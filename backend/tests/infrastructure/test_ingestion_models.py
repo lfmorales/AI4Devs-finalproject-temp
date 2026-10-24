@@ -3,6 +3,7 @@
 from datetime import datetime
 
 import pytest
+from sqlalchemy import insert
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app.infrastructure.persistence.models.delivery import (
@@ -136,8 +137,15 @@ def test_batch_records_how_many_rows_were_ignored(rolled_back_session):
 
 
 def test_batch_ignored_row_count_is_required(rolled_back_session):
-    dsp_id = seeded_dsp_id(rolled_back_session)
+    # Core insert, not the ORM: the ORM replaces an explicit None with the column's Python default.
+    statement = insert(IngestionBatchRecord).values(
+        dsp_id=seeded_dsp_id(rolled_back_session),
+        route="api",
+        started_at=datetime(2026, 8, 4, 2, 0),
+        status="running",
+        row_count=0,
+        ignored_row_count=None,
+    )
 
-    rolled_back_session.add(_batch(dsp_id, ignored_row_count=None))
     with pytest.raises(IntegrityError):
-        rolled_back_session.flush()
+        rolled_back_session.execute(statement)
