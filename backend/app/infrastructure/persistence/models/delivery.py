@@ -35,6 +35,8 @@ class IngestionBatchRecord(Base):
         SQLEnum("running", "succeeded", "failed", name="ingestion_batch_status_enum"), nullable=False
     )
     row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Rows the DSP reported without an attributed line item; counted, never worked as exceptions.
+    ignored_row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
 
 class DailyDeliveryRecord(Base):

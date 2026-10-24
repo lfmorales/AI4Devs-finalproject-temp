@@ -12,7 +12,7 @@
 - [x] 1.5 Generate the Alembic migration with `--autogenerate`, review it by hand, and verify `upgrade head` then `downgrade base` runs clean
 - [ ] 1.6 Load a synthetic set of at least 1 M delivery rows and verify a period roll-up returns within an acceptable time, recording the measurement **(deferred: carga sintética de 1 M de filas; rendimiento sin medir)**
 - [x] 1.7 Widen `daily_deliveries.media_cost` to `Numeric(18,6)` with a migration, and verify with a test that a six-decimal value is stored and read back unchanged
-- [ ] 1.8 Add the ignored-row count to `ingestion_batches` with a migration, verified by a constraint test
+- [x] 1.8 Add the ignored-row count to `ingestion_batches` with a migration, verified by a constraint test
 
 ## 2. Backend: Ingestion Contract (domain layer)
 

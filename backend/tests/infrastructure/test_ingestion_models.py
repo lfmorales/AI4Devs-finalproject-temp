@@ -117,3 +117,27 @@ def test_exception_must_reference_an_existing_batch(rolled_back_session):
     rolled_back_session.add(_exception(batch_id=0))
     with pytest.raises(IntegrityError):
         rolled_back_session.flush()
+
+
+def test_batch_counts_no_ignored_rows_by_default(rolled_back_session):
+    batch_id = insert_ingestion_batch(rolled_back_session)
+    rolled_back_session.expire_all()
+
+    assert rolled_back_session.get(IngestionBatchRecord, batch_id).ignored_row_count == 0
+
+
+def test_batch_records_how_many_rows_were_ignored(rolled_back_session):
+    batch_id = insert_ingestion_batch(rolled_back_session)
+    rolled_back_session.get(IngestionBatchRecord, batch_id).ignored_row_count = 42
+    rolled_back_session.flush()
+    rolled_back_session.expire_all()
+
+    assert rolled_back_session.get(IngestionBatchRecord, batch_id).ignored_row_count == 42
+
+
+def test_batch_ignored_row_count_is_required(rolled_back_session):
+    dsp_id = seeded_dsp_id(rolled_back_session)
+
+    rolled_back_session.add(_batch(dsp_id, ignored_row_count=None))
+    with pytest.raises(IntegrityError):
+        rolled_back_session.flush()
