@@ -48,7 +48,7 @@
 - [x] 4.14 Write a test with simulated HTTP asserting that the Adform smoke script prints no value, name, identifier or amount from a synthetic response, and makes a single request
 - [x] 4.15 Implement `scripts/adform_smoke.py` (`python -m scripts.adform_smoke`), printing only the final operation status, row count, ignored rows, EUR rows, distinct pair count, the zero-impression rows with and without an attributed line item (line item above 0, EUR) and the type of each column, writing nothing to the database or disk; the PO runs it against the real account
 - [x] 4.16 Mark the 1 M-row memory test as `slow`, register the marker, exclude it by default with `-m "not slow"`, and note that it runs with `pytest -m slow` and that the full verification of section 10 must include it **(run it with `pytest -m slow`; the full verification of section 10, task 10.3, includes it)**
-- [ ] 4.17 Make a batch's `row_count` the number of rows read from the DSP, keeping `ignored_row_count` for rows without an attributed line item and adding `zero_unmatched_row_count` for unmatched rows of zeros, verified by tests on the ingestion service
+- [x] 4.17 Make a batch's `row_count` the number of rows read from the DSP, keeping `ignored_row_count` for rows without an attributed line item and adding `zero_unmatched_row_count` for unmatched rows of zeros, verified by tests on the ingestion service
 
 ## 5. Backend: Manual Upload Route
 

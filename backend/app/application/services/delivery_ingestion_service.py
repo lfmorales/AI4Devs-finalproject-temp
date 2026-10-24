@@ -14,12 +14,24 @@ DEFAULT_WINDOW_DAYS = 7
 
 
 @dataclass(frozen=True)
+class _RunCounts:
+    rows_read: int = 0
+    stored_row_count: int = 0
+    unmatched_row_count: int = 0
+    ignored_row_count: int = 0
+    zero_unmatched_row_count: int = 0
+
+
+@dataclass(frozen=True)
 class IngestionRunResult:
     batch_id: int
     window: DeliveryDateRange
+    rows_read: int
     stored_row_count: int
+    # Every unmatched row, including the zero ones that are counted but not worked.
     unmatched_row_count: int
-    ignored_row_count: int = 0
+    ignored_row_count: int
+    zero_unmatched_row_count: int
     skipped_line_ids: tuple[int, ...] = ()
 
 
@@ -49,14 +61,15 @@ class DeliveryIngestionService:
         batch_id = self._start_batch(dsp_id, route, source_file)
         try:
             targets = self._find_targets(dsp_id, window)
-            stored_row_count, unmatched_row_count, ignored_row_count = self._ingest(batch_id, window, targets)
+            counts = self._ingest(batch_id, window, targets)
         except Exception:
             # The range already rolled back whole; the failed batch is what tells operations the run happened.
-            self._finish_batch(batch_id, BatchStatus.FAILED, row_count=0)
+            self._finish_batch(batch_id, BatchStatus.FAILED, _RunCounts())
             raise
-        self._finish_batch(batch_id, BatchStatus.SUCCEEDED, stored_row_count, ignored_row_count)
+        self._finish_batch(batch_id, BatchStatus.SUCCEEDED, counts)
         return IngestionRunResult(
-            batch_id, window, stored_row_count, unmatched_row_count, ignored_row_count, targets.unmapped_line_ids
+            batch_id, window, counts.rows_read, counts.stored_row_count, counts.unmatched_row_count,
+            counts.ignored_row_count, counts.zero_unmatched_row_count, targets.unmapped_line_ids,
         )
 
     def _start_batch(self, dsp_id: int, route: IngestionRoute, source_file: str | None) -> int:
@@ -68,22 +81,20 @@ class DeliveryIngestionService:
         with self._unit_of_work_factory() as unit_of_work:
             return unit_of_work.targets.find_targets(dsp_id, window)
 
-    def _ingest(
-        self, batch_id: int, window: DeliveryDateRange, targets: IngestionTargets
-    ) -> tuple[int, int, int]:
+    def _ingest(self, batch_id: int, window: DeliveryDateRange, targets: IngestionTargets) -> _RunCounts:
         if not targets.mapped_lines:
-            return 0, 0, 0  # Nothing to ask the DSP for; the quota is shared with the whole agency.
+            return _RunCounts()  # Nothing to ask the DSP for; the quota is shared with the whole agency.
 
         line_by_key = {
             ExternalLineKey.from_raw(line.key.external_campaign_id, line.key.external_line_item_id): line.campaign_line_id
             for line in targets.mapped_lines
         }
-        unmatched_row_count = 0
-        ignored_row_count = 0
+        rows_read = unmatched_row_count = ignored_row_count = zero_unmatched_row_count = 0
 
         def _attributed_rows() -> Iterator[tuple[int, DspDeliveryRow]]:
-            nonlocal unmatched_row_count, ignored_row_count
+            nonlocal rows_read, unmatched_row_count, ignored_row_count, zero_unmatched_row_count
             for row in self._dsp_client.fetch_delivery(window):
+                rows_read += 1
                 if row.key is None:
                     # Counted on the batch, never worked as an exception: there is no line item to chase.
                     ignored_row_count += 1
@@ -93,6 +104,9 @@ class DeliveryIngestionService:
                 )
                 if campaign_line_id is None:
                     unmatched_row_count += 1
+                    if row.impressions == 0 and row.media_cost == 0:
+                        # The statistics API returns many rows of zeros for active campaigns; counted, not worked.
+                        zero_unmatched_row_count += 1
                     continue
                 yield campaign_line_id, row
 
@@ -102,10 +116,11 @@ class DeliveryIngestionService:
             stored = DeliveryRangeReplacer(unit_of_work).replace_range(
                 {line.campaign_line_id for line in targets.mapped_lines}, window, deliveries
             )
-        return stored, unmatched_row_count, ignored_row_count
+        return _RunCounts(rows_read, stored, unmatched_row_count, ignored_row_count, zero_unmatched_row_count)
 
-    def _finish_batch(
-        self, batch_id: int, status: BatchStatus, row_count: int, ignored_row_count: int = 0
-    ) -> None:
+    def _finish_batch(self, batch_id: int, status: BatchStatus, counts: _RunCounts) -> None:
         with self._unit_of_work_factory() as unit_of_work:
-            unit_of_work.batches.finish(batch_id, status, self._clock(), row_count, ignored_row_count)
+            unit_of_work.batches.finish(
+                batch_id, status, self._clock(), counts.rows_read, counts.ignored_row_count,
+                counts.zero_unmatched_row_count,
+            )

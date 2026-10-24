@@ -28,3 +28,4 @@ class IngestionBatch:
     status: BatchStatus
     row_count: int
     ignored_row_count: int
+    zero_unmatched_row_count: int

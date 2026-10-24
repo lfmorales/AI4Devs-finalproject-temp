@@ -11,6 +11,12 @@ class IngestionBatchRepository(ABC):
 
     @abstractmethod
     def finish(
-        self, batch_id: int, status: BatchStatus, finished_at: datetime, row_count: int, ignored_row_count: int
+        self,
+        batch_id: int,
+        status: BatchStatus,
+        finished_at: datetime,
+        row_count: int,
+        ignored_row_count: int,
+        zero_unmatched_row_count: int,
     ) -> None:
-        """Record how the run ended."""
+        """Record how the run ended: rows read, rows ignored for having no line item, unmatched rows of zeros."""

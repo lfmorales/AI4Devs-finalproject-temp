@@ -101,8 +101,9 @@ def test_a_batch_is_started_running_and_finished_with_its_counts(rolled_back_ses
     started = rolled_back_session.get(IngestionBatchRecord, batch_id)
     assert (started.status, started.route, started.source_file) == ("running", "upload", "export.xlsx")
 
-    repository.finish(batch_id, BatchStatus.FAILED, datetime(2026, 8, 10, 2, 5), row_count=0, ignored_row_count=3)
+    repository.finish(batch_id, BatchStatus.FAILED, datetime(2026, 8, 10, 2, 5), row_count=9, ignored_row_count=3,
+                      zero_unmatched_row_count=4)
     rolled_back_session.expire_all()
     finished = rolled_back_session.get(IngestionBatchRecord, batch_id)
-    assert (finished.status, finished.finished_at, finished.ignored_row_count) == (
-        "failed", datetime(2026, 8, 10, 2, 5), 3)
+    assert (finished.status, finished.finished_at, finished.row_count, finished.ignored_row_count,
+            finished.zero_unmatched_row_count) == ("failed", datetime(2026, 8, 10, 2, 5), 9, 3, 4)

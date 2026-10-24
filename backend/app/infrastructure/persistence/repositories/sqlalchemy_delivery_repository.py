@@ -71,11 +71,17 @@ class SqlAlchemyIngestionBatchRepository(IngestionBatchRepository):
         return record.id
 
     def finish(
-        self, batch_id: int, status: BatchStatus, finished_at: datetime, row_count: int, ignored_row_count: int
+        self,
+        batch_id: int,
+        status: BatchStatus,
+        finished_at: datetime,
+        row_count: int,
+        ignored_row_count: int,
+        zero_unmatched_row_count: int,
     ) -> None:
         self._session.execute(
             update(IngestionBatchRecord)
             .where(IngestionBatchRecord.id == batch_id)
             .values(status=status.value, finished_at=finished_at, row_count=row_count,
-                    ignored_row_count=ignored_row_count)
+                    ignored_row_count=ignored_row_count, zero_unmatched_row_count=zero_unmatched_row_count)
         )

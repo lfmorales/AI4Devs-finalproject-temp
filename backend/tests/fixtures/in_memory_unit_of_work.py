@@ -17,18 +17,20 @@ class InMemoryIngestionBatchRepository(IngestionBatchRepository):
         batch_id = len(self.records) + 1
         self.records[batch_id] = IngestionBatch(
             id=batch_id, dsp_id=dsp_id, route=route, source_file=source_file, started_at=started_at,
-            finished_at=None, status=BatchStatus.RUNNING, row_count=0, ignored_row_count=0,
+            finished_at=None, status=BatchStatus.RUNNING, row_count=0, ignored_row_count=0, zero_unmatched_row_count=0,
         )
         return batch_id
 
     def finish(
-        self, batch_id: int, status: BatchStatus, finished_at: datetime, row_count: int, ignored_row_count: int
+        self, batch_id: int, status: BatchStatus, finished_at: datetime, row_count: int, ignored_row_count: int,
+        zero_unmatched_row_count: int,
     ) -> None:
         started = self.records[batch_id]
         self.records[batch_id] = IngestionBatch(
             id=batch_id, dsp_id=started.dsp_id, route=started.route, source_file=started.source_file,
             started_at=started.started_at, finished_at=finished_at, status=status,
             row_count=row_count, ignored_row_count=ignored_row_count,
+            zero_unmatched_row_count=zero_unmatched_row_count,
         )
 
 
