@@ -44,7 +44,8 @@ def _require_decimal_media_cost(media_cost: object) -> None:
 class DspDeliveryRow:
     """One day of delivery as a DSP reports it, before it is matched to a campaign line."""
 
-    key: ExternalLineKey
+    # None when the DSP reports delivery without an attributed line item.
+    key: ExternalLineKey | None
     delivery_date: date
     impressions: int
     clicks: int

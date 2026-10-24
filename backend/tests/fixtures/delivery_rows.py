@@ -21,9 +21,10 @@ def dsp_row(
     banner_size: str | None = None,
     screen: str | None = None,
     line_format: str | None = None,
+    unattributed: bool = False,
 ) -> DspDeliveryRow:
     return DspDeliveryRow(
-        key=key or external_key(),
+        key=None if unattributed else key or external_key(),
         delivery_date=delivery_date,
         impressions=impressions,
         clicks=clicks,

@@ -36,3 +36,7 @@ class DeliveryOutsideRangeError(DomainError):
 
 class DeliveryForUnknownLineError(DomainError):
     """A delivery row belongs to a campaign line the run is not replacing."""
+
+
+class UnsupportedCurrencyError(DomainError):
+    """A DSP reported delivery in a currency other than EUR. Nothing is converted; the run fails."""
