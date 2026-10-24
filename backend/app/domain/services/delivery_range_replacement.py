@@ -1,7 +1,7 @@
 from collections.abc import Collection, Iterable, Iterator
 
 from app.domain.exceptions import DeliveryForUnknownLineError, DeliveryOutsideRangeError
-from app.domain.repositories.delivery_repository import DeliveryRepository
+from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.value_objects.delivery import DailyDelivery, DeliveryDateRange
 
 
@@ -12,8 +12,8 @@ class DeliveryRangeReplacer:
     rows, and an upsert would leave the removed ones behind.
     """
 
-    def __init__(self, repository: DeliveryRepository) -> None:
-        self._repository = repository
+    def __init__(self, unit_of_work: UnitOfWork) -> None:
+        self._unit_of_work = unit_of_work
 
     def replace_range(
         self,
@@ -30,8 +30,10 @@ class DeliveryRangeReplacer:
                 stored_count += 1
                 yield row
 
-        self._repository.delete_range(campaign_line_ids, date_range)
-        self._repository.add_all(_counted(self._within_run(campaign_line_ids, date_range, deliveries)))
+        # Delete and insert share one transaction: a failure partway must not leave the range half replaced.
+        with self._unit_of_work as unit_of_work:
+            unit_of_work.deliveries.delete_range(campaign_line_ids, date_range)
+            unit_of_work.deliveries.add_all(_counted(self._within_run(campaign_line_ids, date_range, deliveries)))
         return stored_count
 
     @staticmethod
