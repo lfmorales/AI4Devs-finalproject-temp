@@ -53,6 +53,7 @@ class FakeAdform:
         data_status: int = 202,
         headers: Sequence[str] = COLUMN_HEADERS,
         fail_with: Exception | None = None,
+        error_body: str = '{"error": "rejected"}',
     ) -> None:
         self.requests: list[httpx.Request] = []
         self._report = report_body(rows, headers)
@@ -60,6 +61,7 @@ class FakeAdform:
         self._token_status = token_status
         self._data_status = data_status
         self._fail_with = fail_with
+        self._error_body = error_body
 
     def client(self) -> httpx.Client:
         return httpx.Client(transport=httpx.MockTransport(self._handle))
@@ -74,11 +76,11 @@ class FakeAdform:
         path = request.url.path
         if request.url.host == "id.adform.com" and path == "/sts/connect/token":
             if self._token_status != 200:
-                return httpx.Response(self._token_status, json={"error": "invalid_client"})
+                return httpx.Response(self._token_status, content=self._error_body)
             return httpx.Response(200, json={"access_token": TOKEN_VALUE, "token_type": "Bearer", "expires_in": 3600})
         if request.method == "POST" and path == "/v1/buyer/stats/data":
             if self._data_status != 202:
-                return httpx.Response(self._data_status, json={"error": "rejected"})
+                return httpx.Response(self._data_status, content=self._error_body)
             return httpx.Response(202, headers={"operation-location": OPERATION_PATH})
         if path == OPERATION_PATH:
             status = self._statuses.pop(0) if len(self._statuses) > 1 else self._statuses[0]

@@ -33,7 +33,7 @@
 ## 4. Backend: Adform Connector and Ingestion Service
 
 - [x] 4.1 Implement the Adform delivery client in `infrastructure/dsp/` behind the interface from 2.1, with authentication and pagination, verified against the sandbox **(partial: sin sandbox: se verifica contra la cuenta real, solo lectura; los tests usan HTTP simulado y la verificación contra la cuenta real queda pendiente)**
-- [ ] 4.2 Verify no credential reaches the logs or an error response, asserted by a test on the log output
+- [x] 4.2 Verify no credential reaches the logs or an error response, asserted by a test on the log output
 - [x] 4.3 Implement the ingestion application service over the D-7 to D-1 window, writing through a bulk path rather than materialising entities, and verify memory stays bounded on a 1 M-row run **(partial: memoria verificada en el servicio con 1 M de filas y un destino contador; la escritura a PostgreSQL se verifica por trozos, no con 1 M de filas)**
 - [x] 4.4 Implement batch recording for success and failure and verify a failed run leaves a batch with a failed outcome and no partial range
 - [x] 4.5 Implement skipping of unmapped active lines and verify the run completes for every mapped line while reporting the skipped ones
