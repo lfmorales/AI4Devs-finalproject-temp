@@ -26,6 +26,7 @@ from app.infrastructure.persistence.models.delivery import (
     IngestionBatchRecord,
     DailyDeliveryRecord,
     IngestionExceptionRecord,
+    IngestionExceptionDeliveryRecord,
 )
 
 __all__ = [
@@ -50,4 +51,5 @@ __all__ = [
     "IngestionBatchRecord",
     "DailyDeliveryRecord",
     "IngestionExceptionRecord",
+    "IngestionExceptionDeliveryRecord",
 ]

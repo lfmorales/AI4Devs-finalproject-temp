@@ -29,7 +29,7 @@ def test_migration_schema_matches_models(test_db_session):
         'campaigns', 'campaign_periods', 'campaign_lines',
         'purchase_orders', 'purchase_order_versions',
         'dsp_mappings',
-        'daily_deliveries', 'ingestion_batches', 'ingestion_exceptions',
+        'daily_deliveries', 'ingestion_batches', 'ingestion_exceptions', 'ingestion_exception_deliveries',
     }
 
     # Actual tables in database

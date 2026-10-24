@@ -151,3 +151,12 @@ def campaign_id_of(session: Session, campaign_line_id: int) -> int:
         .join(CampaignLineRecord, CampaignLineRecord.campaign_period_id == CampaignPeriodRecord.id)
         .where(CampaignLineRecord.id == campaign_line_id)
     ).one()
+
+
+def insert_user(session: Session, email: str = "resolver@example.com") -> int:
+    from app.infrastructure.persistence.models.identity import UserRecord
+
+    user = UserRecord(email=email, full_name="Resolver", is_active=True)
+    session.add(user)
+    session.flush()
+    return user.id

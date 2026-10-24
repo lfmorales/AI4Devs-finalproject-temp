@@ -67,7 +67,7 @@
 - [ ] 6.5 Implement the daily status endpoint returning contracted, delivered, ratio, pacing and both flags, aggregated in the database
 - [ ] 6.6 Implement the finance restriction so cost fields are absent from the response for a user without the role, and write a test asserting the field is missing rather than null **(deferred: el endpoint de estado del corte no devuelve campos de coste)**
 - [ ] 6.7 Write tests asserting 403 for a user without `operations` on the exception queue, and 401 for a missing or invalid token on every endpoint of this change
-- [ ] 6.8 Generate the exceptions migration with `--autogenerate`: the types `unmatched_delivery`, `missing_delivery` and `channel_mismatch`, uniqueness per type, DSP and external pair and per line and period, `first_date`, `last_date`, `resolved_at`, `resolved_by` and the note, the child table `ingestion_exception_deliveries` unique on exception and date, and `zero_unmatched_row_count` on the batches, reviewed by hand with `test_migration_schema_sync` green and `downgrade base` clean
+- [x] 6.8 Generate the exceptions migration with `--autogenerate`: the types `unmatched_delivery`, `missing_delivery` and `channel_mismatch`, uniqueness per type, DSP and external pair and per line and period, `first_date`, `last_date`, `resolved_at`, `resolved_by` and the note, the child table `ingestion_exception_deliveries` unique on exception and date, and `zero_unmatched_row_count` on the batches, reviewed by hand with `test_migration_schema_sync` green and `downgrade base` clean
 
 ## 7. Backend: Scheduled Run
 
