@@ -8,9 +8,9 @@
 - [ ] 1.1 Write failing tests for the delivery model asserting exact-decimal media cost and that delivered and contracted volumes are separate fields
 - [ ] 1.2 Define the `daily_deliveries` model at the line-and-day grain with impressions, clicks, media cost, measurable and viewable impressions, banner size, screen and contrast `line_format`, and verify the tests from 1.1 pass
 - [ ] 1.3 Define `ingestion_batches` with route, source, timings, outcome and row count, and `ingestion_exceptions` with its type and external key, verified by constraint tests
-- [ ] 1.4 Add indexes on the DSP mapping, campaign period and delivery date, and verify with `EXPLAIN` that a period roll-up uses them rather than scanning
+- [ ] 1.4 Add indexes on the DSP mapping, campaign period and delivery date, and verify with `EXPLAIN` that a period roll-up uses them rather than scanning **(partial: índice sin EXPLAIN)**
 - [ ] 1.5 Generate the Alembic migration with `--autogenerate`, review it by hand, and verify `upgrade head` then `downgrade base` runs clean
-- [ ] 1.6 Load a synthetic set of at least 1 M delivery rows and verify a period roll-up returns within an acceptable time, recording the measurement
+- [ ] 1.6 Load a synthetic set of at least 1 M delivery rows and verify a period roll-up returns within an acceptable time, recording the measurement **(deferred: carga sintética de 1 M de filas; rendimiento sin medir)**
 
 ## 2. Backend: Ingestion Contract (domain layer)
 
@@ -30,17 +30,18 @@
 
 ## 4. Backend: Adform Connector and Ingestion Service
 
-- [ ] 4.1 Implement the Adform delivery client in `infrastructure/dsp/` behind the interface from 2.1, with authentication and pagination, verified against the sandbox
+- [ ] 4.1 Implement the Adform delivery client in `infrastructure/dsp/` behind the interface from 2.1, with authentication and pagination, verified against the sandbox **(partial: sin sandbox: se verifica contra la cuenta real, solo lectura)**
 - [ ] 4.2 Verify no credential reaches the logs or an error response, asserted by a test on the log output
 - [ ] 4.3 Implement the ingestion application service over the D-7 to D-1 window, writing through a bulk path rather than materialising entities, and verify memory stays bounded on a 1 M-row run
 - [ ] 4.4 Implement batch recording for success and failure and verify a failed run leaves a batch with a failed outcome and no partial range
 - [ ] 4.5 Implement skipping of unmapped active lines and verify the run completes for every mapped line while reporting the skipped ones
+- [ ] 4.6 Create the DSP mapping from a campaign line to a real Adform identifier
 
 ## 5. Backend: Manual Upload Route
 
 - [ ] 5.1 Implement the spreadsheet parser in `infrastructure/spreadsheets/` behind an interface, and verify pandas and openpyxl are imported nowhere else
 - [ ] 5.2 Write failing tests asserting structure is validated before content and that a malformed file fails naming file, sheet and row
-- [ ] 5.3 Implement the upload endpoint validating file type and size before parsing, storing the file in S3, and verify the tests from 5.2 pass
+- [ ] 5.3 Implement the upload endpoint validating file type and size before parsing, storing the file in S3, and verify the tests from 5.2 pass **(partial: almacenamiento en disco detrás de una interfaz, en lugar de S3)**
 - [ ] 5.4 Verify an uploaded file produces delivery records indistinguishable from the API route, asserted by a test comparing both paths
 - [ ] 5.5 Write a test asserting a user without `operations` receives 403 on the upload endpoint
 
@@ -51,13 +52,13 @@
 - [ ] 6.3 Write failing tests for absence: a line with no delivery in an ended period raises an exception, a running period does not
 - [ ] 6.4 Implement absence detection and exception resolution, and verify a resolved exception leaves the outstanding queue while remaining readable
 - [ ] 6.5 Implement the daily status endpoint returning contracted, delivered, ratio, pacing and both flags, aggregated in the database
-- [ ] 6.6 Implement the finance restriction so cost fields are absent from the response for a user without the role, and write a test asserting the field is missing rather than null
+- [ ] 6.6 Implement the finance restriction so cost fields are absent from the response for a user without the role, and write a test asserting the field is missing rather than null **(deferred: el endpoint de estado del corte no devuelve campos de coste)**
 - [ ] 6.7 Write tests asserting 403 for a user without `operations` on the exception queue, and 401 for a missing or invalid token on every endpoint of this change
 
 ## 7. Backend: Scheduled Run
 
 - [ ] 7.1 Implement the nightly ingestion as a container command invoked by the host scheduler, and verify a manual invocation uses the same code path
-- [ ] 7.2 Verify the status view reads the last successful batch so a stale page is visibly stale, asserted by a test with a failed most-recent run
+- [ ] 7.2 Verify the status view reads the last successful batch so a stale page is visibly stale, asserted by a test with a failed most-recent run **(deferred: indicador de página desactualizada)**
 
 ## 8. Frontend: Daily Status and Exception Queue
 
@@ -66,7 +67,7 @@
 - [ ] 8.3 Implement the status table and verify the tests from 8.2 pass
 - [ ] 8.4 Verify a loaded-but-empty list renders distinctly from a pending one, asserted by a test
 - [ ] 8.5 Implement the exception queue with resolution, guarded by the `operations` role, and write a test asserting what a user without the role sees
-- [ ] 8.6 Verify no cost or margin column renders for a user without `finance`, asserted by a test
+- [ ] 8.6 Verify no cost or margin column renders for a user without `finance`, asserted by a test **(deferred: el endpoint de estado del corte no devuelve campos de coste)**
 
 ## 9. Review and Update Existing Unit Tests (MANDATORY)
 
