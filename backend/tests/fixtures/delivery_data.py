@@ -16,6 +16,7 @@ from app.infrastructure.persistence.models.campaign import (
     CampaignRecord,
 )
 from app.infrastructure.persistence.models.delivery import IngestionBatchRecord
+from app.infrastructure.persistence.models.dsp_mapping import DSPMappingRecord
 from app.infrastructure.persistence.models.masters import (
     AdvertiserRecord,
     AgencyRecord,
@@ -42,7 +43,14 @@ def seeded_dsp_id(session: Session) -> int:
     return dsp.id
 
 
-def insert_campaign_line(session: Session, campaign_name: str = "Delivery fixture campaign") -> int:
+def insert_campaign_line(
+    session: Session,
+    campaign_name: str = "Delivery fixture campaign",
+    start_date: date = date(2026, 8, 1),
+    end_date: date = date(2026, 8, 31),
+    status: str = "active",
+    dsp_id: int | None = None,
+) -> int:
     """Persist a campaign with one period and one line, and return the line id."""
     holding_group = HoldingGroupRecord(name=f"{campaign_name} group")
     advertiser = AdvertiserRecord(name=f"{campaign_name} advertiser")
@@ -65,8 +73,9 @@ def insert_campaign_line(session: Session, campaign_name: str = "Delivery fixtur
         campaign_type_id=campaign_type.id,
         sector_id=sector.id,
         sales_rep_id=sales_rep.id,
-        start_date=date(2026, 8, 1),
-        end_date=date(2026, 8, 31),
+        start_date=start_date,
+        end_date=end_date,
+        status=status,
     )
     session.add(campaign)
     session.flush()
@@ -74,14 +83,14 @@ def insert_campaign_line(session: Session, campaign_name: str = "Delivery fixtur
         campaign_id=campaign.id,
         period_year=2026,
         period_month=8,
-        period_start=date(2026, 8, 1),
-        period_end=date(2026, 8, 31),
+        period_start=start_date,
+        period_end=end_date,
     )
     session.add(period)
     session.flush()
     line = CampaignLineRecord(
         campaign_period_id=period.id,
-        dsp_id=seeded_dsp_id(session),
+        dsp_id=dsp_id if dsp_id is not None else seeded_dsp_id(session),
         channel_id=channel.id,
         format_id=line_format.id,
         scope="national",
@@ -108,3 +117,37 @@ def insert_ingestion_batch(session: Session, route: str = "api") -> int:
     session.add(batch)
     session.flush()
     return batch.id
+
+
+def insert_other_dsp(session: Session, name: str = "Another fixture DSP") -> int:
+    dsp = DSPRecord(name=name, is_active=True)
+    session.add(dsp)
+    session.flush()
+    return dsp.id
+
+
+def insert_mapping(
+    session: Session,
+    campaign_line_id: int,
+    dsp_id: int,
+    external_campaign_id: str = "1001",
+    external_line_item_id: str = "2001",
+    validated_at: datetime | None = datetime(2026, 8, 1, 9, 0),
+) -> None:
+    session.add(DSPMappingRecord(
+        campaign_line_id=campaign_line_id,
+        dsp_id=dsp_id,
+        external_campaign_id=external_campaign_id,
+        external_line_item_id=external_line_item_id,
+        validated_at=validated_at,
+    ))
+    session.flush()
+
+
+def campaign_id_of(session: Session, campaign_line_id: int) -> int:
+    return session.scalars(
+        select(CampaignRecord.id)
+        .join(CampaignPeriodRecord, CampaignPeriodRecord.campaign_id == CampaignRecord.id)
+        .join(CampaignLineRecord, CampaignLineRecord.campaign_period_id == CampaignPeriodRecord.id)
+        .where(CampaignLineRecord.id == campaign_line_id)
+    ).one()
