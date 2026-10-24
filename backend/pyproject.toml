@@ -29,4 +29,7 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-ra"
+addopts = "-ra -m 'not slow'"
+markers = [
+    "slow: takes tens of seconds, excluded by default; run with `pytest -m slow`",
+]

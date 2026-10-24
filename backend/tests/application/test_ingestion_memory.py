@@ -4,6 +4,8 @@ import tracemalloc
 from collections.abc import Iterable, Iterator
 from datetime import date, timedelta
 
+import pytest
+
 from app.domain.services.dsp_delivery_client import DspDeliveryClient
 from app.domain.value_objects.delivery import DailyDelivery, DeliveryDateRange, DspDeliveryRow, ExternalLineKey
 from app.domain.value_objects.ingestion import MappedLine
@@ -44,6 +46,7 @@ class CountingRepository(InMemoryDeliveryRepository):
             self.stored += 1
 
 
+@pytest.mark.slow
 def test_a_million_row_run_stays_within_a_bounded_amount_of_memory():
     client = MillionRowClient()
     harness = IngestionHarness(
