@@ -20,6 +20,8 @@ from app.domain.exceptions import (
     DspResponseFormatError,
     DspUnreachableError,
     DuplicateDspMappingError,
+    IngestionExceptionAlreadyResolvedError,
+    IngestionExceptionNotFoundError,
     UnsupportedCurrencyError,
     DuplicateCampaignNameError,
     DuplicateOrderReferenceError,
@@ -59,6 +61,10 @@ _ERROR_MAPPINGS: dict[type[DomainError], _ErrorMapping] = {
     ),
     DuplicateDspMappingError: _ErrorMapping(
         409, "duplicate_dsp_mapping", "These DSP identifiers are already mapped to a campaign line"
+    ),
+    IngestionExceptionNotFoundError: _ErrorMapping(404, "exception_not_found", "The exception does not exist"),
+    IngestionExceptionAlreadyResolvedError: _ErrorMapping(
+        409, "exception_already_resolved", "The exception is already resolved"
     ),
     CampaignLineNotFoundError: _ErrorMapping(404, "campaign_line_not_found", "The campaign line does not exist"),
     DspNotSupportedError: _ErrorMapping(

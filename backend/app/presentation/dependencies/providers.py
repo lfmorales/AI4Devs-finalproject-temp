@@ -15,12 +15,16 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.services.authentication_service import AuthenticationService
 from app.application.services.dsp_mapping_service import DspMappingService
+from app.application.services.ingestion_exception_service import IngestionExceptionService
 from app.config import get_settings
 from app.domain.exceptions import DspNotConfiguredError
 from app.domain.services.dsp_delivery_client import DspDeliveryClient
 from app.infrastructure.auth.cognito_token_verifier import CognitoTokenVerifier
 from app.infrastructure.dsp.adform_delivery_client import AdformDeliveryClient
 from app.infrastructure.persistence.database import build_engine, build_session_factory
+from app.infrastructure.persistence.repositories.sqlalchemy_exception_queue_repository import (
+    SqlAlchemyExceptionQueueRepository,
+)
 from app.infrastructure.persistence.repositories.sqlalchemy_dsp_mapping_repository import (
     SqlAlchemyDspMappingRepository,
 )
@@ -94,5 +98,14 @@ def get_dsp_mapping_service(
     return DspMappingService(
         repository=SqlAlchemyDspMappingRepository(session),
         client_for_dsp=resolver,
+        clock=lambda: datetime.now(UTC).replace(tzinfo=None),
+    )
+
+
+def get_ingestion_exception_service(
+    session: Annotated[Session, Depends(get_db_session)],
+) -> IngestionExceptionService:
+    return IngestionExceptionService(
+        queue=SqlAlchemyExceptionQueueRepository(session),
         clock=lambda: datetime.now(UTC).replace(tzinfo=None),
     )

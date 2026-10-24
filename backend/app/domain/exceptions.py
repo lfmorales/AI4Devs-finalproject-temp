@@ -80,3 +80,11 @@ class DspNotSupportedError(DomainError):
 
 class DspNotConfiguredError(DomainError):
     """The DSP has a connector but its credentials are not configured."""
+
+
+class IngestionExceptionNotFoundError(DomainError):
+    """No ingestion exception has this id."""
+
+
+class IngestionExceptionAlreadyResolvedError(DomainError):
+    """The ingestion exception was already resolved."""
