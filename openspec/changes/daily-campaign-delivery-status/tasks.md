@@ -1,6 +1,6 @@
 ## 0. Setup: Create Feature Branch (MANDATORY - FIRST STEP)
 
-- [ ] 0.1 Create feature branch `feature/daily-campaign-delivery-status` from `main` and verify `git status` reports it as current
+- [ ] 0.1 Create feature branch `feature/daily-campaign-delivery-status` from `final-project-LFMC` and verify `git status` reports it as current **(desviación: rama creada desde final-project-LFMC, no desde main)**
 - [ ] 0.2 Verify `register-campaign-from-purchase-order` is applied: campaign lines and validated DSP mappings exist to ingest against
 
 ## 1. Database: Delivery Schema
