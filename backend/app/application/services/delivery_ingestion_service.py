@@ -45,8 +45,13 @@ class DeliveryIngestionService:
     ) -> IngestionRunResult:
         window = ingestion_window(today, self._window_days)
         batch_id = self._start_batch(dsp_id, route, source_file)
-        targets = self._find_targets(dsp_id, window)
-        stored_row_count, unmatched_row_count = self._ingest(batch_id, window, targets)
+        try:
+            targets = self._find_targets(dsp_id, window)
+            stored_row_count, unmatched_row_count = self._ingest(batch_id, window, targets)
+        except Exception:
+            # The range already rolled back whole; the failed batch is what tells operations the run happened.
+            self._finish_batch(batch_id, BatchStatus.FAILED, row_count=0)
+            raise
         self._finish_batch(batch_id, BatchStatus.SUCCEEDED, stored_row_count)
         return IngestionRunResult(batch_id, window, stored_row_count, unmatched_row_count)
 
