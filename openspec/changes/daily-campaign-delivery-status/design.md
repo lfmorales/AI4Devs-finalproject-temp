@@ -43,6 +43,8 @@ It also introduces the first scheduled work in the product. Until now every writ
 
 **Unattributed rows are ignored and counted, never worked.** Rows the DSP reports with no attributed line item are not exceptions: they are counted on the batch. A currency other than EUR is a batch failure, not a conversion.
 
+**Which lines are ingested and which are watched are different sets.** A line is ingested when it has a validated mapping and its campaign's dates overlap the D-7 to D-1 window, whatever the campaign's status: a campaign that ended three days ago still needs the figures Adform restates. The missing-data flag watches only a campaign whose status is `active` and whose dates include D-1. A campaign that has not started belongs to neither set. A line without a validated mapping for the DSP is skipped and counted, not failed.
+
 **Validating a pair through the stats API can only see delivery.** A pair is found when it appears in any row of the last 30 days; a line with no delivery in that period cannot be told apart from one that does not exist. The limitation is documented where the check is made.
 
 ## Risks / Trade-offs

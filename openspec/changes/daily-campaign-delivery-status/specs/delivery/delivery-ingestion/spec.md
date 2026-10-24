@@ -77,14 +77,39 @@ The system SHALL take the channel from the campaign line's configuration, SHALL 
 - **AND** the reported value is stored as contrast data
 - **AND** the row is flagged for review
 
-### Requirement: Only mapped active lines are ingested
+### Requirement: Lines are ingested when their mapping is validated and their campaign overlaps the window
 
-The system SHALL ingest delivery for active campaign lines carrying a validated DSP mapping, and SHALL NOT fail the run because other lines lack one.
+The system SHALL ingest delivery for every campaign line that runs on the DSP being ingested, carries a validated DSP mapping for that DSP and belongs to a campaign whose dates overlap the ingestion window, whatever the campaign's status, and SHALL NOT fail the run because other such lines lack a validated mapping.
 
 #### Scenario: An unmapped line is skipped without failing the run
-- **WHEN** an ingestion run encounters an active line with no DSP mapping
+- **WHEN** an ingestion run encounters a line of an overlapping campaign with no DSP mapping
 - **THEN** that line is skipped and reported
 - **AND** the run completes for every mapped line
+
+#### Scenario: A mapping that is not validated does not make a line ingestable
+- **WHEN** the only mapping of a line has no validation timestamp
+- **THEN** the line is not ingested
+- **AND** it is counted among the skipped lines
+
+#### Scenario: A mapping for another DSP does not make a line ingestable
+- **WHEN** a line's mapping belongs to a DSP other than the one being ingested
+- **THEN** the line is not ingested
+- **AND** it is counted among the skipped lines
+
+#### Scenario: A campaign that ended inside the window is still ingested
+- **WHEN** a campaign ended three days before the run and its line has a validated mapping
+- **THEN** its delivery is ingested, whatever the campaign's status
+- **AND** figures the DSP restates for it are picked up
+
+#### Scenario: A campaign that has not started is neither ingested nor skipped
+- **WHEN** a campaign starts after the last day of the window
+- **THEN** its lines are not ingested
+- **AND** they are not counted among the skipped lines
+
+#### Scenario: A line with several external pairs is ingested through all its validated pairs
+- **WHEN** a line holds several validated pairs
+- **THEN** every validated pair is ingested
+- **AND** the line is not counted among the skipped lines
 
 ### Requirement: Media cost keeps the precision the DSP reports
 
