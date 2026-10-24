@@ -28,3 +28,11 @@ class DuplicateOrderReferenceError(DomainError):
 
 class DuplicateCampaignNameError(DomainError):
     """A campaign with this name already exists."""
+
+
+class DeliveryOutsideRangeError(DomainError):
+    """A delivery row is dated outside the range the run is replacing."""
+
+
+class DeliveryForUnknownLineError(DomainError):
+    """A delivery row belongs to a campaign line the run is not replacing."""
