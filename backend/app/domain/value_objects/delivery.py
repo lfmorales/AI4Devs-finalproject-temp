@@ -28,6 +28,11 @@ class ExternalLineKey:
     external_campaign_id: str
     external_line_item_id: str
 
+    @classmethod
+    def from_raw(cls, external_campaign_id: int | str, external_line_item_id: int | str) -> "ExternalLineKey":
+        """Build a key from what a DSP reports (often integers) or a mapping stores (text), as text on both sides."""
+        return cls(str(external_campaign_id).strip(), str(external_line_item_id).strip())
+
 
 def _require_decimal_media_cost(media_cost: object) -> None:
     # Float cost drifts when summed over millions of rows.
