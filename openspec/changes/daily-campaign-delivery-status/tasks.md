@@ -25,8 +25,8 @@
 
 - [x] 3.1 Write failing tests for pacing covering under-delivery beyond ten percent, over-delivery beyond ten percent, and delivery inside the threshold at the exact boundary
 - [x] 3.2 Implement pacing as a pure function of contracted volume, period bounds, date and delivered volume, and verify the tests from 3.1 pass without a database
-- [ ] 3.3 Write failing tests for the missing-data rule: flagged when the latest delivery predates D-1, not flagged at D-1, cleared on the next ingestion
-- [ ] 3.4 Implement the missing-data rule and verify the tests from 3.3 pass
+- [x] 3.3 Write failing tests for the missing-data rule: flagged when the latest delivery predates D-1, not flagged at D-1, cleared on the next ingestion
+- [x] 3.4 Implement the missing-data rule and verify the tests from 3.3 pass
 
 ## 4. Backend: Adform Connector and Ingestion Service
 
