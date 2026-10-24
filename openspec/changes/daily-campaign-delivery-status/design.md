@@ -59,6 +59,12 @@ It also introduces the first scheduled work in the product. Until now every writ
 
 **Absence is judged once a period has ended.** A line is absent from a period when it has no row in it or its impressions sum to zero, evaluated when the period's last day is on or before D-1. The check is a service method, not wired to a scheduler yet.
 
+**Absence is evaluated only for mapped lines, inside the window, after the mapping.** A `missing_delivery` exception is considered only for a line with a validated DSP mapping, for a period whose last day falls between D-7 and D-1, and only if the mapping was validated on or before that last day, so a period older than the mapping is never flagged. A line without a validated mapping could never have received delivery, and that case is already reported as a skipped line. The campaign's own status is not part of the rule: a campaign that ended inside the window is exactly the one whose last period is evaluated.
+
+**Pacing, the status view and absence are three separate things.** Pacing is a pure function of contracted volume, period bounds, a date and delivered volume. It does not know which periods are shown, so a finished period with nothing delivered reports under-delivery. The status endpoint decides what is listed, and leaves out finished periods and campaigns that have not started. Delivery that never arrived in a finished period is the absence exception's job.
+
+**The exception queue exposes what was retained, not its cost.** An exception shows its first and last dates, its number of days, and the total impressions and clicks it retains. The retained media cost is stored but not returned by any endpoint until the finance restriction of the status API exists, because cost figures are restricted to `finance` and the queue is open to `operations`.
+
 **The two flags are different questions.** The missing-data flag asks whether the latest delivery predates D-1, and a row of zero impressions counts as data received. A campaign that keeps sending rows of zeros is stalled, which the pacing deviation flag covers.
 
 **A batch counts rows read.** `row_count` is the number of rows read from the DSP; rows without an attributed line item are counted in `ignored_row_count` and unmatched rows of zeros in `zero_unmatched_row_count`. The states are `running`, `succeeded` and `failed`.

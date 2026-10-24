@@ -60,6 +60,19 @@ The system SHALL compare delivered volume against the volume expected by the cur
 - **WHEN** a campaign line paces within ten percent of expectation
 - **THEN** no deviation flag is raised
 
+### Requirement: Pacing, the status view and absence are separate responsibilities
+
+The system SHALL calculate pacing for a campaign line from its contracted volume, its period bounds, a date and its delivered volume, without regard to whether the period is shown. Which periods and campaigns the daily status lists is decided by the status view, and delivery that never arrived in a finished period is surfaced by the absence exception, not by the pacing flag.
+
+#### Scenario: The pacing calculation does not hide a finished period
+- **WHEN** pacing is calculated for a period that has ended with nothing delivered against a contracted volume
+- **THEN** it reports under-delivery
+
+#### Scenario: The status view lists neither finished periods nor campaigns that have not started
+- **WHEN** the daily status is read
+- **THEN** a period that has ended is not listed
+- **AND** a campaign that has not started is not listed
+
 ### Requirement: Cost and margin figures are restricted to finance
 
 The system SHALL withhold cost and margin figures from users who do not hold the `finance` role, in the API response and not only in the interface.

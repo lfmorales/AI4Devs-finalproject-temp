@@ -59,19 +59,31 @@ The system SHALL NOT turn a row that the DSP reports without an attributed line 
 
 ### Requirement: A line with no delivery in a finished period is an exception
 
-The system SHALL record an active campaign line as a `missing_delivery` exception when the sum of its impressions across a campaign period is zero, or when it has no delivery row in that period at all, evaluated once the last day of the period is on or before D-1. There SHALL be at most one such exception per line and period.
+The system SHALL record a campaign line as a `missing_delivery` exception when the sum of its impressions across a campaign period is zero, or when it has no delivery row in that period at all. Only a line with a validated DSP mapping is evaluated, and only for a period whose last day falls inside the ingestion window, between D-7 and D-1, and on or after the day the mapping was validated. There SHALL be at most one such exception per line and period.
 
 #### Scenario: A finished period with no rows is flagged
-- **WHEN** a period has ended and one of its active lines has no delivery row in it
+- **WHEN** a period's last day is inside the ingestion window and one of its mapped lines has no delivery row in it
 - **THEN** an exception is recorded against that line and period
 
 #### Scenario: A finished period with only zero impressions is flagged
-- **WHEN** a period has ended and every delivery row of one of its active lines has zero impressions
+- **WHEN** a period's last day is inside the ingestion window and every delivery row of one of its mapped lines has zero impressions
 - **THEN** an exception is recorded against that line and period
 
 #### Scenario: A period still running is not flagged for absence
 - **WHEN** a period's last day is after D-1
 - **THEN** no absence exception is raised for its lines
+
+#### Scenario: A period that ended before the window is not evaluated
+- **WHEN** a period's last day is before D-7
+- **THEN** no absence exception is raised for its lines
+
+#### Scenario: A period that ended before the mapping was validated is not flagged
+- **WHEN** a line's mapping was validated after the last day of a period
+- **THEN** no absence exception is raised for that line and period
+
+#### Scenario: A line without a validated mapping is not evaluated
+- **WHEN** a line has no validated DSP mapping
+- **THEN** no absence exception is raised for it, because it could never have received delivery
 
 #### Scenario: Evaluating twice does not duplicate the exception
 - **WHEN** the absence check runs again for a line and period that already has an exception
@@ -107,6 +119,16 @@ The system SHALL let an operations user resolve an exception, SHALL keep an unre
 #### Scenario: The queue can be read by status
 - **WHEN** an operations user requests the exceptions with a status of open or resolved
 - **THEN** only the exceptions with that status are returned
+
+#### Scenario: The queue shows what was retained without its cost
+- **WHEN** an operations user reads the exception queue
+- **THEN** each unmatched-delivery exception shows its first and last dates, its number of days, and the total impressions and clicks it retains
+- **AND** no media cost is returned
+
+#### Scenario: The retained cost is stored but not exposed
+- **WHEN** delivery is retained on an exception
+- **THEN** its media cost is stored with the rest of the figures
+- **AND** it stays out of every response until the finance restriction exists
 
 #### Scenario: Reading the queue requires the operations role
 - **WHEN** a user without the `operations` role requests the exception queue
