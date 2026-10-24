@@ -16,7 +16,13 @@ from app.infrastructure.persistence.models.delivery import (
     IngestionExceptionRecord,
 )
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from tests.fixtures.delivery_data import insert_campaign_line, insert_mapping, insert_user, seeded_dsp_id
+from tests.fixtures.delivery_data import (
+    insert_campaign_line,
+    insert_ingestion_batch,
+    insert_mapping,
+    insert_user,
+    seeded_dsp_id,
+)
 from tests.fixtures.delivery_rows import dsp_row
 from tests.fixtures.dsp_delivery_client import InMemoryDspDeliveryClient
 
@@ -105,3 +111,21 @@ def test_the_span_follows_the_retained_dates(setup):
 
     exception = setup.session.scalars(select(IngestionExceptionRecord)).one()
     assert (exception.first_date, exception.last_date) == (D5, D6)
+
+
+def test_absence_is_detected_once_per_line_and_period_through_postgres(rolled_back_session):
+    dsp_id = seeded_dsp_id(rolled_back_session)
+    line = insert_campaign_line(rolled_back_session, "Absent line", date(2026, 7, 1), date(2026, 8, 7))
+    insert_mapping(rolled_back_session, line, dsp_id, validated_at=datetime(2026, 7, 20, 9, 0))
+    batch_id = insert_ingestion_batch(rolled_back_session)
+    service = DeliveryIngestionService(
+        InMemoryDspDeliveryClient([]), lambda: SqlAlchemyUnitOfWork(lambda: rolled_back_session),
+        lambda: datetime(2026, 8, 10, 2, 0))
+
+    first = service.detect_missing_delivery(dsp_id, TODAY, batch_id)
+    second = service.detect_missing_delivery(dsp_id, TODAY, batch_id)
+
+    exception = rolled_back_session.scalars(select(IngestionExceptionRecord)).one()
+    assert (first, second) == (1, 0)
+    assert (exception.exception_type, exception.status, exception.campaign_line_id) == (
+        "missing_delivery", "open", line)

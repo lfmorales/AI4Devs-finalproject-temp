@@ -20,6 +20,14 @@ class IngestionTargets:
     unmapped_line_ids: tuple[int, ...] = ()
 
 
+@dataclass(frozen=True)
+class MissingDeliveryCandidate:
+    """A mapped line and a finished period in which it delivered nothing."""
+
+    campaign_line_id: int
+    campaign_period_id: int
+
+
 def ingestion_window(today: date, window_days: int) -> DeliveryDateRange:
     """D-window_days to D-1: the rolling range every nightly run replaces."""
     if window_days < 1:

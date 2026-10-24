@@ -14,6 +14,7 @@ from app.infrastructure.persistence.models.delivery import (
 )
 
 _UNMATCHED = ExceptionType.UNMATCHED_DELIVERY.value
+_MISSING = ExceptionType.MISSING_DELIVERY.value
 _CHUNK_SIZE = 5000
 
 
@@ -62,6 +63,26 @@ class SqlAlchemyIngestionExceptionRepository(IngestionExceptionRepository):
             self._session.execute(
                 insert(IngestionExceptionDeliveryRecord), [_as_row(exception_id, row) for row in chunk]
             )
+
+    def record_missing_delivery(self, campaign_line_id: int, campaign_period_id: int, batch_id: int) -> bool:
+        already_recorded = self._session.scalar(
+            select(exists().where(
+                IngestionExceptionRecord.exception_type == _MISSING,
+                IngestionExceptionRecord.campaign_line_id == campaign_line_id,
+                IngestionExceptionRecord.campaign_period_id == campaign_period_id,
+            ))
+        )
+        if already_recorded:
+            return False
+        self._session.add(IngestionExceptionRecord(
+            ingestion_batch_id=batch_id,
+            exception_type=_MISSING,
+            status="open",
+            campaign_line_id=campaign_line_id,
+            campaign_period_id=campaign_period_id,
+        ))
+        self._session.flush()
+        return True
 
     def refresh_unmatched_date_spans(self, dsp_id: int) -> None:
         retained = IngestionExceptionDeliveryRecord

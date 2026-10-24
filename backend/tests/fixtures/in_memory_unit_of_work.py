@@ -6,7 +6,7 @@ from app.domain.repositories.ingestion_exception_repository import IngestionExce
 from app.domain.repositories.ingestion_target_repository import IngestionTargetRepository
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.value_objects.delivery import DeliveryDateRange, ExternalLineKey, RetainedDelivery
-from app.domain.value_objects.ingestion import IngestionTargets
+from app.domain.value_objects.ingestion import IngestionTargets, MissingDeliveryCandidate
 from collections.abc import Iterable
 from datetime import date, datetime
 
@@ -43,10 +43,16 @@ class InMemoryIngestionTargetRepository(IngestionTargetRepository):
         self.targets = targets
         self.watched_campaign_ids = watched_campaign_ids
         self.requests: list[tuple[int, DeliveryDateRange]] = []
+        self.missing_candidates: tuple[MissingDeliveryCandidate, ...] = ()
+        self.missing_requests: list[tuple[int, DeliveryDateRange]] = []
 
     def find_targets(self, dsp_id: int, window: DeliveryDateRange) -> IngestionTargets:
         self.requests.append((dsp_id, window))
         return self.targets
+
+    def find_lines_missing_delivery(self, dsp_id: int, window: DeliveryDateRange) -> tuple[MissingDeliveryCandidate, ...]:
+        self.missing_requests.append((dsp_id, window))
+        return self.missing_candidates
 
     def find_watched_campaign_ids(self, today: date) -> tuple[int, ...]:
         return self.watched_campaign_ids
@@ -85,6 +91,19 @@ class InMemoryIngestionExceptionRepository(IngestionExceptionRepository):
     def add_retained(self, exception_id: int, rows: Iterable[RetainedDelivery]) -> None:
         for row in rows:
             self.retained[(exception_id, row.delivery_date)] = row
+
+    def record_missing_delivery(self, campaign_line_id: int, campaign_period_id: int, batch_id: int) -> bool:
+        for exception in self.exceptions.values():
+            if (exception.exception_type is ExceptionType.MISSING_DELIVERY
+                    and exception.campaign_line_id == campaign_line_id
+                    and exception.campaign_period_id == campaign_period_id):
+                return False
+        exception_id = max(self.exceptions, default=0) + 1
+        self.exceptions[exception_id] = IngestionException(
+            id=exception_id, exception_type=ExceptionType.MISSING_DELIVERY, status=ExceptionStatus.OPEN,
+            ingestion_batch_id=batch_id, campaign_line_id=campaign_line_id, campaign_period_id=campaign_period_id,
+        )
+        return True
 
     def refresh_unmatched_date_spans(self, dsp_id: int) -> None:
         for exception in list(self.exceptions.values()):

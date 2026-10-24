@@ -77,6 +77,22 @@ class DeliveryIngestionService:
             counts.ignored_row_count, counts.zero_unmatched_row_count, targets.unmapped_line_ids,
         )
 
+    def detect_missing_delivery(self, dsp_id: int, today: date, batch_id: int) -> int:
+        """Record an exception for every mapped line with no impressions in a period that ended inside the window.
+
+        Not wired to any scheduler. Safe to repeat: a line and period have at most one exception.
+        Returns how many exceptions were new.
+        """
+        window = ingestion_window(today, self._window_days)
+        with self._unit_of_work_factory() as unit_of_work:
+            candidates = unit_of_work.targets.find_lines_missing_delivery(dsp_id, window)
+            return sum(
+                unit_of_work.exceptions.record_missing_delivery(
+                    candidate.campaign_line_id, candidate.campaign_period_id, batch_id
+                )
+                for candidate in candidates
+            )
+
     def _start_batch(self, dsp_id: int, route: IngestionRoute, source_file: str | None) -> int:
         # Its own transaction, committed before the data one, so the batch exists whatever happens next.
         with self._unit_of_work_factory() as unit_of_work:

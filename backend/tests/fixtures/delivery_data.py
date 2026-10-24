@@ -160,3 +160,13 @@ def insert_user(session: Session, email: str = "resolver@example.com") -> int:
     session.add(user)
     session.flush()
     return user.id
+
+
+def insert_delivery(session: Session, campaign_line_id: int, delivery_day: date, impressions: int, batch_id: int) -> None:
+    from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord
+
+    session.add(DailyDeliveryRecord(
+        campaign_line_id=campaign_line_id, ingestion_batch_id=batch_id, delivery_date=delivery_day,
+        impressions=impressions, clicks=0, media_cost=Decimal("0"), measurable_impressions=0, viewable_impressions=0,
+    ))
+    session.flush()

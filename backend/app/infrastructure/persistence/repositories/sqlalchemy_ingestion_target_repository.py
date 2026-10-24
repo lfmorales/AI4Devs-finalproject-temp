@@ -1,16 +1,17 @@
 from datetime import date, timedelta
 
-from sqlalchemy import and_, select
+from sqlalchemy import Date, and_, cast, exists, func, select
 from sqlalchemy.orm import Session
 
 from app.domain.repositories.ingestion_target_repository import IngestionTargetRepository
 from app.domain.value_objects.delivery import DeliveryDateRange, ExternalLineKey
-from app.domain.value_objects.ingestion import IngestionTargets, MappedLine
+from app.domain.value_objects.ingestion import IngestionTargets, MappedLine, MissingDeliveryCandidate
 from app.infrastructure.persistence.models.campaign import (
     CampaignLineRecord,
     CampaignPeriodRecord,
     CampaignRecord,
 )
+from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord
 from app.infrastructure.persistence.models.dsp_mapping import DSPMappingRecord
 
 
@@ -72,3 +73,34 @@ class SqlAlchemyIngestionTargetRepository(IngestionTargetRepository):
             )
             .order_by(CampaignRecord.id)
         ))
+
+    def find_lines_missing_delivery(self, dsp_id: int, window: DeliveryDateRange) -> tuple[MissingDeliveryCandidate, ...]:
+        period = CampaignPeriodRecord
+        # Summed in the database over the whole period, including days older than the ingestion window.
+        impressions_in_period = (
+            select(func.coalesce(func.sum(DailyDeliveryRecord.impressions), 0))
+            .where(
+                DailyDeliveryRecord.campaign_line_id == CampaignLineRecord.id,
+                DailyDeliveryRecord.delivery_date.between(period.period_start, period.period_end),
+            )
+            .scalar_subquery()
+        )
+        # Compared as dates: a mapping validated at 15:30 on the last day still covers that day.
+        mapped_by_period_end = exists().where(
+            DSPMappingRecord.campaign_line_id == CampaignLineRecord.id,
+            DSPMappingRecord.dsp_id == dsp_id,
+            DSPMappingRecord.validated_at.is_not(None),
+            cast(DSPMappingRecord.validated_at, Date) <= period.period_end,
+        )
+        rows = self._session.execute(
+            select(CampaignLineRecord.id, period.id)
+            .join(period, period.id == CampaignLineRecord.campaign_period_id)
+            .where(
+                CampaignLineRecord.dsp_id == dsp_id,
+                period.period_end.between(window.start, window.end),
+                mapped_by_period_end,
+                impressions_in_period == 0,
+            )
+            .order_by(CampaignLineRecord.id, period.id)
+        ).all()
+        return tuple(MissingDeliveryCandidate(line_id, period_id) for line_id, period_id in rows)

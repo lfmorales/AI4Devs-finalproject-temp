@@ -26,3 +26,7 @@ class IngestionExceptionRepository(ABC):
 
         An exception with no retained delivery left keeps the dates it had.
         """
+
+    @abstractmethod
+    def record_missing_delivery(self, campaign_line_id: int, campaign_period_id: int, batch_id: int) -> bool:
+        """Record a missing-delivery exception for the line and period; True if it was new, False if it existed."""
