@@ -1,7 +1,5 @@
 """The slow marker is registered, and slow tests stay out of the default run but can be selected."""
 
-import shlex
-
 import pytest
 
 
@@ -12,7 +10,7 @@ def test_the_slow_marker_is_registered(pytestconfig: pytest.Config):
 
 
 def test_slow_tests_are_excluded_by_default(pytestconfig: pytest.Config):
-    addopts = shlex.split(" ".join(pytestconfig.getini("addopts")))
+    addopts = pytestconfig.getini("addopts")  # Already split into arguments, so "not slow" is one item.
 
     assert addopts[addopts.index("-m") + 1] == "not slow"
 
