@@ -11,6 +11,8 @@
 - [x] 1.4 Add indexes on the DSP mapping, campaign period and delivery date, and verify with `EXPLAIN` that a period roll-up uses them rather than scanning **(partial: índice sin EXPLAIN)**
 - [x] 1.5 Generate the Alembic migration with `--autogenerate`, review it by hand, and verify `upgrade head` then `downgrade base` runs clean
 - [ ] 1.6 Load a synthetic set of at least 1 M delivery rows and verify a period roll-up returns within an acceptable time, recording the measurement **(deferred: carga sintética de 1 M de filas; rendimiento sin medir)**
+- [ ] 1.7 Widen `daily_deliveries.media_cost` to `Numeric(18,6)` with a migration, and verify with a test that a six-decimal value is stored and read back unchanged
+- [ ] 1.8 Add the ignored-row count to `ingestion_batches` with a migration, verified by a constraint test
 
 ## 2. Backend: Ingestion Contract (domain layer)
 
@@ -35,7 +37,10 @@
 - [ ] 4.3 Implement the ingestion application service over the D-7 to D-1 window, writing through a bulk path rather than materialising entities, and verify memory stays bounded on a 1 M-row run
 - [ ] 4.4 Implement batch recording for success and failure and verify a failed run leaves a batch with a failed outcome and no partial range
 - [ ] 4.5 Implement skipping of unmapped active lines and verify the run completes for every mapped line while reporting the skipped ones
-- [ ] 4.6 Create the DSP mapping from a campaign line to a real Adform identifier
+- [ ] 4.6 Create the DSP mapping from a campaign line to a real Adform identifier, checking the pair with `resolve_identifiers` and distinguishing found, unknown and unreachable, setting `validated_at` only when found, and documenting that the stats API cannot tell a line with no delivery in 30 days from an unknown one
+- [ ] 4.7 Enforce one campaign line per external identifier pair and DSP with a unique constraint, and verify a second mapping to the same pair is rejected as a conflict
+- [ ] 4.8 Compare external identifiers as text and combine several external line items mapped to one campaign line into one record per day, verified by tests
+- [ ] 4.9 Ignore delivery rows without an attributed line item, counting them on the batch and not as exceptions, and fail the batch on a currency other than EUR, verified by tests
 
 ## 5. Backend: Manual Upload Route
 

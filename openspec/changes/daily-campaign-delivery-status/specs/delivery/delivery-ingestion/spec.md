@@ -85,3 +85,65 @@ The system SHALL ingest delivery for active campaign lines carrying a validated 
 - **WHEN** an ingestion run encounters an active line with no DSP mapping
 - **THEN** that line is skipped and reported
 - **AND** the run completes for every mapped line
+
+### Requirement: Media cost keeps the precision the DSP reports
+
+The system SHALL store media cost without losing any of the up to six decimals a DSP reports.
+
+#### Scenario: A six-decimal cost is stored and read back unchanged
+- **WHEN** a day of delivery with a media cost of six decimals is stored
+- **THEN** reading it back returns exactly the same value
+
+### Requirement: External identifiers are compared as text
+
+The system SHALL compare a DSP's external campaign and line item identifiers with a mapping as text, whatever type the DSP reports them in.
+
+#### Scenario: A numeric identifier matches its textual mapping
+- **WHEN** the DSP reports a line item identifier as a number and a mapping holds the same digits as text
+- **THEN** the delivery row resolves to the mapped campaign line
+
+### Requirement: An external identifier pair maps to at most one campaign line per DSP
+
+The system SHALL NOT allow two campaign lines to carry the same external campaign identifier and external line item identifier for the same DSP.
+
+#### Scenario: A second mapping to the same pair is rejected
+- **WHEN** a mapping is created for a pair already mapped to another campaign line of the same DSP
+- **THEN** the creation is rejected as a conflict
+- **AND** the existing mapping is unchanged
+
+### Requirement: Several external line items on one campaign line are combined per day
+
+The system SHALL combine the delivery of every external line item mapped to the same campaign line into one record per day, summing impressions, clicks, media cost, measurable impressions and viewable impressions.
+
+#### Scenario: Two external line items of one line are summed
+- **WHEN** two external line items mapped to the same campaign line report delivery for the same day
+- **THEN** one delivery record exists for that line and date
+- **AND** each of its figures is the sum of the two reported figures
+
+### Requirement: Delivery the DSP does not attribute to a line item is ignored and counted
+
+The system SHALL ignore delivery rows the DSP reports without an attributed line item, SHALL count them on the batch as ignored, and SHALL NOT turn them into exceptions.
+
+#### Scenario: An unattributed row is counted, not worked
+- **WHEN** a run retrieves a row with no attributed line item
+- **THEN** the batch records it among its ignored rows
+- **AND** no exception is recorded for it
+
+#### Scenario: A currency other than EUR fails the run
+- **WHEN** a run retrieves a delivery row reported in a currency other than EUR that is not an unattributed row
+- **THEN** the run fails with a failed batch
+- **AND** nothing is converted and no part of the range is stored
+
+### Requirement: A DSP mapping is created against an identifier pair checked with the DSP
+
+The system SHALL check an external identifier pair with the DSP when a mapping is created, SHALL distinguish a pair that was found, one the DSP does not know and a DSP that could not be reached, and SHALL set `validated_at` only when the pair was found.
+
+#### Scenario: A found pair is validated
+- **WHEN** a mapping is created for a pair the DSP knows
+- **THEN** the mapping carries a validation timestamp
+
+#### Scenario: An unknown pair and an unreachable DSP are different outcomes
+- **WHEN** the DSP does not know the pair, or cannot be reached
+- **THEN** the two outcomes are distinguishable from each other and from a found pair
+- **AND** no validation timestamp is set
+

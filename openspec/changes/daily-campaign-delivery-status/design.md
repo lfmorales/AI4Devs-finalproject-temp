@@ -33,6 +33,18 @@ It also introduces the first scheduled work in the product. Until now every writ
 
 **The nightly run is a container command invoked by the host scheduler**, not an in-process scheduler inside the API. It keeps long work out of the request cycle and makes a manual re-run the same code path as the scheduled one.
 
+**One stats request per run, for every mapped line.** The Adform quota is 10 requests a minute and 500 a day, shared with the whole agency, so a run asks once for the whole window and splits the answer by line afterwards. The report is asynchronous: the request is accepted, its operation is polled at an interval of at least three seconds up to a configurable number of attempts, and the data is read only once the operation has succeeded. Any state other than running or succeeded is a failure.
+
+**A run records its batch outside the delivery transaction.** The batch is written before the range is replaced and finished after, each in its own transaction, so a run that fails still leaves a batch with a failed outcome while the range itself rolls back whole.
+
+**Identifiers are compared as text.** Adform reports campaign and line item identifiers as integers and mappings hold them as text; both sides are normalised to text before they are compared.
+
+**One campaign line per external pair and DSP; several pairs may feed one line.** A pair identifies at most one campaign line, enforced by a unique constraint. Several pairs may map to the same line, and their rows for a day are summed into the single record the grain allows. Decided by the PO.
+
+**Unattributed rows are ignored and counted, never worked.** Rows the DSP reports with no attributed line item are not exceptions: they are counted on the batch. A currency other than EUR is a batch failure, not a conversion.
+
+**Validating a pair through the stats API can only see delivery.** A pair is found when it appears in any row of the last 30 days; a line with no delivery in that period cannot be told apart from one that does not exist. The limitation is documented where the check is made.
+
 ## Risks / Trade-offs
 
 - **The delivery table grows without bound and the migration adds 8.5 M rows at once.** → Index the columns joins and filters use — the mapping, the campaign period, the delivery date — from the first migration. Partitioning by date is the escape hatch if roll-ups degrade; deliberately not built now, because the access pattern is period-scoped and an index covers it until volumes are known in production.
