@@ -54,7 +54,7 @@ class DailyDeliveryRecord(Base):
     delivery_date: Mapped[date] = mapped_column(Date, nullable=False)
     impressions: Mapped[int] = mapped_column(BigInteger, nullable=False)
     clicks: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    media_cost: Mapped[Decimal] = mapped_column(Numeric(precision=16, scale=4), nullable=False)
+    media_cost: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=6), nullable=False)
     measurable_impressions: Mapped[int] = mapped_column(BigInteger, nullable=False)
     viewable_impressions: Mapped[int] = mapped_column(BigInteger, nullable=False)
     banner_size: Mapped[str | None] = mapped_column(String, nullable=True)

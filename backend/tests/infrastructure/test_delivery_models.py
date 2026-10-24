@@ -98,3 +98,19 @@ def test_line_format_is_optional_contrast_data(rolled_back_session):
 
     rolled_back_session.add(_delivery(line_id, batch_id, line_format=None, banner_size=None, screen=None))
     rolled_back_session.flush()
+
+
+def test_media_cost_keeps_six_decimals(rolled_back_session):
+    line_id = insert_campaign_line(rolled_back_session)
+    batch_id = insert_ingestion_batch(rolled_back_session)
+    rolled_back_session.add(_delivery(line_id, batch_id, media_cost=Decimal("1234.123457")))
+    rolled_back_session.flush()
+    rolled_back_session.expire_all()
+
+    assert rolled_back_session.scalars(select(DailyDeliveryRecord.media_cost)).one() == Decimal("1234.123457")
+
+
+def test_media_cost_column_holds_six_decimals_in_the_schema(test_engine):
+    media_cost = next(c for c in inspect(test_engine).get_columns("daily_deliveries") if c["name"] == "media_cost")
+
+    assert (media_cost["type"].precision, media_cost["type"].scale) == (18, 6)
