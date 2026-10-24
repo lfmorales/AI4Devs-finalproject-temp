@@ -24,7 +24,7 @@ from app.infrastructure.dsp.adform_delivery_client import AdformDeliveryClient, 
 
 _REQUIRED_VARIABLES = ("ADFORM_CLIENT_ID", "ADFORM_CLIENT_SECRET")
 _EUR = "EUR"
-_COUNT_COLUMNS = ("campaignID", "lineItemID", "campaignCurrency")
+_COUNT_COLUMNS = ("campaignID", "lineItemID", "campaignCurrency", "impressions")
 
 
 def main(
@@ -84,17 +84,24 @@ def summarize(report: AdformReport) -> list[str]:
 
 def _counts(report: AdformReport) -> list[str]:
     position = {name: report.column_headers.index(name) for name in _COUNT_COLUMNS}
-    ignored = eur = unreadable = 0
+    ignored = eur = unreadable = zero_attributed = zero_not_attributed = 0
     pairs: set[tuple[int, int]] = set()
     for row in report.rows:
         try:
             campaign_id = int(row[position["campaignID"]])
             line_item_id = int(row[position["lineItemID"]])
             currency = str(row[position["campaignCurrency"]])
+            impressions = int(row[position["impressions"]])
         except (ValueError, TypeError, IndexError):
             unreadable += 1
             continue
         eur += currency == _EUR
+        if impressions == 0:
+            # Attributed here means a real line item reported in EUR, which is narrower than "not ignored".
+            if line_item_id > 0 and currency == _EUR:
+                zero_attributed += 1
+            else:
+                zero_not_attributed += 1
         if is_unattributed(line_item_id, currency):
             ignored += 1
         else:
@@ -103,6 +110,8 @@ def _counts(report: AdformReport) -> list[str]:
         f"rows without an attributed line item (ignored): {ignored}",
         f"rows in {_EUR}: {eur}",
         f"distinct (campaign, line item) pairs among attributed rows: {len(pairs)}",
+        f"rows with zero impressions, attributed (line item > 0, {_EUR}): {zero_attributed}",
+        f"rows with zero impressions, not attributed: {zero_not_attributed}",
     ]
     if unreadable:
         lines.append(f"rows that could not be read: {unreadable}")

@@ -142,3 +142,36 @@ def test_it_does_not_load_the_database_layer():
     )
 
     assert (result.returncode, result.stderr) == (0, "")
+
+
+def _zero_impression_rows():
+    zero = {"impressions": 0}
+    return [
+        report_row("2031-02-03T00:00:00", 777001, 888001, "EUR", **zero),           # attributed, zero
+        report_row("2031-02-04T00:00:00", 777001, 888001, "EUR", **zero),           # attributed, zero
+        report_row("2031-02-03T00:00:00", 777002, 888002, "EUR", impressions=31415926),  # attributed, not zero
+        report_row("2031-02-03T00:00:00", 777001, 0, "-", **zero),                  # no line item, zero
+        report_row("2031-02-03T00:00:00", 777002, 888003, "GBP", **zero),           # not EUR, zero
+        report_row("2031-02-03T00:00:00", 777002, 0, "-", impressions=31415926),    # no line item, not zero
+    ]
+
+
+def test_it_counts_zero_impression_rows_with_and_without_an_attributed_line():
+    _, output = _run(FakeAdform(rows=_zero_impression_rows()))
+
+    assert "rows with zero impressions, attributed (line item > 0, EUR): 2" in output
+    assert "rows with zero impressions, not attributed: 2" in output
+
+
+def test_the_zero_impression_counts_show_no_value_from_the_report():
+    _, output = _run(FakeAdform(rows=_zero_impression_rows()))
+
+    for value in SYNTHETIC_VALUES:
+        assert value not in output
+
+
+def test_a_report_without_zero_impressions_counts_zero_in_both():
+    _, output = _run(FakeAdform(rows=_report_rows()))
+
+    assert "rows with zero impressions, attributed (line item > 0, EUR): 0" in output
+    assert "rows with zero impressions, not attributed: 0" in output
