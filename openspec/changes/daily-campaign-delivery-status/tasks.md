@@ -29,7 +29,7 @@
 - [x] 3.2 Implement pacing as a pure function of contracted volume, period bounds, date and delivered volume, and verify the tests from 3.1 pass without a database
 - [x] 3.3 Write failing tests for the missing-data rule: flagged when the latest delivery predates D-1, not flagged at D-1, cleared on the next ingestion
 - [x] 3.4 Implement the missing-data rule and verify the tests from 3.3 pass
-- [ ] 3.5 Add a test documenting that the pacing function reports under-delivery for a period that has ended with nothing delivered, and keep the test for a period that has not started
+- [x] 3.5 Add a test documenting that the pacing function reports under-delivery for a period that has ended with nothing delivered, and keep the test for a period that has not started
 
 ## 4. Backend: Adform Connector and Ingestion Service
 

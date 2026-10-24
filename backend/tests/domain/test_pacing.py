@@ -90,6 +90,13 @@ def test_before_the_period_starts_nothing_is_expected_and_nothing_is_flagged():
     assert (pacing.expected_impressions, pacing.status, pacing.deviation) == (0, PacingStatus.ON_PACE, None)
 
 
+def test_a_period_that_has_ended_with_nothing_delivered_reports_under_delivery():
+    # The pure function does not know which periods the status view lists; finished periods are left out there.
+    pacing = _pace(delivered=0, as_of=date(2026, 9, 5))
+
+    assert (pacing.status, pacing.is_deviating, pacing.days_remaining) == (PacingStatus.UNDER_DELIVERING, True, 0)
+
+
 def test_a_line_with_no_contracted_volume_is_never_flagged():
     assert _pace(delivered=500, contracted=0).is_deviating is False
 
