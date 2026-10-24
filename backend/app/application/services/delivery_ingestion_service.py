@@ -7,7 +7,12 @@ from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.services.delivery_combination import combine_daily_deliveries
 from app.domain.services.delivery_range_replacement import DeliveryRangeReplacer
 from app.domain.services.dsp_delivery_client import DspDeliveryClient
-from app.domain.value_objects.delivery import DeliveryDateRange, DspDeliveryRow, ExternalLineKey
+from app.domain.services.unmatched_delivery_recording import (
+    UnmatchedDeliveryRecorder,
+    has_something_to_work,
+    retain,
+)
+from app.domain.value_objects.delivery import DeliveryDateRange, DspDeliveryRow, ExternalLineKey, RetainedDelivery
 from app.domain.value_objects.ingestion import IngestionTargets, ingestion_window
 
 DEFAULT_WINDOW_DAYS = 7
@@ -61,7 +66,7 @@ class DeliveryIngestionService:
         batch_id = self._start_batch(dsp_id, route, source_file)
         try:
             targets = self._find_targets(dsp_id, window)
-            counts = self._ingest(batch_id, window, targets)
+            counts = self._ingest(dsp_id, batch_id, window, targets)
         except Exception:
             # The range already rolled back whole; the failed batch is what tells operations the run happened.
             self._finish_batch(batch_id, BatchStatus.FAILED, _RunCounts())
@@ -81,7 +86,9 @@ class DeliveryIngestionService:
         with self._unit_of_work_factory() as unit_of_work:
             return unit_of_work.targets.find_targets(dsp_id, window)
 
-    def _ingest(self, batch_id: int, window: DeliveryDateRange, targets: IngestionTargets) -> _RunCounts:
+    def _ingest(
+        self, dsp_id: int, batch_id: int, window: DeliveryDateRange, targets: IngestionTargets
+    ) -> _RunCounts:
         if not targets.mapped_lines:
             return _RunCounts()  # Nothing to ask the DSP for; the quota is shared with the whole agency.
 
@@ -90,6 +97,7 @@ class DeliveryIngestionService:
             for line in targets.mapped_lines
         }
         rows_read = unmatched_row_count = ignored_row_count = zero_unmatched_row_count = 0
+        retained: dict[tuple[ExternalLineKey, date], RetainedDelivery] = {}
 
         def _attributed_rows() -> Iterator[tuple[int, DspDeliveryRow]]:
             nonlocal rows_read, unmatched_row_count, ignored_row_count, zero_unmatched_row_count
@@ -104,7 +112,10 @@ class DeliveryIngestionService:
                 )
                 if campaign_line_id is None:
                     unmatched_row_count += 1
-                    if row.impressions == 0 and row.media_cost == 0:
+                    if has_something_to_work(row):
+                        key = ExternalLineKey.from_raw(row.key.external_campaign_id, row.key.external_line_item_id)
+                        retained[(key, row.delivery_date)] = retain(retained.get((key, row.delivery_date)), key, row)
+                    else:
                         # The statistics API returns many rows of zeros for active campaigns; counted, not worked.
                         zero_unmatched_row_count += 1
                     continue
@@ -112,9 +123,13 @@ class DeliveryIngestionService:
 
         # The DSP is read before any transaction opens, so a slow report never holds the database.
         deliveries = combine_daily_deliveries(_attributed_rows(), batch_id)
+        # Deliveries and exceptions share one transaction: a run lands whole or not at all.
         with self._unit_of_work_factory() as unit_of_work:
-            stored = DeliveryRangeReplacer(unit_of_work).replace_range(
+            stored = DeliveryRangeReplacer(unit_of_work).replace_range_in_transaction(
                 {line.campaign_line_id for line in targets.mapped_lines}, window, deliveries
+            )
+            UnmatchedDeliveryRecorder().record(
+                unit_of_work.exceptions, dsp_id, batch_id, window, retained.values()
             )
         return _RunCounts(rows_read, stored, unmatched_row_count, ignored_row_count, zero_unmatched_row_count)
 

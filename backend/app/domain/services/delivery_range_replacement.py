@@ -21,7 +21,17 @@ class DeliveryRangeReplacer:
         date_range: DeliveryDateRange,
         deliveries: Iterable[DailyDelivery],
     ) -> int:
-        """Replace the lines' delivery inside the range and return how many rows were stored."""
+        """Replace the lines' delivery inside the range, in its own transaction, and return the rows stored."""
+        with self._unit_of_work:
+            return self.replace_range_in_transaction(campaign_line_ids, date_range, deliveries)
+
+    def replace_range_in_transaction(
+        self,
+        campaign_line_ids: Collection[int],
+        date_range: DeliveryDateRange,
+        deliveries: Iterable[DailyDelivery],
+    ) -> int:
+        """The same replacement inside a transaction the caller has already opened, so other writes can share it."""
         stored_count = 0
 
         def _counted(rows: Iterator[DailyDelivery]) -> Iterator[DailyDelivery]:
@@ -31,9 +41,8 @@ class DeliveryRangeReplacer:
                 yield row
 
         # Delete and insert share one transaction: a failure partway must not leave the range half replaced.
-        with self._unit_of_work as unit_of_work:
-            unit_of_work.deliveries.delete_range(campaign_line_ids, date_range)
-            unit_of_work.deliveries.add_all(_counted(self._within_run(campaign_line_ids, date_range, deliveries)))
+        self._unit_of_work.deliveries.delete_range(campaign_line_ids, date_range)
+        self._unit_of_work.deliveries.add_all(_counted(self._within_run(campaign_line_ids, date_range, deliveries)))
         return stored_count
 
     @staticmethod

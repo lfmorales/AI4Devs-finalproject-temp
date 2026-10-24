@@ -79,3 +79,19 @@ class DailyDelivery:
 
     def __post_init__(self) -> None:
         _require_decimal_media_cost(self.media_cost)
+
+
+@dataclass(frozen=True)
+class RetainedDelivery:
+    """Delivery kept on an unmatched-delivery exception for one pair and date, instead of being dropped."""
+
+    key: ExternalLineKey
+    delivery_date: date
+    impressions: int
+    clicks: int
+    media_cost: Decimal
+    measurable_impressions: int
+    viewable_impressions: int
+
+    def __post_init__(self) -> None:
+        _require_decimal_media_cost(self.media_cost)

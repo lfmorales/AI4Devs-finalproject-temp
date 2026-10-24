@@ -1,0 +1,37 @@
+from dataclasses import dataclass
+from datetime import date, datetime
+from enum import StrEnum
+
+from app.domain.value_objects.delivery import ExternalLineKey
+
+
+class ExceptionType(StrEnum):
+    UNMATCHED_DELIVERY = "unmatched_delivery"
+    MISSING_DELIVERY = "missing_delivery"
+    # Defined but not generated: neither the statistics API nor the manual upload carries a line format.
+    CHANNEL_MISMATCH = "channel_mismatch"
+
+
+class ExceptionStatus(StrEnum):
+    OPEN = "open"
+    RESOLVED = "resolved"
+
+
+@dataclass(frozen=True)
+class IngestionException:
+    """Something an operations user has to work. Resolving it only marks it; nothing is reprocessed."""
+
+    id: int
+    exception_type: ExceptionType
+    status: ExceptionStatus
+    # The batch that first raised it.
+    ingestion_batch_id: int
+    dsp_id: int | None = None
+    key: ExternalLineKey | None = None
+    campaign_line_id: int | None = None
+    campaign_period_id: int | None = None
+    first_date: date | None = None
+    last_date: date | None = None
+    resolved_at: datetime | None = None
+    resolved_by: int | None = None
+    note: str | None = None

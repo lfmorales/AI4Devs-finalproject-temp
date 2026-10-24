@@ -60,8 +60,8 @@
 
 ## 6. Backend: Exceptions and Status API
 
-- [ ] 6.1 Write failing tests for unmatched delivery: an `unmatched_delivery` exception is recorded with its DSP and external pair, figures are retained per date, running the same window twice neither duplicates the exception nor its days, a resolved pair that delivers again is not reopened but its new delivery is kept, unmatched rows of zeros are counted and not recorded, and the run still stores matched rows
-- [ ] 6.2 Implement unmatched-delivery exception recording in the ingestion service, shared by the API and upload routes, and verify the tests from 6.1 pass
+- [x] 6.1 Write failing tests for unmatched delivery: an `unmatched_delivery` exception is recorded with its DSP and external pair, figures are retained per date, running the same window twice neither duplicates the exception nor its days, a resolved pair that delivers again is not reopened but its new delivery is kept, unmatched rows of zeros are counted and not recorded, and the run still stores matched rows
+- [x] 6.2 Implement unmatched-delivery exception recording in the ingestion service, shared by the API and upload routes, and verify the tests from 6.1 pass
 - [ ] 6.3 Write failing tests for absence: a line with no row in an ended period raises a `missing_delivery` exception, so does a line whose rows sum to zero impressions, a period whose last day is after D-1 does not, and evaluating twice does not duplicate it
 - [ ] 6.4 Implement absence detection as a service method not wired to a scheduler, and the endpoints `GET /ingestion-exceptions?status=open|resolved` and `POST /ingestion-exceptions/{id}/resolve` for the `operations` role as plain `def` routes, with 404 `exception_not_found` and 409 `exception_already_resolved`, and verify a resolved exception leaves the open queue while remaining readable
 - [ ] 6.5 Implement the daily status endpoint returning contracted, delivered, ratio, pacing and both flags, aggregated in the database
