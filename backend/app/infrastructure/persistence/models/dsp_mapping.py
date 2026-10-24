@@ -1,7 +1,7 @@
 """DSP mapping: external IDs that bind campaign lines to DSPs."""
 
 from datetime import datetime
-from sqlalchemy import String, ForeignKey, DateTime, Index
+from sqlalchemy import String, ForeignKey, DateTime, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.persistence.base import Base
@@ -10,8 +10,11 @@ from app.infrastructure.persistence.base import Base
 class DSPMappingRecord(Base):
     __tablename__ = "dsp_mappings"
     __table_args__ = (
-        # Ingestion resolves a DSP's external identifiers to a campaign line through this key.
-        Index("ix_dsp_mappings_dsp_external_ids", "dsp_id", "external_campaign_id", "external_line_item_id"),
+        # Ingestion resolves a DSP's external identifiers to a campaign line through this key, so a pair
+        # must identify at most one line. Several pairs may still feed the same line.
+        UniqueConstraint(
+            "dsp_id", "external_campaign_id", "external_line_item_id", name="uq_dsp_mappings_dsp_external_ids"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
