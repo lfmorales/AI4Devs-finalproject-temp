@@ -19,6 +19,7 @@ class IngestionRunResult:
     window: DeliveryDateRange
     stored_row_count: int
     unmatched_row_count: int
+    skipped_line_ids: tuple[int, ...] = ()
 
 
 class DeliveryIngestionService:
@@ -53,7 +54,7 @@ class DeliveryIngestionService:
             self._finish_batch(batch_id, BatchStatus.FAILED, row_count=0)
             raise
         self._finish_batch(batch_id, BatchStatus.SUCCEEDED, stored_row_count)
-        return IngestionRunResult(batch_id, window, stored_row_count, unmatched_row_count)
+        return IngestionRunResult(batch_id, window, stored_row_count, unmatched_row_count, targets.unmapped_line_ids)
 
     def _start_batch(self, dsp_id: int, route: IngestionRoute, source_file: str | None) -> int:
         # Its own transaction, committed before the data one, so the batch exists whatever happens next.
