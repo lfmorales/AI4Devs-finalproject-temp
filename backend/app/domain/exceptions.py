@@ -40,3 +40,23 @@ class DeliveryForUnknownLineError(DomainError):
 
 class UnsupportedCurrencyError(DomainError):
     """A DSP reported delivery in a currency other than EUR. Nothing is converted; the run fails."""
+
+
+class DspUnreachableError(DomainError):
+    """The DSP could not be reached: a timeout or a connection failure."""
+
+
+class DspAuthenticationError(DomainError):
+    """The DSP refused the credentials or the token."""
+
+
+class DspReportFailedError(DomainError):
+    """The DSP rejected the report request or the report ended in a state other than succeeded."""
+
+
+class DspReportTimeoutError(DomainError):
+    """The DSP report was still running after the configured number of polling attempts."""
+
+
+class DspResponseFormatError(DomainError):
+    """The DSP answered in a shape the client does not recognise."""

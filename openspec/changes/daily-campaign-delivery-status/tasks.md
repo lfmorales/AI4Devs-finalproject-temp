@@ -32,7 +32,7 @@
 
 ## 4. Backend: Adform Connector and Ingestion Service
 
-- [ ] 4.1 Implement the Adform delivery client in `infrastructure/dsp/` behind the interface from 2.1, with authentication and pagination, verified against the sandbox **(partial: sin sandbox: se verifica contra la cuenta real, solo lectura)**
+- [x] 4.1 Implement the Adform delivery client in `infrastructure/dsp/` behind the interface from 2.1, with authentication and pagination, verified against the sandbox **(partial: sin sandbox: se verifica contra la cuenta real, solo lectura; los tests usan HTTP simulado y la verificación contra la cuenta real queda pendiente)**
 - [ ] 4.2 Verify no credential reaches the logs or an error response, asserted by a test on the log output
 - [x] 4.3 Implement the ingestion application service over the D-7 to D-1 window, writing through a bulk path rather than materialising entities, and verify memory stays bounded on a 1 M-row run **(partial: memoria verificada en el servicio con 1 M de filas y un destino contador; la escritura a PostgreSQL se verifica por trozos, no con 1 M de filas)**
 - [x] 4.4 Implement batch recording for success and failure and verify a failed run leaves a batch with a failed outcome and no partial range
@@ -40,7 +40,7 @@
 - [ ] 4.6 Create the DSP mapping from a campaign line to a real Adform identifier, checking the pair with `resolve_identifiers` and distinguishing found, unknown and unreachable, setting `validated_at` only when found, and documenting that the stats API cannot tell a line with no delivery in 30 days from an unknown one
 - [ ] 4.7 Enforce one campaign line per external identifier pair and DSP with a unique constraint, and verify a second mapping to the same pair is rejected as a conflict
 - [x] 4.8 Compare external identifiers as text and combine several external line items mapped to one campaign line into one record per day, verified by tests
-- [ ] 4.9 Ignore delivery rows without an attributed line item, counting them on the batch and not as exceptions, and fail the batch on a currency other than EUR, verified by tests
+- [x] 4.9 Ignore delivery rows without an attributed line item, counting them on the batch and not as exceptions, and fail the batch on a currency other than EUR, verified by tests
 
 ## 5. Backend: Manual Upload Route
 
