@@ -14,7 +14,7 @@ The system SHALL present contracted volume and delivered volume as separate figu
 
 ### Requirement: An active campaign missing D-1 delivery is flagged
 
-The system SHALL flag an active campaign whose most recent delivery predates D-1, evaluated after the nightly ingestion has run. For this flag a campaign is active when its status is `active` and D-1 falls within its dates.
+The system SHALL flag an active campaign whose most recent delivery predates D-1, evaluated after the nightly ingestion has run. For this flag a campaign is active when its status is `active` and D-1 falls within its dates. A delivery row with zero impressions counts as data received. The flag is not evaluated while D-1 is before the campaign's start; once D-1 is on or after the start, a campaign with no delivery at all is flagged. A campaign that receives rows but stalls is covered by the pacing deviation flag, not by this one: the two flags are distinct.
 
 #### Scenario: A campaign with no delivery for D-1 is flagged
 - **WHEN** the nightly ingestion completes and an active campaign's most recent delivery is older than D-1
@@ -27,6 +27,14 @@ The system SHALL flag an active campaign whose most recent delivery predates D-1
 #### Scenario: A campaign that has not started is not flagged
 - **WHEN** a campaign's start date is after D-1
 - **THEN** it carries no missing-data flag
+
+#### Scenario: A row with zero impressions counts as data received
+- **WHEN** an active campaign's most recent delivery is dated D-1 and has zero impressions
+- **THEN** it carries no missing-data flag
+
+#### Scenario: A campaign with no delivery at all is flagged once D-1 reaches its start
+- **WHEN** D-1 is on or after an active campaign's start and the campaign has no delivery
+- **THEN** it is flagged as having received no data
 
 #### Scenario: A campaign that has ended is not flagged
 - **WHEN** a campaign ended before D-1, even if it was ingested because its dates overlap the window

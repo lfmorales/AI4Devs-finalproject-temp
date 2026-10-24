@@ -32,7 +32,7 @@
 
 ## 4. Backend: Adform Connector and Ingestion Service
 
-- [x] 4.1 Implement the Adform delivery client in `infrastructure/dsp/` behind the interface from 2.1, with authentication and pagination, verified against the sandbox **(partial: sin sandbox: se verifica contra la cuenta real, solo lectura; los tests usan HTTP simulado y la verificación contra la cuenta real queda pendiente)**
+- [x] 4.1 Implement the Adform delivery client in `infrastructure/dsp/` behind the interface from 2.1, with authentication and pagination, verified against the sandbox **(verificado contra la cuenta real de Adform, solo lectura, con adform_smoke el 2026-10-24: 142 filas, operación succeeded)**
 - [x] 4.2 Verify no credential reaches the logs or an error response, asserted by a test on the log output
 - [x] 4.3 Implement the ingestion application service over the D-7 to D-1 window, writing through a bulk path rather than materialising entities, and verify memory stays bounded on a 1 M-row run **(partial: memoria verificada en el servicio con 1 M de filas y un destino contador; la escritura a PostgreSQL se verifica por trozos, no con 1 M de filas)**
 - [x] 4.4 Implement batch recording for success and failure and verify a failed run leaves a batch with a failed outcome and no partial range
@@ -48,6 +48,7 @@
 - [x] 4.14 Write a test with simulated HTTP asserting that the Adform smoke script prints no value, name, identifier or amount from a synthetic response, and makes a single request
 - [x] 4.15 Implement `scripts/adform_smoke.py` (`python -m scripts.adform_smoke`), printing only the final operation status, row count, ignored rows, EUR rows, distinct pair count, the zero-impression rows with and without an attributed line item (line item above 0, EUR) and the type of each column, writing nothing to the database or disk; the PO runs it against the real account
 - [x] 4.16 Mark the 1 M-row memory test as `slow`, register the marker, exclude it by default with `-m "not slow"`, and note that it runs with `pytest -m slow` and that the full verification of section 10 must include it **(run it with `pytest -m slow`; the full verification of section 10, task 10.3, includes it)**
+- [ ] 4.17 Make a batch's `row_count` the number of rows read from the DSP, keeping `ignored_row_count` for rows without an attributed line item and adding `zero_unmatched_row_count` for unmatched rows of zeros, verified by tests on the ingestion service
 
 ## 5. Backend: Manual Upload Route
 
@@ -59,13 +60,14 @@
 
 ## 6. Backend: Exceptions and Status API
 
-- [ ] 6.1 Write failing tests for unmatched delivery: an exception is recorded with its external key, figures are retained, and the run still stores matched rows
-- [ ] 6.2 Implement unmatched-delivery exception recording and verify the tests from 6.1 pass
-- [ ] 6.3 Write failing tests for absence: a line with no delivery in an ended period raises an exception, a running period does not
-- [ ] 6.4 Implement absence detection and exception resolution, and verify a resolved exception leaves the outstanding queue while remaining readable
+- [ ] 6.1 Write failing tests for unmatched delivery: an `unmatched_delivery` exception is recorded with its DSP and external pair, figures are retained per date, running the same window twice neither duplicates the exception nor its days, a resolved pair that delivers again is not reopened but its new delivery is kept, unmatched rows of zeros are counted and not recorded, and the run still stores matched rows
+- [ ] 6.2 Implement unmatched-delivery exception recording in the ingestion service, shared by the API and upload routes, and verify the tests from 6.1 pass
+- [ ] 6.3 Write failing tests for absence: a line with no row in an ended period raises a `missing_delivery` exception, so does a line whose rows sum to zero impressions, a period whose last day is after D-1 does not, and evaluating twice does not duplicate it
+- [ ] 6.4 Implement absence detection as a service method not wired to a scheduler, and the endpoints `GET /ingestion-exceptions?status=open|resolved` and `POST /ingestion-exceptions/{id}/resolve` for the `operations` role as plain `def` routes, with 404 `exception_not_found` and 409 `exception_already_resolved`, and verify a resolved exception leaves the open queue while remaining readable
 - [ ] 6.5 Implement the daily status endpoint returning contracted, delivered, ratio, pacing and both flags, aggregated in the database
 - [ ] 6.6 Implement the finance restriction so cost fields are absent from the response for a user without the role, and write a test asserting the field is missing rather than null **(deferred: el endpoint de estado del corte no devuelve campos de coste)**
 - [ ] 6.7 Write tests asserting 403 for a user without `operations` on the exception queue, and 401 for a missing or invalid token on every endpoint of this change
+- [ ] 6.8 Generate the exceptions migration with `--autogenerate`: the types `unmatched_delivery`, `missing_delivery` and `channel_mismatch`, uniqueness per type, DSP and external pair and per line and period, `first_date`, `last_date`, `resolved_at`, `resolved_by` and the note, the child table `ingestion_exception_deliveries` unique on exception and date, and `zero_unmatched_row_count` on the batches, reviewed by hand with `test_migration_schema_sync` green and `downgrade base` clean
 
 ## 7. Backend: Scheduled Run
 

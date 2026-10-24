@@ -37,12 +37,17 @@ The system SHALL replace, not append, the delivery already held for the date ran
 
 ### Requirement: Every ingestion run is recorded as a batch
 
-The system SHALL record each ingestion run with its route, its source, its start and end times, its outcome and the number of rows processed, and SHALL associate every delivery record with the batch that produced it.
+The system SHALL record each ingestion run with its route, its source, its start and end times, its outcome, the number of rows read, the number of rows ignored for having no attributed line item and the number of unmatched rows ignored for having no impressions and no cost, and SHALL associate every delivery record with the batch that produced it. The outcome SHALL be one of `running`, `succeeded` or `failed`.
 
 #### Scenario: A successful run is traceable to its source
 - **WHEN** an ingestion run completes
 - **THEN** a batch record exists naming the route, the DSP and the source
 - **AND** every delivery record it produced references that batch
+
+#### Scenario: The batch counts the rows it read and the rows it ignored
+- **WHEN** a run reads rows of which some have no attributed line item and some are unmatched with zero impressions and zero cost
+- **THEN** the batch's row count is the number of rows read
+- **AND** its ignored rows and its zero unmatched rows are counted separately
 
 #### Scenario: A failed run is recorded, not silently dropped
 - **WHEN** an ingestion run fails partway
