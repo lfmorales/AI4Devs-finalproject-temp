@@ -836,16 +836,11 @@ signIn("/")). Solo frontend/.
 Un bloque se da por terminado solo cuando pasan los tres: `npm run typecheck`, la suite de
 Vitest dos veces seguidas y `docker compose build frontend`. Pega el resultado real.
 
-**Prompt 8**
-**Herramienta** Claude Code
-**Prompt**
 
 
 ---
 
 ### Ajustes humanos de los bloques siguientes (pendientes de colocar bajo su prompt)
-
-> Estos ajustes corresponden a prompts posteriores al 7 que aún no constan arriba. Cada uno debe ir bajo el prompt de su bloque, junto al texto original y a la respuesta de Claude Code.
 
 **Formulario de alta: errores de validación en pantalla (Zod 4)**
 - **Ajuste humano:** Al enviar el formulario vacío salía el JSON en bruto de los issues de Zod 4, con los 52 tests en verde: solo lo vi en el navegador. El primer arreglo (`9be3c1b`) mapeó cada issue a su campo. El segundo (`0106edc`) traducía el error de `scope` buscando el texto «Invalid enum value» y su informe hablaba de `superRefine`. Ese texto es de Zod 3 y el proyecto usa Zod 4 (`^4.6.7`), donde el mensaje real es «Invalid option: expected one of...». Lo localicé con `grep` (`message.includes("Invalid enum value")`) contrastando con el error que veía en pantalla, y exigí que el mensaje saliera del propio esquema y no de un texto en inglés de la librería. Verifiqué en el navegador que `scope` muestra «Selecciona el ámbito».
@@ -872,3 +867,146 @@ Vitest dos veces seguidas y `docker compose build frontend`. Pega el resultado r
 - **Ajuste humano:** Para que no inventara cifras, ejecuté yo las pruebas dos veces y dejé los resultados en ficheros; el informe se escribió solo a partir de ellos. Aun así, la primera versión estaba en inglés, daba por buenos los nombres de las bases de datos sin que figuraran en los ficheros, llamaba «unitarios» a todos los tests de backend (que incluyen API contra PostgreSQL real y migraciones) y añadía «Playwright cubriendo los tres flujos de rol», que no habíamos decidido. En la corrección su resumen dijo haber eliminado «Performance y carga» y seguía en el fichero; lo detecté comparando el contenido con lo pedido y lo quité a mano.
 
 **Patrón común.** Los informes de Claude Code llegaron varias veces incompletos o recortados: daban por cerrado algo que no habían hecho (el stub de `GET /campaigns`, el arreglo del 409, el archivado con tareas abiertas) o citaban un solo test con `PASSED` en lugar de la suite. Lo detecté exigiendo la salida cruda de `pytest` dos veces, `git show --stat`, `typecheck` y `docker compose build`, y comprobando siempre en el navegador, donde aparecieron los fallos que los tests no veían (el botón de login, el JSON de Zod, el 403 mal pintado, `campaign_period_id: 0`).
+
+
+## Entrega 3 — Proyecto final
+### Change: daily-campaign-delivery-status 
+
+**Prompt 1**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame.
+
+La tarea 2.1 habla del método de resolución de identificadores «existente», pero no existe: las tareas 4.1–4.4 de la historia 1 se aplazaron. Créalo también en la interfaz del cliente DSP.
+Vamos a implementar el change daily-campaign-delivery-status, en esta rama (feature/daily-campaign-delivery-status, creada desde final-project-LFMC). Este prompt cubre solo los apartados 1, 2 y 3 de tasks.md.
+
+Antes de escribir código, lee openspec/changes/daily-campaign-delivery-status/ (proposal, specs, design y tasks), docs/base-standards.md, el readme (§3 y la historia B de §5) y el backend existente: repositorios, errors.py con los manejadores globales y require_roles.
+
+Orden: (1) esquema y migración de Alembic, con --autogenerate; test_migration_schema_sync debe seguir en verde. (2) Contrato de ingesta en el dominio: la interfaz del cliente DSP de entrega y un doble en memoria en tests/fixtures/, la regla de idempotencia en ventana (borrar y reinsertar en una transacción), el límite transaccional y la regla de autoridad del canal. (3) Ritmo (pacing) y regla de datos ausentes como funciones puras. Para cada tarea: test que falla primero, implementación mínima, tests en verde, marca en tasks.md y commit pequeño con git add de rutas concretas (nunca git add -A).
+
+Restricciones: el dominio no depende de SQLAlchemy; los errores de negocio devuelven {"code","message"} mediante manejadores globales, nunca con SQL en la respuesta; no toques los otros changes ni el frontend; no leas ni imprimas .env ni credenciales; no llames a servicios externos. Si algo del spec es ambiguo, pregunta antes de decidir. Una tarea se marca completada solo cuando su test pasa.
+
+Al terminar el bloque, ejecuta pytest dos veces seguidas con la imagen reconstruida (docker compose build backend y up -d --force-recreate backend), pega la salida cruda de ambas y git show --stat de cada commit, y dime qué tareas quedan sin marcar y por qué. Sin resumen tuyo en lugar de la salida real.
+
+**Respuesta**
+Los apartados 1, 2 y 3 están hechos salvo 1.6, que no he tocado, y 1.4 va con un matiz. La rama era la correcta. pytest pasa 144 de 144 las dos veces, con la imagen reconstruida y el backend recreado.
+
+Salida de las dos ejecuciones
+
+===== RUN 1 =====  … 144 passed, 5 warnings in 1.29s
+===== RUN 2 =====  … 144 passed, 5 warnings in 1.67s
+La salida completa de cada ejecución, con la lista de ficheros de test, está en el resultado de arriba.
+
+Commits (git show --stat completo arriba)
+
+┌──────────────────────────────────────────┬──────────┐
+│                  Commit                  │  Tareas  │
+├──────────────────────────────────────────┼──────────┤
+│ d99321b feat(db) esquema + migración     │ 1.1–1.5  │
+├──────────────────────────────────────────┼──────────┤
+│ 2390233 interfaz del cliente DSP + doble │ 2.1      │
+├──────────────────────────────────────────┼──────────┤
+│ 8f50628 reemplazo de rango               │ 2.2      │
+├──────────────────────────────────────────┼──────────┤
+│ 2604223 límite transaccional             │ 2.3, 2.4 │
+├──────────────────────────────────────────┼──────────┤
+│ e541e00 autoridad del canal              │ 2.5, 2.6 │
+├──────────────────────────────────────────┼──────────┤
+│ 6d470a2 pacing                           │ 3.1, 3.2 │
+├──────────────────────────────────────────┼──────────┤
+│ f17986e datos ausentes                   │ 3.3, 3.4 │
+└──────────────────────────────────────────┴──────────┘
+
+Tareas sin marcar en 0–3
+
+- 1.6 (carga de 1 M de filas): no la he hecho. Ya estaba aplazada en tasks.md.
+- 1.4 está marcada, pero solo comprueba que los índices existen. No he ejecutado EXPLAIN sobre un roll-up, así que no hay evidencia de que el planificador los use. Ya figuraba como parcial en tasks.md.
+- 0.1 y 0.2 siguen sin marcar. No eran de este bloque, pero la rama existe y está activa.
+
+Desviaciones y decisiones que debes revisar
+
+1. Un solo commit para el esquema. daily_deliveries tiene FK a ingestion_batches y el test de sincronización exige las tres tablas, así que partirlo no daba commits en verde. La migración se generó con --autogenerate y le añadí a mano el borrado de los enums en downgrade; upgrade → downgrade base → upgrade queda limpio y alembic check no detecta diferencias.
+2. 2.3 y 2.4 comparten commit. Primero implementé 2.3 sin transacción. Después escribí el test de 2.4, que falló, y añadí UnitOfWork. Por eso marqué 2.3 junto con 2.4.
+3. Resolución de identificadores. No existía, así que la creé en DspDeliveryClient como resolve_identifiers(campaña, line_item) -> ExternalLineKey | None. Esa firma es mía; revísala.
+4. Estados. En las excepciones usé open/resolved, no abierta/resuelta, por la norma de inglés. Para los lotes inventé running/succeeded/failed, porque el readme solo dice «status».
+5. Decisiones tuyas. La columna se llama impressions; el pacing es lineal e inclusivo, y el 10 % exacto no se marca; el desajuste de canal es igualdad de texto normalizada. Con la comparación de texto, Deal frente a Directo salta siempre como desajuste.
+6. Fixtures de test. No usé seed_master_data en los tests nuevos. Reinicia secuencias y choca con los roles que los tests de identidad confirman de verdad, así que mis builders crean sus propios maestros. Extraje rolled_back_session en tests/conftest.py.
+7. Puertos síncronos. Los repositorios existentes son async; los nuevos (DeliveryRepository, UnitOfWork) son síncronos porque la ingesta es un comando por lotes.
+
+Preguntas abiertas
+
+- Varias filas por línea y día. El grano es una fila por línea y día (restricción única). Si Adform devuelve varias filas por tamaño de banner o pantalla, hay que decidir si se agregan o se rechazan. Hoy la restricción lo rechazaría.
+- Qué es «activa» para el flag de datos ausentes. has_missing_data solo compara fechas y marca también la campaña que nunca entregó. Filtrar las campañas activas que ya deberían haber entregado queda para el endpoint de estado (6.5).
+- Cifras de las excepciones sin casar. El spec dice que se conservan, pero ingestion_exceptions no tiene columnas para ellas ni para la fecha de resolución. Harán falta cuando llegue la 6.2.
+- Mapeos de errores. No añadí nada a errors.py: no hay endpoint nuevo todavía. DeliveryOutsideRangeError y DeliveryForUnknownLineError caerían hoy en el manejador genérico (500 internal_error, sin detalle interno). Conviene mapearlos cuando llegue el endpoint de subida.
+
+No toqué otros changes ni el frontend, no leí .env, no llamé a servicios externos y usé git add con rutas concretas. La base temporal adops360_autogen que usé para generar la migración ya está borrada.
+
+
+**Prompt 2**
+**Herramienta** Claude Code
+**Prompt**
+No cambies código. Lee openspec/changes/daily-campaign-delivery-status/specs/ y design.md y responde citando el texto exacto de cada uno: (1) cuál es el grano de daily_deliveries y si el tamaño de banner y la pantalla forman parte de la clave o son atributos; (2) qué valores puede tomar line_format y cómo se compara con el canal configurado; (3) qué debe conservar una excepción de entrega sin casar; (4) si el spec fija estados para los lotes. Si el spec no lo dice, escribe «no especificado» en lugar de deducirlo.
+
+**Respuesta**
+Cito de los ficheros tal como los leí antes en esta sesión, sin releerlos ni tocar código.
+
+(1) Grano de daily_deliveries
+
+- Spec (delivery-ingestion): «The system SHALL store delivery at the grain of one campaign line and one calendar day, holding impressions, clicks, media cost, measurable impressions and viewable impressions.»
+- Spec, escenario: «one delivery record exists for that line and date».
+- Design: «averaging ~4,600 rows a day at the line-item and day grain». El proposal.md dice «at the line-and-day grain».
+- Tamaño de banner y pantalla: no especificado. Ni los specs ni design.md los mencionan, así que no dicen si forman parte de la clave o son atributos.
+- Línea y line item: el spec habla de «campaign line» y el design de «line-item». No especifica si son lo mismo.
+- Que banner_size y screen sean columnas viene de tasks.md (1.2) y del readme, no de estos ficheros. La clave única (campaign_line_id, delivery_date) que implementé es una lectura mía del spec.
+
+(2) Valores de line_format y comparación con el canal
+
+- Valores posibles: no especificado.
+- Comparación: no especificado. El único texto es el del requisito y el escenario: «The system SHALL take the channel from the campaign line's configuration, SHALL store the DSP's reported line format only as contrast data, and SHALL flag a disagreement for review rather than reclassifying.» Y: «WHEN ingested delivery reports a line format that differs from the campaign line's configured channel». No define «differs».
+- Design: «The line_format from the DSP is stored but never read by a calculation.»
+- La igualdad de texto normalizada (mayúsculas y espacios) que implementé no sale del spec. Fue la opción que elegiste en la pregunta. El ejemplo Deal frente a Directo está en el readme, no en estos ficheros.
+
+(3) Qué conserva una excepción de entrega sin casar
+
+- Spec (ingestion-exceptions): «The system SHALL record delivery that resolves to no campaign line as an exception carrying the external key that failed to match, and SHALL NOT discard it.»
+- Escenario: «an exception is recorded naming that external key and the batch» y «the delivery figures are retained rather than dropped».
+- Resultado de la ejecución: «the run's outcome reports how many rows went unmatched».
+- Cómo se retienen las cifras (en la excepción, en otra tabla o en daily_deliveries): no especificado. Tampoco qué cifras ni qué fecha.
+
+(4) Estados de los lotes
+
+- No especificado: el spec no fija un conjunto de estados.
+- Lo que menciona: «its outcome» sin enumerarlo, y en un escenario «a batch record exists with a failed outcome». El design habla de «the last successful run». Eso implica los resultados «failed» y «successful» y nada más.
+- running y los nombres succeeded/failed que usé en el enum son míos, no del spec.
+- Lo mismo vale para open/resolved en las excepciones. El spec solo dice «resolves», «marked resolved» y «outstanding queue», sin valores de estado.
+
+**Prompt 3**
+**Herramienta** Claude Code
+**Prompt**
+
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame.
+
+Objetivo: apartado 4 de tasks.md (4.1 a 4.6). No toques los apartados 5 a 8 ni el frontend.
+
+Contrato verificado de la API de Adform (lo he comprobado con llamadas reales; úsalo tal cual y no lo deduzcas de otras fuentes):
+
+Token: POST https://id.adform.com/sts/connect/token, flujo client credentials, autenticación Basic con ADFORM_CLIENT_ID y ADFORM_CLIENT_SECRET (variables de entorno), ámbitos https://api.adform.com/scope/buyer.stats y https://api.adform.com/scope/eapi.
+Datos: POST https://api.adform.com/v1/buyer/stats/data, cuerpo {"dimensions": ["date","campaignID","lineItemID","campaignCurrency"], "metrics": ["impressions","clicks","cost","measurableImpressions","viewImpressionsIAB"], "filter": {"date": {"from":"AAAA-MM-DD","to":"AAAA-MM-DD"}}, "paging": {"limit": 0}}. Responde 202 con la cabecera operation-location (ruta relativa).
+GET de esa ruta devuelve {"id","status","createdAt","lastActionAt","location"}. El estado pasa de running a succeeded; no conozco el nombre del estado de fallo, así que cualquier estado distinto de running y succeeded es un error. No leas location hasta que el estado sea succeeded.
+GET de location devuelve {"reportData": {"columnHeaders": [...], "columns": [...], "rows": [[...]]}}. Lee cada columna por el nombre de columnHeaders, nunca por posición.
+Tipos: date es texto AAAA-MM-DDT00:00:00 (usa solo la fecha); campaignID y lineItemID son enteros; los contadores son enteros; cost es entero o decimal con hasta 6 decimales, así que interpreta el JSON con parse_float=Decimal; la moneda es EUR o -.
+Las filas con lineItemID menor o igual que 0 y moneda - son entrega sin línea atribuida: ignóralas, cuéntalas en el lote como ignoradas y no las conviertas en excepciones. Cualquier otra moneda distinta de EUR es un error del lote, no una conversión.
+Cuota: 10 peticiones por minuto y 500 al día, compartidas con toda la agencia. Una ingesta hace una sola petición para todas las líneas mapeadas. Sondea el estado con un intervalo de al menos 3 segundos y un máximo de intentos configurable.
+
+Orden de trabajo, test primero, un commit por tarea y git add de rutas concretas:
+
+Comprueba la columna de coste de daily_deliveries. Si su escala es menor que 6, amplíala con una migración (Numeric(18,6)), con un test que guarde y lea un valor de 6 decimales sin perder ninguno.
+4.3, 4.4 y 4.5: el servicio de ingesta y el registro de lotes, primero con el doble en memoria. Cubre la normalización a cadena de los identificadores (un int de la API debe casar con el texto del mapeo), las filas ignoradas y las líneas sin mapeo.
+4.1: el cliente real de Adform en infrastructure/dsp/ tras la interfaz de la 2.1. Los tests usan HTTP simulado con respuestas sintéticas construidas con el formato de arriba, sin cifras ni nombres reales, y cubren: running repetido y luego succeeded, un estado inesperado, un 401, un tiempo de espera, cost con 6 decimales, y filas ignoradas.
+4.2: un test que asegure que ni el secreto ni el token aparecen en los registros ni en un mensaje de error, incluso cuando falla el token.
+4.6: crear el mapeo de una línea a una pareja (external_campaign_id, external_line_item_id), validándola contra el DSP con resolve_identifiers. El resultado tiene tres casos distinguibles: encontrada, desconocida e inalcanzable. Con la API de estadísticas, una pareja se da por encontrada si aparece en alguna fila de los últimos 30 días; una línea sin entrega en ese periodo es indistinguible de una inexistente, y debes dejar esa limitación documentada en el código. Solo se marca validated_at cuando se encuentra.
+
+Restricciones: no llames a ningún servicio externo ni leas .env; las credenciales llegan solo por variables de entorno; los errores de negocio devuelven {"code","message"} por manejadores globales en errors.py, sin detalles internos. No decidas si dos mapeos pueden apuntar a la misma pareja externa, ni cómo se combinan dos líneas de Adform mapeadas a una sola línea de AdOps360: el spec no lo dice, y quiero decidirlo yo. Pregúntame.
+
+Al terminar, reconstruye (docker compose build backend y up -d --force-recreate backend) y pega la salida cruda de pytest dos veces seguidas, el git show --stat de cada commit y qué tareas quedan sin marcar. Sin resumen tuyo en lugar de la salida real.
