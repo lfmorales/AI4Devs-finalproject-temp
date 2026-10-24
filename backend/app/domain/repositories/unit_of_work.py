@@ -3,6 +3,8 @@ from types import TracebackType
 from typing import Self
 
 from app.domain.repositories.delivery_repository import DeliveryRepository
+from app.domain.repositories.ingestion_batch_repository import IngestionBatchRepository
+from app.domain.repositories.ingestion_target_repository import IngestionTargetRepository
 
 
 class UnitOfWork(ABC):
@@ -12,6 +14,8 @@ class UnitOfWork(ABC):
     """
 
     deliveries: DeliveryRepository
+    batches: IngestionBatchRepository
+    targets: IngestionTargetRepository
 
     def __enter__(self) -> Self:
         return self

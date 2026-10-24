@@ -39,7 +39,7 @@
 - [ ] 4.5 Implement skipping of unmapped active lines and verify the run completes for every mapped line while reporting the skipped ones
 - [ ] 4.6 Create the DSP mapping from a campaign line to a real Adform identifier, checking the pair with `resolve_identifiers` and distinguishing found, unknown and unreachable, setting `validated_at` only when found, and documenting that the stats API cannot tell a line with no delivery in 30 days from an unknown one
 - [ ] 4.7 Enforce one campaign line per external identifier pair and DSP with a unique constraint, and verify a second mapping to the same pair is rejected as a conflict
-- [ ] 4.8 Compare external identifiers as text and combine several external line items mapped to one campaign line into one record per day, verified by tests
+- [x] 4.8 Compare external identifiers as text and combine several external line items mapped to one campaign line into one record per day, verified by tests
 - [ ] 4.9 Ignore delivery rows without an attributed line item, counting them on the batch and not as exceptions, and fail the batch on a currency other than EUR, verified by tests
 
 ## 5. Backend: Manual Upload Route
