@@ -136,7 +136,7 @@ The system SHALL ignore delivery rows the DSP reports without an attributed line
 
 ### Requirement: A DSP mapping is created against an identifier pair checked with the DSP
 
-The system SHALL check an external identifier pair with the DSP when a mapping is created, SHALL distinguish a pair that was found, one the DSP does not know and a DSP that could not be reached, and SHALL set `validated_at` only when the pair was found.
+The system SHALL check an external identifier pair with the DSP when a mapping is created, SHALL distinguish a pair that was found, one the DSP does not know and a DSP that could not be reached, SHALL create the mapping in all three cases, and SHALL set `validated_at` only when the pair was found.
 
 #### Scenario: A found pair is validated
 - **WHEN** a mapping is created for a pair the DSP knows
@@ -145,5 +145,25 @@ The system SHALL check an external identifier pair with the DSP when a mapping i
 #### Scenario: An unknown pair and an unreachable DSP are different outcomes
 - **WHEN** the DSP does not know the pair, or cannot be reached
 - **THEN** the two outcomes are distinguishable from each other and from a found pair
-- **AND** no validation timestamp is set
+- **AND** the mapping is created without a validation timestamp
+
+#### Scenario: A DSP that fails for another reason does not create a mapping
+- **WHEN** the DSP answers the check with a failure that is not an unreachable DSP, such as refused credentials
+- **THEN** the request fails and no mapping is created
+
+### Requirement: Creating a DSP mapping requires the operations role
+
+The system SHALL accept the creation of a DSP mapping only from a user holding the `operations` role.
+
+#### Scenario: A user without the operations role is forbidden
+- **WHEN** a user without the `operations` role creates a DSP mapping
+- **THEN** the request is rejected as forbidden
+
+#### Scenario: A request without a valid token is unauthenticated
+- **WHEN** a DSP mapping is created without a valid token
+- **THEN** the request is rejected as unauthenticated
+
+#### Scenario: A pair the DSP is not asked about twice
+- **WHEN** a mapping is created for a pair already mapped for that DSP
+- **THEN** it is rejected as a conflict without asking the DSP
 
