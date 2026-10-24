@@ -10,6 +10,7 @@ import json
 import logging
 import time
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -44,6 +45,20 @@ _REPORTED_CURRENCY = "EUR"
 _NO_CURRENCY = "-"
 
 
+@dataclass(frozen=True)
+class AdformReport:
+    """A finished stats report as Adform returns it, before any row is interpreted."""
+
+    final_status: str
+    column_headers: list[str]
+    rows: list[list[Any]]
+
+
+def is_unattributed(line_item_id: int, currency: str) -> bool:
+    """Adform reports delivery it does not attribute to a line item with a non-positive id and no currency."""
+    return line_item_id <= 0 and currency == _NO_CURRENCY
+
+
 class AdformDeliveryClient(DspDeliveryClient):
     def __init__(
         self,
@@ -70,13 +85,21 @@ class AdformDeliveryClient(DspDeliveryClient):
         self._api_base = httpx.URL(api_base_url)
 
     def fetch_delivery(self, date_range: DeliveryDateRange) -> Iterator[DspDeliveryRow]:
+        # The report is parsed whole: it is bounded by the window (a few tens of thousands of rows).
+        yield from self._rows(self.fetch_report(date_range))
+
+    def fetch_report(self, date_range: DeliveryDateRange) -> AdformReport:
+        """One data request: token, accepted operation, polling, then the finished report as Adform sent it."""
         token = self._request_token()
         headers = {"Authorization": f"Bearer {token}"}
         operation_path = self._request_report(date_range, headers)
         location = self._wait_for_report(operation_path, headers)
-        report = self._read_report(location, headers)
-        # The report is parsed whole: it is bounded by the window (a few tens of thousands of rows).
-        yield from self._rows(report)
+        document = self._read_report(location, headers)
+        try:
+            data = document["reportData"]
+            return AdformReport("succeeded", list(data["columnHeaders"]), [list(row) for row in data["rows"]])
+        except (KeyError, TypeError):
+            raise DspResponseFormatError("The report lacks its data") from None
 
     def resolve_identifiers(self, external_campaign_id: str, external_line_item_id: str) -> ExternalLineKey | None:
         """Return the key if the pair appears in any delivery row of the last 30 days, else None.
@@ -129,7 +152,7 @@ class AdformDeliveryClient(DspDeliveryClient):
                     raise DspResponseFormatError("The finished operation carries no report location")
                 return location
             if status != "running":
-                raise DspReportFailedError(f"The Adform report ended with status '{status}'")
+                raise DspReportFailedError(f"The Adform report ended with status '{status}'", status=str(status))
             logger.info("Adform report still running (attempt %s of %s)", attempt, self._max_poll_attempts)
             if attempt < self._max_poll_attempts:
                 self._sleep(self._poll_interval_seconds)
@@ -155,13 +178,8 @@ class AdformDeliveryClient(DspDeliveryClient):
             raise DspReportFailedError(f"Adform answered HTTP {response.status_code}")
         return response
 
-    def _rows(self, report: dict[str, Any]) -> Iterator[DspDeliveryRow]:
-        try:
-            data = report["reportData"]
-            headers: list[str] = data["columnHeaders"]
-            rows: list[list[Any]] = data["rows"]
-        except (KeyError, TypeError):
-            raise DspResponseFormatError("The report lacks its data") from None
+    def _rows(self, report: AdformReport) -> Iterator[DspDeliveryRow]:
+        headers, rows = report.column_headers, report.rows
         missing = [name for name in _REQUIRED_COLUMNS if name not in headers]
         if missing:
             raise DspResponseFormatError(f"The report lacks the columns {', '.join(missing)}")
@@ -174,7 +192,7 @@ class AdformDeliveryClient(DspDeliveryClient):
         try:
             line_item_id = int(cells["lineItemID"])
             currency = str(cells["campaignCurrency"])
-            if line_item_id <= 0 and currency == _NO_CURRENCY:
+            if is_unattributed(line_item_id, currency):
                 key = None  # Delivery Adform does not attribute to a line item.
             elif currency != _REPORTED_CURRENCY:
                 raise UnsupportedCurrencyError("The report contains a currency other than EUR")

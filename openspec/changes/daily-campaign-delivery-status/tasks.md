@@ -45,8 +45,8 @@
 - [x] 4.11 Implement the ingestion-target query with SQLAlchemy behind `IngestionTargetRepository` and verify the tests from 4.10 pass
 - [x] 4.12 Write failing tests against PostgreSQL for the watched-campaign query: only a campaign with status `active` whose dates include D-1 is returned
 - [x] 4.13 Implement the watched-campaign query behind `IngestionTargetRepository` and verify the tests from 4.12 pass
-- [ ] 4.14 Write a test with simulated HTTP asserting that the Adform smoke script prints no value, name, identifier or amount from a synthetic response, and makes a single request
-- [ ] 4.15 Implement `scripts/adform_smoke.py` (`python -m scripts.adform_smoke`), printing only the final operation status, row count, ignored rows, EUR rows, distinct pair count and the type of each column, writing nothing to the database or disk; the PO runs it against the real account
+- [x] 4.14 Write a test with simulated HTTP asserting that the Adform smoke script prints no value, name, identifier or amount from a synthetic response, and makes a single request
+- [x] 4.15 Implement `scripts/adform_smoke.py` (`python -m scripts.adform_smoke`), printing only the final operation status, row count, ignored rows, EUR rows, distinct pair count and the type of each column, writing nothing to the database or disk; the PO runs it against the real account
 - [ ] 4.16 Mark the 1 M-row memory test as `slow`, register the marker, exclude it by default with `-m "not slow"`, and note that it runs with `pytest -m slow` and that the full verification of section 10 must include it
 
 ## 5. Backend: Manual Upload Route

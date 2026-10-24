@@ -53,6 +53,10 @@ class DspAuthenticationError(DomainError):
 class DspReportFailedError(DomainError):
     """The DSP rejected the report request or the report ended in a state other than succeeded."""
 
+    def __init__(self, message: str, status: str | None = None) -> None:
+        super().__init__(message)
+        self.status = status  # The operation status the DSP reported, when the failure is about one.
+
 
 class DspReportTimeoutError(DomainError):
     """The DSP report was still running after the configured number of polling attempts."""
