@@ -4,7 +4,7 @@ from app.domain.repositories.ingestion_target_repository import IngestionTargetR
 from app.domain.repositories.unit_of_work import UnitOfWork
 from app.domain.value_objects.delivery import DeliveryDateRange
 from app.domain.value_objects.ingestion import IngestionTargets
-from datetime import datetime
+from datetime import date, datetime
 
 from tests.fixtures.in_memory_delivery_repository import InMemoryDeliveryRepository
 
@@ -33,13 +33,17 @@ class InMemoryIngestionBatchRepository(IngestionBatchRepository):
 
 
 class InMemoryIngestionTargetRepository(IngestionTargetRepository):
-    def __init__(self, targets: IngestionTargets) -> None:
+    def __init__(self, targets: IngestionTargets, watched_campaign_ids: tuple[int, ...] = ()) -> None:
         self.targets = targets
+        self.watched_campaign_ids = watched_campaign_ids
         self.requests: list[tuple[int, DeliveryDateRange]] = []
 
     def find_targets(self, dsp_id: int, window: DeliveryDateRange) -> IngestionTargets:
         self.requests.append((dsp_id, window))
         return self.targets
+
+    def find_watched_campaign_ids(self, today: date) -> tuple[int, ...]:
+        return self.watched_campaign_ids
 
 
 class InMemoryUnitOfWork(UnitOfWork):

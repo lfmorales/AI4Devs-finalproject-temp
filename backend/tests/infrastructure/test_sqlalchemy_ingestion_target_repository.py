@@ -9,7 +9,13 @@ from app.domain.value_objects.ingestion import MappedLine
 from app.infrastructure.persistence.repositories.sqlalchemy_ingestion_target_repository import (
     SqlAlchemyIngestionTargetRepository,
 )
-from tests.fixtures.delivery_data import insert_campaign_line, insert_mapping, insert_other_dsp, seeded_dsp_id
+from tests.fixtures.delivery_data import (
+    campaign_id_of,
+    insert_campaign_line,
+    insert_mapping,
+    insert_other_dsp,
+    seeded_dsp_id,
+)
 
 WINDOW = DeliveryDateRange(date(2026, 8, 3), date(2026, 8, 9))
 
@@ -135,3 +141,64 @@ def test_the_result_is_ordered_so_runs_are_reproducible(rolled_back_session, dsp
     insert_mapping(rolled_back_session, first, dsp_id, "1001", "2001")
 
     assert [m.campaign_line_id for m in _targets(rolled_back_session, dsp_id).mapped_lines] == [first, second]
+
+
+TODAY = date(2026, 8, 10)  # D-1 is Aug 9
+
+
+def _watched(session) -> tuple[int, ...]:
+    return SqlAlchemyIngestionTargetRepository(session).find_watched_campaign_ids(TODAY)
+
+
+def _campaign(session, line: int) -> int:
+    return campaign_id_of(session, line)
+
+
+def test_an_active_campaign_whose_dates_include_d_minus_1_is_watched(rolled_back_session):
+    line = _line(rolled_back_session, "Running", date(2026, 8, 1), date(2026, 8, 31))
+
+    assert _watched(rolled_back_session) == (_campaign(rolled_back_session, line),)
+
+
+@pytest.mark.parametrize("start, end", [
+    (date(2026, 7, 1), date(2026, 8, 9)),   # ends on D-1
+    (date(2026, 8, 9), date(2026, 8, 31)),  # starts on D-1
+])
+def test_d_minus_1_is_inclusive_at_both_ends_of_the_campaign_dates(rolled_back_session, start, end):
+    line = _line(rolled_back_session, "Edge", start, end)
+
+    assert _watched(rolled_back_session) == (_campaign(rolled_back_session, line),)
+
+
+def test_a_campaign_that_ended_three_days_ago_is_not_watched(rolled_back_session):
+    _line(rolled_back_session, "Ended", date(2026, 7, 1), date(2026, 8, 7))
+
+    assert _watched(rolled_back_session) == ()
+
+
+def test_a_campaign_that_starts_tomorrow_is_not_watched(rolled_back_session):
+    _line(rolled_back_session, "Starts tomorrow", date(2026, 8, 11), date(2026, 8, 31))
+
+    assert _watched(rolled_back_session) == ()
+
+
+def test_a_campaign_that_starts_today_has_no_d_minus_1_yet_and_is_not_watched(rolled_back_session):
+    _line(rolled_back_session, "Starts today", date(2026, 8, 10), date(2026, 8, 31))
+
+    assert _watched(rolled_back_session) == ()
+
+
+def test_an_inactive_campaign_is_not_watched_even_inside_its_dates(rolled_back_session):
+    _line(rolled_back_session, "Switched off", date(2026, 8, 1), date(2026, 8, 31), status="inactive")
+
+    assert _watched(rolled_back_session) == ()
+
+
+def test_every_watched_campaign_is_returned_in_id_order(rolled_back_session):
+    first = _line(rolled_back_session, "Watched one", date(2026, 8, 1), date(2026, 8, 31))
+    second = _line(rolled_back_session, "Watched two", date(2026, 8, 1), date(2026, 8, 31))
+
+    assert _watched(rolled_back_session) == (
+        _campaign(rolled_back_session, first),
+        _campaign(rolled_back_session, second),
+    )

@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
@@ -56,3 +58,17 @@ class SqlAlchemyIngestionTargetRepository(IngestionTargetRepository):
                     MappedLine(line_id, ExternalLineKey.from_raw(external_campaign_id, external_line_item_id))
                 )
         return IngestionTargets(tuple(mapped_lines), tuple(unmapped_line_ids))
+
+    def find_watched_campaign_ids(self, today: date) -> tuple[int, ...]:
+        # Narrower than the ingestion set on purpose: an ended campaign is still ingested to pick up restated
+        # figures, but it is no longer expected to deliver, so it must not raise a missing-data flag.
+        day_before = today - timedelta(days=1)
+        return tuple(self._session.scalars(
+            select(CampaignRecord.id)
+            .where(
+                CampaignRecord.status == "active",
+                CampaignRecord.start_date <= day_before,
+                CampaignRecord.end_date >= day_before,
+            )
+            .order_by(CampaignRecord.id)
+        ))
