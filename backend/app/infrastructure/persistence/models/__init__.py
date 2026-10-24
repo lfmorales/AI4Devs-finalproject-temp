@@ -22,6 +22,11 @@ from app.infrastructure.persistence.models.purchase_order import (
     PurchaseOrderVersionRecord,
 )
 from app.infrastructure.persistence.models.dsp_mapping import DSPMappingRecord
+from app.infrastructure.persistence.models.delivery import (
+    IngestionBatchRecord,
+    DailyDeliveryRecord,
+    IngestionExceptionRecord,
+)
 
 __all__ = [
     "RoleRecord",
@@ -42,4 +47,7 @@ __all__ = [
     "PurchaseOrderRecord",
     "PurchaseOrderVersionRecord",
     "DSPMappingRecord",
+    "IngestionBatchRecord",
+    "DailyDeliveryRecord",
+    "IngestionExceptionRecord",
 ]

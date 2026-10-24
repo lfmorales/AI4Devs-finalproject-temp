@@ -5,11 +5,11 @@
 
 ## 1. Database: Delivery Schema
 
-- [ ] 1.1 Write failing tests for the delivery model asserting exact-decimal media cost and that delivered and contracted volumes are separate fields
-- [ ] 1.2 Define the `daily_deliveries` model at the line-and-day grain with impressions, clicks, media cost, measurable and viewable impressions, banner size, screen and contrast `line_format`, and verify the tests from 1.1 pass
-- [ ] 1.3 Define `ingestion_batches` with route, source, timings, outcome and row count, and `ingestion_exceptions` with its type and external key, verified by constraint tests
-- [ ] 1.4 Add indexes on the DSP mapping, campaign period and delivery date, and verify with `EXPLAIN` that a period roll-up uses them rather than scanning **(partial: índice sin EXPLAIN)**
-- [ ] 1.5 Generate the Alembic migration with `--autogenerate`, review it by hand, and verify `upgrade head` then `downgrade base` runs clean
+- [x] 1.1 Write failing tests for the delivery model asserting exact-decimal media cost and that delivered and contracted volumes are separate fields
+- [x] 1.2 Define the `daily_deliveries` model at the line-and-day grain with impressions, clicks, media cost, measurable and viewable impressions, banner size, screen and contrast `line_format`, and verify the tests from 1.1 pass
+- [x] 1.3 Define `ingestion_batches` with route, source, timings, outcome and row count, and `ingestion_exceptions` with its type and external key, verified by constraint tests
+- [x] 1.4 Add indexes on the DSP mapping, campaign period and delivery date, and verify with `EXPLAIN` that a period roll-up uses them rather than scanning **(partial: índice sin EXPLAIN)**
+- [x] 1.5 Generate the Alembic migration with `--autogenerate`, review it by hand, and verify `upgrade head` then `downgrade base` runs clean
 - [ ] 1.6 Load a synthetic set of at least 1 M delivery rows and verify a period roll-up returns within an acceptable time, recording the measurement **(deferred: carga sintética de 1 M de filas; rendimiento sin medir)**
 
 ## 2. Backend: Ingestion Contract (domain layer)
