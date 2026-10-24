@@ -60,3 +60,19 @@ class DspReportTimeoutError(DomainError):
 
 class DspResponseFormatError(DomainError):
     """The DSP answered in a shape the client does not recognise."""
+
+
+class DuplicateDspMappingError(DomainError):
+    """The external identifier pair is already mapped to a campaign line of this DSP."""
+
+
+class CampaignLineNotFoundError(DomainError):
+    """No campaign line has this id."""
+
+
+class DspNotSupportedError(DomainError):
+    """The campaign line's DSP has no connector yet."""
+
+
+class DspNotConfiguredError(DomainError):
+    """The DSP has a connector but its credentials are not configured."""

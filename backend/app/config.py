@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,6 +13,9 @@ class Settings(BaseSettings):
     cognito_region: str
     cognito_user_pool_id: str
     cognito_client_id: str
+    # Optional so the application starts without a DSP; a connector that needs them reports it is not configured.
+    adform_client_id: str | None = None
+    adform_client_secret: SecretStr | None = None
 
     @property
     def cognito_issuer(self) -> str:

@@ -10,7 +10,17 @@ from fastapi.responses import JSONResponse
 logger = logging.getLogger(__name__)
 
 from app.domain.exceptions import (
+    CampaignLineNotFoundError,
     DomainError,
+    DspAuthenticationError,
+    DspNotConfiguredError,
+    DspNotSupportedError,
+    DspReportFailedError,
+    DspReportTimeoutError,
+    DspResponseFormatError,
+    DspUnreachableError,
+    DuplicateDspMappingError,
+    UnsupportedCurrencyError,
     DuplicateCampaignNameError,
     DuplicateOrderReferenceError,
     IdentityProviderUnavailableError,
@@ -47,11 +57,31 @@ _ERROR_MAPPINGS: dict[type[DomainError], _ErrorMapping] = {
     DuplicateOrderReferenceError: _ErrorMapping(
         409, "duplicate_order_reference", "A purchase order with this reference already exists"
     ),
+    DuplicateDspMappingError: _ErrorMapping(
+        409, "duplicate_dsp_mapping", "These DSP identifiers are already mapped to a campaign line"
+    ),
+    CampaignLineNotFoundError: _ErrorMapping(404, "campaign_line_not_found", "The campaign line does not exist"),
+    DspNotSupportedError: _ErrorMapping(
+        422, "dsp_not_supported", "The campaign line's DSP has no connector yet"
+    ),
+    DspNotConfiguredError: _ErrorMapping(503, "dsp_not_configured", "The DSP connector is not configured"),
+    DspUnreachableError: _ErrorMapping(503, "dsp_unreachable", "The DSP cannot be reached right now"),
+    # One public outcome for every way a DSP exchange can go wrong; the cause is logged, never returned.
+    DspAuthenticationError: _ErrorMapping(502, "dsp_request_failed", "The DSP request failed"),
+    DspReportFailedError: _ErrorMapping(502, "dsp_request_failed", "The DSP request failed"),
+    DspReportTimeoutError: _ErrorMapping(502, "dsp_request_failed", "The DSP request failed"),
+    DspResponseFormatError: _ErrorMapping(502, "dsp_request_failed", "The DSP request failed"),
+    UnsupportedCurrencyError: _ErrorMapping(
+        502, "dsp_response_unsupported", "The DSP reported data that cannot be processed"
+    ),
 }
 
 
 def _handler_for(mapping: _ErrorMapping) -> Callable[[Request, Exception], Awaitable[JSONResponse]]:
     async def handle(request: Request, error: Exception) -> JSONResponse:
+        if mapping.status_code >= 500:
+            # The class names the cause for the operator; the message and traceback stay out of the log and the body.
+            logger.warning("%s answered %s (%s)", type(error).__name__, mapping.status_code, mapping.code)
         body = ErrorResponse(code=mapping.code, message=mapping.message)
         return JSONResponse(
             status_code=mapping.status_code,
