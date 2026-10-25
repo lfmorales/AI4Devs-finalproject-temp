@@ -42,6 +42,34 @@ https://github.com/lfmorales/AI4Devs-finalproject
 
 ---
 
+## Estado del proyecto
+
+### Historia 2 — Status diario de campañas (`daily-campaign-delivery-status`)
+
+Implementado:
+
+- **Ingesta nocturna desde Adform**: comando `python -m scripts.run_ingestion`, que ingiere la ventana de D-7 a D-1 y se puede repetir sin duplicar. Se programa desde el cron del host (ver [docs/deploy.md](./docs/deploy.md)).
+- **Carga de un rango histórico** con `run_ingestion --from AAAA-MM-DD --to AAAA-MM-DD`.
+- **Catálogo de líneas de Adform**, que rellena la propia ingesta, con la página «Catálogo Adform» (filtros, paginación, vincular y desvincular).
+- **Estado diario de las campañas** (`/status`): contratado frente a entregado y ritmo, con los avisos «Sin datos recibidos» y «Desviación de ritmo».
+- **Cola de excepciones** (`/exceptions`): entrega sin emparejar y entrega ausente, con resolver, vincular a una línea y filtro por texto y tipo.
+- **Fechas y reparto mensual por línea** en el alta de campañas.
+- **Difuminado visual de nombres** de Adform con `NEXT_PUBLIC_MASK_NAMES`, y una hoja de estilos global propia.
+
+Instrucciones de despliegue, ingesta, carga de histórico y copias de seguridad: [docs/deploy.md](./docs/deploy.md).
+
+### Limitaciones conocidas
+
+- La validación `found` al vincular no prueba que la línea entregue ni que sea la correcta.
+- No hay edición ni borrado de campañas ni de líneas: solo se pueden recrear.
+- Una línea mapeada a mitad de campaña no recibe su histórico sin la carga de rango.
+- El difuminado de nombres es visual: los nombres siguen en los datos de la página.
+- El catálogo y las excepciones guardan datos de líneas de toda la cuenta de Adform.
+- La subida manual de informes está aplazada; su formato está documentado en `design.md`.
+- Las copias de seguridad y el `CRON_TZ` están documentados, pero no se han probado en un servidor.
+
+---
+
 ## 1. Descripción general del producto
 
 > Describe en detalle los siguientes aspectos del producto:
