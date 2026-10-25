@@ -1282,7 +1282,56 @@ Pruebas, test primero, un commit por tarea: actualización del catálogo (nueva,
 
 Restricciones: no edites uv.lock; no leas .env; no llames a servicios externos; commits pequeños con git add de rutas concretas; si algo es ambiguo, pregunta. Al terminar, reconstruye y pega la salida cruda de pytest con la línea de resultado completa dos veces, el git show --stat de todos los commits y qué tareas quedan sin marcar. Sin resumen tuyo.
 
-**Prompt 8**
+**Respuesta**
+Decisiones y cosas que debes saber
+
+- Errores sin nombres: pedías que los errores nombraran el elemento y que la salida nunca llevara nombres. Los identifico por sección y posición, por ejemplo agencies[2]: the holding group is neither in the file nor stored. La excepción es dsps: a DSP named Adform is required..., porque Adform es una constante del programa y no un dato del fichero.
+- Todos los errores a la vez: los problemas se informan juntos, y todos salen con código 2 sin escribir nada.
+- Claves desconocidas: se rechazan, para que un error de escritura no pase en silencio.
+- --check y la base de datos: lee la base para saber qué existe y qué crearía, pero no escribe. Imprime «would create N, existing M».
+- Comprobaciones antes de escribir: nombres obligatorios y sin repetir (comparando sin espacios y sin distinguir mayúsculas de minúsculas no; la base distingue mayúsculas, y yo también), grupo de cada agencia en el fichero o ya guardado, y Adform en el fichero o ya guardado.
+- Roles: grant_roles ya crea las filas que faltan, solo las que se le piden. Por eso el cargador no toca roles y no hay test de roles en este bloque.
+- Lo ya guardado no se modifica: una agencia guardada con otro grupo, o un DSP guardado con otro is_active, se queda como está y cuenta como «existente». Hay un test que lo comprueba.
+- Ficheros: deploy/masters.example.json (datos ficticios, DSP Displayce inactivo como en el seed de desarrollo) está versionado. deploy/masters.json está en .gitignore: lo comprobé con git check-ignore y con git ls-files.
+
+Cambios que afectan a lo que ya tenías
+
+- Numeración de docs/deploy.md: pasa de 13 a 15 secciones porque insertas el paso de maestros (10) y añadí «Copias de seguridad» (13). Los pasos son: maestros (10), primer usuario (11), ingesta (12), copias (13), comprobación (14), logs (15). Si algún otro documento remite a un número de sección, hay que actualizarlo.
+- Pendiente anterior cerrado: quité la nota «Pending, outside this change» sobre los maestros, que este bloque resuelve.
+- Backend recreado: al recrearlo, /api/health por nginx siguió dando 200, así que no fue necesario reiniciar nginx.
+
+Lo que no puedo garantizar desde aquí
+
+- Documentación sin ejecutar: el cron con CRON_TZ (la línea completa con la comprobación exit=), el script de pg_dump con rotación de siete días y la prueba de restauración en una base temporal están documentados pero no probados. Comprueba en la instancia que su cron admite CRON_TZ (man 5 crontab).
+- Comprobación autenticada: el GET /api/campaign-status autenticado necesita un token real de Cognito. Lo documenté copiándolo de las herramientas del navegador y leyéndolo con read -rs, para que no quede en el historial.
+- Frase que retiré: en la guía había escrito que, sin líneas mapeadas, la ingesta termina con cero filas leídas. No lo he comprobado, así que lo quité.
+
+**Prompt 9**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame. Si git status --short no está vacío, para. No toques el frontend.
+
+Objetivo: la base de la 1a en el backend: un catálogo de líneas de Adform que rellena la ingesta, vincular y desvincular, y la carga de un rango histórico. Antes de escribir nada, lee el cliente de Adform, delivery_ingestion_service, dsp_mapping_service, ingestion_exception_service, los esquemas de mapeos y excepciones, run_ingestion.py y adform_smoke.py, y dime: dónde se construye la petición a Adform y qué columnas lee el servicio, si el servicio de ingesta ya recibe una ventana como parámetro, y si existe algún endpoint que liste líneas de campaña sin mapeo. Si algo no está claro, pregunta.
+
+Decisiones, a registrar en spec, design y tasks (apartado nuevo 9A) en un commit docs(openspec): ... antes del código:
+
+La petición nocturna pide 8 dimensiones, el tope de la API: date, campaignID, campaign, lineItemID, lineItem, lineItemStartDate, lineItemEndDate y campaignCurrency, con las mismas cinco métricas. El cliente lee por nombre de cabecera, las columnas nuevas no cambian el grano (una fila por fecha, campaña y línea) y las fechas llegan como AAAA-MM-DDTHH:MM:SS: se toma solo la fecha. Sigue siendo una sola petición.
+Tabla dsp_catalog_lines (migración con --autogenerate, test_migration_schema_sync en verde): dsp_id, external_campaign_id y external_line_item_id (texto), campaign_name, line_item_name, line_start_date, line_end_date, first_seen_date, last_seen_date y last_impressions_date (nulable: la última fecha vista con impresiones mayores que cero). Única por (DSP, pareja). La ingesta la actualiza con todas las filas atribuidas (lineItemID mayor que 0 y moneda EUR) de la ventana, estén mapeadas o no y sean de ceros o no, en la misma transacción que el lote: si el lote falla, el catálogo no cambia. Las filas sin línea atribuida no entran.
+GET /api/dsp-catalog, rol operations, def: filtros dsp_id, q (texto en los nombres, sin distinguir mayúsculas), mapped (verdadero, falso o ausente) y active_since (fecha); paginado (50 por defecto, 200 como máximo). Cada elemento lleva nombres, pareja, fechas, last_impressions_date y mapped_line_id si existe mapeo. Sin coste.
+GET /api/campaign-lines/unmapped, rol operations: líneas de AdOps360 sin mapeo, con id, nombre de campaña, número de línea, fechas y DSP.
+POST /api/ingestion-exceptions/{id}/link con {"campaign_line_id": N}: en una sola transacción, crea el mapeo con la pareja de esa excepción y la resuelve con la nota automática «linked to line N». El mapeo queda validado porque la pareja está en el catálogo (no se pregunta a Adform). Errores {"code","message"} por manejadores globales: 404 exception_not_found y line_not_found; 409 exception_already_resolved, mapping_pair_taken y exception_not_linkable (solo vale para unmatched_delivery). La entrega retenida no pasa a daily_deliveries: la ventana de siete días la traerá.
+DELETE /api/campaign-lines/{id}/dsp-mappings: si la línea tiene exactamente un mapeo, lo borra junto con la entrega ingerida de esa línea (solo puede venir de él), en una transacción, y devuelve cuántos días de entrega retira; con varios, 409 ambiguous_mapping; sin ninguno, 404. Documenta en el design que reabrir la excepción queda fuera: la entrega reaparecerá como «sin casar» en la siguiente ingesta.
+La respuesta del POST de mapeos incluye, si la pareja está en el catálogo, last_impressions_date (campo nuevo opcional, sin romper el contrato actual), para detectar parejas que existen pero no entregan.
+Las respuestas de la cola de excepciones incluyen campaign_name y line_item_name, nulables, tomados del catálogo. Sin coste.
+Todo bajo operations, y las rutas nuevas quedan cubiertas por el test de protección de rutas, que se construye a partir de las registradas.
+Carga de un rango. run_ingestion acepta --from AAAA-MM-DD y --to AAAA-MM-DD: los dos juntos, incompatibles con --date, con un máximo de 31 días y con --to no posterior a D-1 en la zona de Madrid. Hace una sola petición para todo el rango, selecciona las líneas cuyas fechas se solapan con ese rango, y usa el mismo servicio con el mismo reemplazo idempotente. El lote registra el rango. La detección de ausencia no se ejecuta con un rango personalizado y la salida lo dice («absences: skipped, custom range»). Argumentos inválidos salen con el código 3, como hasta ahora, y la salida sigue imprimiendo solo recuentos.
+Aviso de histórico. La respuesta del POST de mapeos y la de link incluyen needs_history_load (booleano): verdadero si la línea mapeada empezó antes del inicio de la ventana normal (hoy menos 7 días, en la zona de Madrid). El frontend lo usará para avisar de que la entrega anterior no se carga sola.
+
+Pruebas, test primero, un commit por tarea: actualización del catálogo (nueva, actualizada, de ceros, sin atribuir, y lote fallido que no la toca); el cliente con las 8 dimensiones y una respuesta sintética; el endpoint del catálogo (filtros, paginación, mapped, sin coste); link (éxito, ya resuelta, pareja ocupada, no vinculable, línea inexistente y atomicidad); unlink (una pareja, varias, ninguna, y que borra la entrega); los campos nuevos de las respuestas; el rango (una sola petición, 31 días como máximo, --to posterior a D-1 rechazado, incompatibilidad con --date, sin ausencias y repetición idempotente); needs_history_load en sus dos bordes; y que la salida de run_ingestion y del script de humo no imprime nombres.
+
+Restricciones: no edites uv.lock; no leas .env; no llames a servicios externos; commits pequeños con git add de rutas concretas; si algo es ambiguo, pregunta. Al terminar, reconstruye (docker compose build backend y up -d --force-recreate backend) y pega la salida cruda de pytest con la línea de resultado completa dos veces seguidas, el git show --stat de todos los commits y qué tareas quedan sin marcar. Sin resumen tuyo en lugar de la salida real.
+
+**Prompt 10**
 **Herramienta** Claude Code
 **Prompt**
 
