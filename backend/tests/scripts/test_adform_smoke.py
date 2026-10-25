@@ -175,3 +175,34 @@ def test_a_report_without_zero_impressions_counts_zero_in_both():
 
     assert "rows with zero impressions, attributed (line item > 0, EUR): 0" in output
     assert "rows with zero impressions, not attributed: 0" in output
+
+
+CATALOGUE_NAMES = ["Synthetic Spring Sale 7733", "Synthetic Banner Line 8844", "2031-06-01", "2031-09-30"]
+
+
+def _named_rows():
+    return [
+        report_row("2031-02-03T00:00:00", 777001, 888001, "EUR", 31415926, 27182, "27182.818281", 16180339, 14142,
+                   campaign_name=CATALOGUE_NAMES[0], line_item_name=CATALOGUE_NAMES[1],
+                   line_start="2031-06-01T00:00:00", line_end="2031-09-30T23:59:59"),
+    ]
+
+
+def test_it_shows_the_type_of_the_name_and_date_columns_and_none_of_their_values():
+    code, output = _run(FakeAdform(rows=_named_rows()))
+
+    assert code == 0
+    for column in ("campaign", "lineItem", "lineItemStartDate", "lineItemEndDate"):
+        assert f"{column}: string" in output
+    for value in CATALOGUE_NAMES:
+        assert value not in output
+
+
+def test_it_asks_for_the_eight_dimensions_in_its_single_request():
+    fake = FakeAdform(rows=_named_rows())
+
+    _run(fake)
+
+    data_requests = [r for r in fake.requests if r.url.path == "/v1/buyer/stats/data" and r.method == "POST"]
+    assert len(data_requests) == 1
+    assert len(json.loads(data_requests[0].content)["dimensions"]) == 8

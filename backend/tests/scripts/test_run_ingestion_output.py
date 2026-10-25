@@ -10,7 +10,7 @@ from sqlalchemy import text
 from app.domain.exceptions import DspUnreachableError
 from app.domain.value_objects.delivery import DeliveryDateRange, DspDeliveryRow, ExternalLineKey
 from scripts.run_ingestion import NIGHTLY_INGESTION_LOCK_KEY, main
-from tests.fixtures.delivery_rows import dsp_row
+from tests.fixtures.delivery_rows import catalog_info, dsp_row
 from tests.fixtures.dsp_delivery_client import InMemoryDspDeliveryClient
 from tests.scripts.test_run_ingestion import Scenario
 
@@ -19,11 +19,13 @@ SECRET_ID, SECRET_VALUE = "synthetic-adform-id-5150", "synthetic-adform-secret-6
 KEY = ExternalLineKey("5551001", "5552001")
 STRANGER = ExternalLineKey("5559001", "5559002")
 NAME = "Synthetic Campaign Name 4242"
+CATALOGUE_CAMPAIGN = "Synthetic Catalogue Campaign 8811"
+CATALOGUE_LINE = "Synthetic Catalogue Line 9922"
 
 # Distinctive values that must never be echoed: identifiers, names, amounts, the account and the DSP's words.
 VALUES = [
     "5551001", "5552001", "5559001", "5559002", NAME, "Synthetic Campaign Name", "7770011", "8880022", "9990033",
-    "1234.567891", "ACME-42", "secret-token", SECRET_ID, SECRET_VALUE, "2026-08-05",
+    CATALOGUE_CAMPAIGN, CATALOGUE_LINE, "2026-07-01", "1234.567891", "ACME-42", "secret-token", SECRET_ID, SECRET_VALUE, "2026-08-05",
 ]
 ALLOWED_LINE = re.compile(
     r"^(status: (succeeded|failed|not configured|another run is in progress)"
@@ -39,9 +41,10 @@ class FailsWithDetail(InMemoryDspDeliveryClient):
 
 
 def _rows():
+    named = catalog_info(CATALOGUE_CAMPAIGN, CATALOGUE_LINE)
     return [
-        dsp_row(D5, KEY, impressions=7770011, clicks=8880022, media_cost=Decimal("1234.567891")),
-        dsp_row(D5, STRANGER, impressions=9990033, media_cost=Decimal("1234.567891")),
+        dsp_row(D5, KEY, impressions=7770011, clicks=8880022, media_cost=Decimal("1234.567891"), catalog=named),
+        dsp_row(D5, STRANGER, impressions=9990033, media_cost=Decimal("1234.567891"), catalog=named),
         dsp_row(D5, ExternalLineKey("5559003", "5559004"), impressions=0, media_cost=Decimal("0")),
     ]
 
@@ -107,3 +110,51 @@ def test_missing_configuration_prints_no_variable_name_or_value(rolled_back_sess
     assert code == 3
     _assert_clean(printed.out.splitlines())
     assert printed.err == ""
+
+
+def test_the_catalogue_names_flow_through_the_run_and_stay_out_of_the_output(
+        rolled_back_session, test_engine, monkeypatch):
+    from sqlalchemy import func, select
+
+    from app.infrastructure.persistence.models.dsp_catalog import DspCatalogLineRecord
+
+    monkeypatch.setenv("ADFORM_CLIENT_ID", SECRET_ID)
+    monkeypatch.setenv("ADFORM_CLIENT_SECRET", SECRET_VALUE)
+    scenario = _scenario(rolled_back_session, test_engine)
+
+    assert scenario.run() == 0
+
+    # The names really reached the catalogue, so their absence from the output is not for lack of data.
+    stored = rolled_back_session.scalars(select(DspCatalogLineRecord.line_item_name)).all()
+    assert stored == [CATALOGUE_LINE, CATALOGUE_LINE]
+    _assert_clean(scenario.output)
+
+
+def test_a_custom_range_prints_only_states_and_counts(rolled_back_session, test_engine, monkeypatch):
+    from datetime import UTC, datetime
+
+    monkeypatch.setenv("ADFORM_CLIENT_ID", SECRET_ID)
+    monkeypatch.setenv("ADFORM_CLIENT_SECRET", SECRET_VALUE)
+    scenario = _scenario(rolled_back_session, test_engine)
+
+    code = main(
+        ["--from", "2026-08-03", "--to", "2026-08-09"], out=scenario.output.append, engine=test_engine,
+        session_factory=lambda: rolled_back_session, client=scenario.client,
+        now=lambda: datetime(2026, 8, 10, 12, 0, tzinfo=UTC),
+    )
+
+    assert code == 0
+    _assert_clean(scenario.output)
+    assert "absences: skipped, custom range" in scenario.output
+
+
+def test_an_invalid_range_prints_only_its_state(rolled_back_session, test_engine, monkeypatch):
+    monkeypatch.setenv("ADFORM_CLIENT_ID", SECRET_ID)
+    monkeypatch.setenv("ADFORM_CLIENT_SECRET", SECRET_VALUE)
+    scenario = _scenario(rolled_back_session, test_engine)
+
+    code = main(["--from", "2026-08-03"], out=scenario.output.append, engine=test_engine,
+                session_factory=lambda: rolled_back_session, client=scenario.client)
+
+    assert code == 3
+    _assert_clean(scenario.output)
