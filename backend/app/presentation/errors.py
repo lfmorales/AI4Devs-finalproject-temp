@@ -25,7 +25,9 @@ from app.domain.exceptions import (
     FlightVolumesIncompleteError,
     FlightVolumesMismatchError,
     IngestionExceptionNotFoundError,
+    LineDatesInvalidError,
     LineDatesOutsideCampaignError,
+    VolumeTooSmallForFlightsError,
     UnsupportedCurrencyError,
     DuplicateCampaignNameError,
     DuplicateOrderReferenceError,
@@ -69,6 +71,12 @@ _ERROR_MAPPINGS: dict[type[DomainError], _ErrorMapping] = {
     IngestionExceptionNotFoundError: _ErrorMapping(404, "exception_not_found", "The exception does not exist"),
     IngestionExceptionAlreadyResolvedError: _ErrorMapping(
         409, "exception_already_resolved", "The exception is already resolved"
+    ),
+    LineDatesInvalidError: _ErrorMapping(
+        422, "line_dates_invalid", "A line's start date cannot be after its end date"
+    ),
+    VolumeTooSmallForFlightsError: _ErrorMapping(
+        422, "volume_too_small_for_flights", "The line's volume is too small to give every flight impressions"
     ),
     LineDatesOutsideCampaignError: _ErrorMapping(
         422, "line_dates_outside_campaign", "A line's dates must fall within the campaign's dates"

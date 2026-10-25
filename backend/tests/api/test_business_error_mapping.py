@@ -9,12 +9,16 @@ from app.domain.exceptions import (
     FlightVolumeNotPositiveError,
     FlightVolumesIncompleteError,
     FlightVolumesMismatchError,
+    LineDatesInvalidError,
     LineDatesOutsideCampaignError,
+    VolumeTooSmallForFlightsError,
 )
 from app.presentation.errors import register_exception_handlers
 
 CASES = [
     (LineDatesOutsideCampaignError, "line_dates_outside_campaign"),
+    (LineDatesInvalidError, "line_dates_invalid"),
+    (VolumeTooSmallForFlightsError, "volume_too_small_for_flights"),
     (FlightVolumesIncompleteError, "flight_volumes_incomplete"),
     (FlightVolumesMismatchError, "flight_volumes_mismatch"),
     (FlightVolumeNotPositiveError, "flight_volume_not_positive"),

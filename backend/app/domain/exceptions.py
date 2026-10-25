@@ -104,3 +104,11 @@ class FlightVolumesMismatchError(DomainError):
 
 class FlightVolumeNotPositiveError(DomainError):
     """A monthly volume is zero or negative."""
+
+
+class LineDatesInvalidError(DomainError):
+    """A campaign line starts after it ends."""
+
+
+class VolumeTooSmallForFlightsError(DomainError):
+    """Splitting a line's volume by days would leave a flight with no impressions."""

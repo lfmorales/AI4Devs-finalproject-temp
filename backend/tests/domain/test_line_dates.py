@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 
-from app.domain.exceptions import DomainError, LineDatesOutsideCampaignError
+from app.domain.exceptions import DomainError, LineDatesInvalidError, LineDatesOutsideCampaignError
 from app.domain.services.line_dates import validate_line_dates
 
 CAMPAIGN_START = date(2026, 8, 10)
@@ -41,6 +41,6 @@ def test_the_error_is_a_domain_error():
     assert issubclass(LineDatesOutsideCampaignError, DomainError)
 
 
-def test_a_line_ending_before_it_starts_is_refused_as_a_plain_value_error():
-    with pytest.raises(ValueError):
+def test_a_line_ending_before_it_starts_is_refused_as_invalid_dates():
+    with pytest.raises(LineDatesInvalidError):
         validate_line_dates(date(2026, 9, 2), date(2026, 9, 1), CAMPAIGN_START, CAMPAIGN_END)
