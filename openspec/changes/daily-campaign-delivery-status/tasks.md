@@ -152,6 +152,15 @@ The types come from the real OpenAPI schema (`DspCatalogPageResponse`, `Unmapped
 - [x] 8B.6 Add unlinking with its explicit confirmation, the removed-days count and the three Spanish error messages, tests first
 - [x] 8B.7 Add `NEXT_PUBLIC_MASK_NAMES` (blurred, unselectable, no reveal on hover, with and without the variable), declared in `.env.example`, `docs/deploy.md`, the Dockerfile and `docker-compose.yml`, tests first
 
+## 8C. Frontend: Native Modal Dialogs
+
+Found in the real browser, and not by the tests: the application has no compiled Tailwind (no dependency, no configuration, no stylesheet) and no component uses `className`, so nothing positions anything by utility classes. The three dialogs (`ResolveDialog`, `LinePickerDialog`, `UnlinkDialog`) were plain `div role="dialog"` blocks with inline borders, so they were drawn in the page flow, below the list, and were not modal. Decision: every dialog is the native `<dialog>` opened with `showModal()`, which uses the browser's top layer with no CSS, dims the page natively, closes with Escape, and gets its focus back to the button that opened it. One shared component holds that logic and gives the dialog an accessible title through `aria-labelledby`; only a minimal inline style (maximum width and padding) keeps it readable. jsdom does not implement `showModal()`, so the test setup defines its minimum behaviour (sets `open`, moves focus into the dialog, closes on Escape through the `cancel` and `close` events) and documents it. Every behaviour the dialogs already had (lists, Spanish errors, confirmations) stays covered.
+
+- [ ] 8C.1 Add the jsdom minimum for `showModal()` and `close()` to the test setup and the shared `Modal` component (open dialog, focus on opening, Escape and cancel close it, focus returns to the opener, no closing while submitting), tests first
+- [ ] 8C.2 Move `ResolveDialog` to the shared modal, tests first
+- [ ] 8C.3 Move `LinePickerDialog` to the shared modal, tests first
+- [ ] 8C.4 Move `UnlinkDialog` to the shared modal, tests first
+
 ## 9. Review and Update Existing Unit Tests (MANDATORY)
 
 - [ ] 9.1 Review every test touched by this change and update any asserting superseded behaviour
