@@ -167,6 +167,14 @@ The form lets each line have its own dates and shows the monthly split (flights)
 - [x] 11A.6 Write `docs/deploy.md` with the steps that cannot be run here: instance, security group, DNS, Certbot, `.env` with `chmod 600`, Cognito callback and sign-out URLs over HTTPS, the explicit migration step and the first user
 - [x] 11A.7 Write `scripts/verify_prod_images.sh` and run it: builds the images, brings the production composition up with a temporary database and a self-signed certificate, and checks `/api/health` answers 200 over HTTPS, port 80 redirects, the backend image has no pytest, `tests/` or `seed_dev_data.py` but has `run_ingestion.py`, the container is not root, the database publishes no port, and `alembic upgrade head` applies as a separate step; ends with one `OK` or `FALLO` line
 
+## 11B. Master Data Loading and Operations Guide
+
+- [ ] 11B.1 Write failing tests against PostgreSQL for `scripts/load_masters.py` loading (a full load on an empty database, a second run that changes nothing, an existing row left as it was, a failure half-way that stores nothing, and an output that carries no name from the file) and implement the load
+- [ ] 11B.2 Write failing tests for the validation (a name repeated within a section, a missing name, an agency whose group is neither in the file nor stored, a missing `Adform` DSP, an unknown section or key, an unreadable or malformed file) and for `--check` writing nothing, with errors naming the section and position and no content, and implement them
+- [ ] 11B.3 Add `deploy/masters.example.json` with fictitious data, ignore `deploy/masters.json`, verify nothing real is versioned, and test that the example loads
+- [ ] 11B.4 Add the masters step to `docs/deploy.md`, after the migrations and before `grant_roles`
+- [ ] 11B.5 Document in `docs/deploy.md` the nightly ingestion cron at 07:00 `Europe/Madrid` with its exit-code check, the nightly `pg_dump` backup with seven-day rotation and a restore test in a temporary database, and the post-deployment check with an authenticated `GET /api/campaign-status` and the `run_ingestion` output (documented, not executed)
+
 ## 12. E2E Testing with Playwright (MANDATORY - AGENT MUST EXECUTE)
 
 - [ ] 12.1 Start frontend and backend and verify the database is in a known state
