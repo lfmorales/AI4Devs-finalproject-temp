@@ -7,8 +7,8 @@ from app.domain.repositories.ingestion_target_repository import IngestionTargetR
 from app.domain.value_objects.delivery import DeliveryDateRange, ExternalLineKey
 from app.domain.value_objects.ingestion import IngestionTargets, MappedLine, MissingDeliveryCandidate
 from app.infrastructure.persistence.models.campaign import (
+    CampaignLinePeriodRecord,
     CampaignLineRecord,
-    CampaignPeriodRecord,
     CampaignRecord,
 )
 from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord
@@ -74,32 +74,33 @@ class SqlAlchemyIngestionTargetRepository(IngestionTargetRepository):
         ))
 
     def find_lines_missing_delivery(self, dsp_id: int, window: DeliveryDateRange) -> tuple[MissingDeliveryCandidate, ...]:
-        period = CampaignPeriodRecord
-        # Summed in the database over the whole period, including days older than the ingestion window.
-        impressions_in_period = (
+        flight = CampaignLinePeriodRecord
+        # Summed in the database over the flight's own window, including days older than the ingestion window.
+        # Delivery on any other day, even inside another flight of the same line, does not count for this one.
+        impressions_in_flight = (
             select(func.coalesce(func.sum(DailyDeliveryRecord.impressions), 0))
             .where(
-                DailyDeliveryRecord.campaign_line_id == CampaignLineRecord.id,
-                DailyDeliveryRecord.delivery_date.between(period.period_start, period.period_end),
+                DailyDeliveryRecord.campaign_line_id == flight.campaign_line_id,
+                DailyDeliveryRecord.delivery_date.between(flight.flight_start, flight.flight_end),
             )
             .scalar_subquery()
         )
-        # Compared as dates: a mapping validated at 15:30 on the last day still covers that day.
-        mapped_by_period_end = exists().where(
-            DSPMappingRecord.campaign_line_id == CampaignLineRecord.id,
+        # Compared as dates: a mapping validated at 15:30 on the flight's last day still covers that day.
+        mapped_by_flight_end = exists().where(
+            DSPMappingRecord.campaign_line_id == flight.campaign_line_id,
             DSPMappingRecord.dsp_id == dsp_id,
             DSPMappingRecord.validated_at.is_not(None),
-            cast(DSPMappingRecord.validated_at, Date) <= period.period_end,
+            cast(DSPMappingRecord.validated_at, Date) <= flight.flight_end,
         )
         rows = self._session.execute(
-            select(CampaignLineRecord.id, period.id)
-            .join(period, period.id == CampaignLineRecord.campaign_period_id)
+            select(flight.campaign_line_id, flight.campaign_period_id)
+            .join(CampaignLineRecord, CampaignLineRecord.id == flight.campaign_line_id)
             .where(
                 CampaignLineRecord.dsp_id == dsp_id,
-                period.period_end.between(window.start, window.end),
-                mapped_by_period_end,
-                impressions_in_period == 0,
+                flight.flight_end.between(window.start, window.end),
+                mapped_by_flight_end,
+                impressions_in_flight == 0,
             )
-            .order_by(CampaignLineRecord.id, period.id)
+            .order_by(flight.campaign_line_id, flight.campaign_period_id)
         ).all()
         return tuple(MissingDeliveryCandidate(line_id, period_id) for line_id, period_id in rows)

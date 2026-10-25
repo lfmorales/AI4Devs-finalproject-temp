@@ -21,6 +21,7 @@ from tests.fixtures.delivery_data import (
     insert_ingestion_batch,
     insert_mapping,
     insert_user,
+    replace_flights,
     seeded_dsp_id,
 )
 from tests.fixtures.delivery_rows import dsp_row
@@ -129,3 +130,23 @@ def test_absence_is_detected_once_per_line_and_period_through_postgres(rolled_ba
     assert (first, second) == (1, 0)
     assert (exception.exception_type, exception.status, exception.campaign_line_id) == (
         "missing_delivery", "open", line)
+
+
+def test_absence_of_a_flight_is_recorded_once_across_two_runs_through_postgres(rolled_back_session):
+    dsp_id = seeded_dsp_id(rolled_back_session)
+    line = insert_campaign_line(rolled_back_session, "Absent flight", date(2026, 7, 1), date(2026, 8, 31))
+    insert_mapping(rolled_back_session, line, dsp_id, validated_at=datetime(2026, 7, 20, 9, 0))
+    july, august = replace_flights(rolled_back_session, line, [(date(2026, 7, 1), date(2026, 7, 31)),
+                                                              (date(2026, 8, 1), date(2026, 8, 7))])
+    batch_id = insert_ingestion_batch(rolled_back_session)
+    service = DeliveryIngestionService(
+        InMemoryDspDeliveryClient([]), lambda: SqlAlchemyUnitOfWork(lambda: rolled_back_session),
+        lambda: datetime(2026, 8, 10, 2, 0))
+
+    first = service.detect_missing_delivery(dsp_id, TODAY, batch_id)
+    second = service.detect_missing_delivery(dsp_id, TODAY, batch_id)
+
+    exception = rolled_back_session.scalars(select(IngestionExceptionRecord)).one()
+    assert (first, second) == (1, 0)
+    assert (exception.campaign_line_id, exception.campaign_period_id) == (line, august)
+    assert july != august

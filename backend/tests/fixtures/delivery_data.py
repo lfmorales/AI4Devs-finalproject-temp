@@ -122,6 +122,32 @@ def insert_campaign_line(
     return line.id
 
 
+def replace_flights(session: Session, campaign_line_id: int, windows: list[tuple[date, date]]) -> list[int]:
+    """Give a line exactly these flights, one per window, each in a period of its own month; return the period ids.
+
+    A window must sit inside one calendar month. The periods are created under the line's campaign.
+    """
+    from sqlalchemy import delete
+
+    session.execute(delete(CampaignLinePeriodRecord).where(CampaignLinePeriodRecord.campaign_line_id == campaign_line_id))
+    campaign_id = campaign_id_of(session, campaign_line_id)
+    period_ids: list[int] = []
+    for flight_start, flight_end in windows:
+        period = CampaignPeriodRecord(
+            campaign_id=campaign_id, period_year=flight_start.year, period_month=flight_start.month,
+            period_start=flight_start, period_end=flight_end,
+        )
+        session.add(period)
+        session.flush()
+        session.add(CampaignLinePeriodRecord(
+            campaign_line_id=campaign_line_id, campaign_period_id=period.id,
+            flight_start=flight_start, flight_end=flight_end, contracted_impressions=CONTRACTED_IMPRESSIONS,
+        ))
+        period_ids.append(period.id)
+    session.flush()
+    return period_ids
+
+
 def insert_ingestion_batch(session: Session, route: str = "api") -> int:
     """Persist a finished ingestion batch for the fixture DSP and return its id."""
     batch = IngestionBatchRecord(
