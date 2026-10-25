@@ -1139,7 +1139,128 @@ Cuando lo aclares, no toco el apartado 5 ni el frontend.
 
 
 
----
+**Prompt 6**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame. Si git status --short no está vacío, para. Solo frontend. No toques el backend.
+
+Objetivo: tareas 8.1 a 8.5 de tasks.md (la 8.6 sigue aplazada). Obtén los esquemas de GET /api/campaign-status, GET /api/ingestion-exceptions y POST /api/ingestion-exceptions/{id}/resolve del OpenAPI real y úsalos como fuente de verdad; no inventes campos.
+
+Comportamiento, a registrar en tasks.md antes del código:
+
+Dos páginas dentro del layout autenticado, con enlaces en una navegación (campañas, estado, excepciones) y el botón de cerrar sesión existente. El estado lo ven operations y business; las excepciones, operations. Un 403 del backend lleva a la pantalla de acceso denegado y un 401 a la de sesión caducada, con los componentes y el cliente que ya existen. La navegación no muestra enlaces a páginas que el usuario no puede ver, pero no decodifiques roles en el navegador: el 403 es la fuente de verdad.
+Estado de campañas. Una fila por flight en curso: campaña, agencia, línea, periodo y ventana, contratado, entregado, ratio, ritmo (esperado, desviación y días restantes) y los dos avisos. Los avisos se muestran con texto («Sin datos recibidos», «Desviación de ritmo»), no solo con color. Orden por defecto el del servidor, con ordenación en cliente por periodo y por agencia. Los estados de carga, vacío («No hay campañas en curso») y error son distintos entre sí. El ratio y la desviación se muestran como los entrega la API, con formato de porcentaje, sin recalcular nada en el navegador.
+Cola de excepciones. Pestañas «Abiertas» y «Resueltas». Cada fila muestra tipo, DSP, pareja externa, primera y última fecha, días, impresiones y clics, y nunca coste. «Resolver» pide una nota opcional y confirma; la fila sale de «Abiertas» sin recargar. exception_already_resolved y exception_not_found se muestran en español. Un estado vacío distinto del de carga.
+Todos los campos de formulario, botones y tablas nuevos llevan etiqueta accesible (htmlFor, aria-label o encabezados de tabla), para que Playwright los localice por rol y etiqueta.
+
+Código, tests primero, un commit por tarea: el cliente tipado de estado y excepciones en lib/api (ningún componente llama a fetch); la tabla de estado; el estado vacío frente al de carga; la cola con su resolución; la navegación y las guardas de rol. Los tests usan el cliente HTTP real con fetch simulado, no un ApiError de mentira, y cubren: ambos avisos, contratado y entregado como campos distintos, la ordenación, vacío frente a carga y error, el 401, el 403 para un usuario sin rol en cada página, y el flujo de resolver (éxito, 409 y 404).
+
+Restricciones: sin credenciales; sin console.log; commits pequeños con git add de rutas concretas; si algo es ambiguo, pregunta. Un bloque se da por terminado solo cuando pasan npm run typecheck, vitest dos veces seguidas con la línea de resultado completa y docker compose build frontend. Pega la salida real, el git show --stat de todos los commits y qué comprobar a mano.
+
+**Respuesta**
+Las páginas de estado y de excepciones, el cliente tipado y la navegación están hechos. Las tareas 8.1 a 8.5 quedan marcadas, y añadí la 8.7 para la navegación. Por el camino cometí un error en tasks.md y lo corregí con un commit propio.
+
+El error de tasks.md
+
+- Qué pasó: para marcar tareas usé un script que vacía el archivo antes de leerlo. Desde bae54d4 el archivo quedó en 0 bytes. No lo vi hasta el git show --stat final.
+- Corrección: restauré la última versión íntegra (ca85391, 174 líneas) y marqué 8.4, 8.5 y 8.7 en d30d9f3. El diff frente a ca85391 son solo esas tres marcas. No reescribí historia, así que bae54d4, 17d3752 y 204674c conservan ese estado intermedio en sus diffs.
+- Un commit ajeno: ef255e1 (prompts.md) apareció entre los míos. No es mío y no lo toqué.
+
+Verificación
+
+> tsc --noEmit            (sin errores)
+
+Test Files  27 passed (27)
+     Tests  189 passed (189)
+
+Test Files  27 passed (27)
+     Tests  189 passed (189)
+
+Image adops360-daily-status-frontend Built
+- Alcance: los 189 tests incluyen los 138 de antes. No modifiqué ninguno de ellos. No hay console. en app, features ni lib. El backend no se tocó.
+- Tipos: los saqué del OpenAPI real (create_app().openapi() en el contenedor) y no hay campo de coste.
+
+git show --stat
+
+08c5301 docs(openspec): specify the status page, the exception queue and the navigation
+  tasks.md | 11 ++++++-----
+df6d13a feat(frontend): add typed API calls for the daily status and the exception queue
+  lib/api/exceptions.ts 40; lib/api/status.ts 48; status-and-exceptions.test.ts 164; tasks.md 2   (4 files, 253+/1-)
+ca85391 feat(frontend): add the daily status page with flags, percentages and client sorting
+  status/page.tsx 24; StatusTable.tsx 78; format.ts 17; sorting.ts 29; useApiCall.ts 57
+  tests/helpers/api-pages.tsx 67; status-page.test.tsx 196; tasks.md 4   (8 files, 470+/2-)
+bae54d4 feat(frontend): tell the loading, empty and error states of the status page apart
+  status/page.tsx 12; status-states.test.tsx 73; tasks.md 174 --- (vaciado por error)   (3 files, 84+/175-)
+17d3752 feat(frontend): add the exception queue with its resolution flow
+  exceptions/page.tsx 45; ExceptionList.tsx 122; ResolveDialog.tsx 30; labels.ts 32; exceptions-page.test.tsx 271   (5 files, 500+)
+204674c feat(frontend): add the navigation, hiding the links the backend refused with a 403
+  campaigns/page.tsx 10; exceptions/page.tsx 2; layout.tsx 37; status/page.tsx 2
+  lib/auth/ForbiddenPages.tsx 33; navigation.test.tsx 124   (6 files, 199+/9-)
+d30d9f3 docs(openspec): restore tasks.md emptied by mistake and mark 8.4, 8.5 and 8.7
+  tasks.md | 174 +   (1 file)
+
+Decisiones que conviene que revises
+
+- Navegación sin decodificar roles: como pides que el 403 sea la fuente de verdad, muestra los tres enlaces hasta que una página recibe un 403 y entonces oculta solo el suyo. Un 401 no oculta nada. Se olvida al recargar, y un usuario sin rol ve el enlace hasta que entra una vez. Lo dejé así por ambigüedad en tu enunciado; si prefieres otra cosa, dímelo.
+- Botón de cerrar sesión: lo moví de la página de campañas al layout con el mismo comportamiento que tenía (removeUser). Eso deja la sesión como «caducada» en vez de «cerrada». Puede ser un fallo previo: el signOut del contexto sí hace el cierre explícito.
+- DSP: la API solo da dsp_id, así que se muestra «DSP 1». Para el nombre haría falta cargar /masters/dsps. En missing_delivery la pareja externa no existe, y muestro «Línea X, periodo Y».
+- Resolver: si el servidor responde 409 o 404, la fila sale de «Abiertas» y se muestra el mensaje en español. Con otro error, la fila se queda y sale un mensaje genérico.
+- Pestañas: al cambiar de pestaña se recarga esa lista.
+- Número de cuatro cifras: es-ES no agrupa los miles, así que 3100 se ve «3100» y 31000 «31.000».
+- Tests y 8.2/8.3: esos dos van en un solo commit, con los tests escritos antes y en rojo. En 8.4 vi en rojo solo vacío y error; «cargando» ya pasaba.
+
+A mano en el navegador
+
+1. La barra tiene Campañas, Estado, Excepciones y «Cerrar sesión», una sola vez en todas las páginas.
+2. /status con un usuario operations o business:
+   - Hay una fila por flight, y contratado y entregado salen en columnas distintas.
+   - Ratio y desviación salen en porcentaje, con «—» si vienen nulos.
+   - «Sin datos recibidos» y «Desviación de ritmo» salen como texto.
+   - Los botones «Periodo» y «Agencia» ordenan ascendente, descendente y vuelven al orden del servidor.
+3. /status sin campañas en curso muestra «No hay campañas en curso». Con el backend parado muestra el error, y durante la carga «Cargando estado…».
+4. /exceptions con operations:
+   - Las pestañas «Abiertas» y «Resueltas» cambian de lista, y la resuelta muestra su nota.
+   - «Resolver» pide la nota y un botón de confirmar. Al confirmar, la fila sale sin recargar.
+   - Resolver la misma excepción desde dos pestañas del navegador debe dar «ya estaba resuelta».
+5. Con un usuario business sin operations, entrar en /exceptions lleva a «Acceso denegado» y el enlace desaparece. /status sigue funcionando.
+6. Con la sesión caducada, cualquiera de las páginas lleva a «Sesión caducada».
+7. En la pestaña de red, los endpoints son GET /api/campaign-status, GET /api/ingestion-exceptions?status=… y POST /api/ingestion-exceptions/{id}/resolve. Ninguna respuesta lleva campo de coste.
+
+Siguen abiertas la 8.6 (aplazada) y todo lo posterior a la sección 8.
+
+**Ajuste humano**
+El botón de Cerrar Sesión llevaba a la pantalla de sesión caducada. Claude lo marcaba como posible regresión y hubo que corregirlo, pues fallaba antes.
+
+
+
+
+----
+**Prompt 7**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame. Si git status --short no está vacío, para.
+
+Objetivo: imágenes y composición de producción, verificables en local. No toques la lógica de la aplicación.
+
+Decisiones, a registrar en design.md y tasks.md antes del código:
+
+Backend: imagen sin dependencias de desarrollo (uv sync --frozen --no-dev), sin tests/ y sin scripts/seed_dev_data.py, con usuario no root. Debe conservar scripts/run_ingestion.py y las migraciones. Las migraciones se aplican con un paso explícito (alembic upgrade head), nunca al arrancar el contenedor.
+Primer usuario sin datos de prueba: un script scripts/grant_roles.py, que recibe el email y los roles por argumentos, crea el usuario si no existe y le asigna los roles, sin leer ni imprimir nada más. El seed de desarrollo no se incluye en la imagen de producción.
+Frontend: imagen de producción con las variables NEXT_PUBLIC_* y COGNITO_DOMAIN pasadas como argumentos de construcción, con la URL pública del servidor.
+docker-compose.prod.yml: sin puertos expuestos salvo los de nginx, política de reinicio, comprobaciones de salud, rotación de logs, env_file: .env y el volumen nombrado de PostgreSQL.
+nginx de producción: el bloque 80 redirige a HTTPS y deja libre /.well-known/acme-challenge/ para Certbot; el bloque 443 usa certificados montados desde un volumen, con server_name como variable. Ningún certificado ni clave se versiona.
+Guía docs/deploy.md con los pasos que no se pueden ejecutar aquí: instancia, grupo de seguridad, DNS, Certbot, .env con chmod 600, y los URL de callback y de cierre de sesión de Cognito en HTTPS.
+
+Verificación en local, test primero cuando sea posible: un script scripts/verify_prod_images.sh que construya las imágenes, levante la composición de producción con una base temporal y un certificado autofirmado generado en el momento, y compruebe: /api/health responde 200 por HTTPS; la imagen de backend no contiene pytest, tests/ ni seed_dev_data.py pero sí run_ingestion.py; el contenedor no corre como root; la base de datos no es accesible desde fuera; y alembic upgrade head se aplica como paso aparte. Debe terminar con una línea OK o FALLO y el motivo.
+
+Restricciones: sin credenciales, claves ni certificados en el repositorio (añade lo que haga falta a .gitignore y comprueba que no queda nada versionado); no leas .env; commits pequeños con git add de rutas concretas; si algo es ambiguo, pregunta. Al terminar, ejecuta el script de verificación y pega su salida cruda, la de pytest y vitest (dos veces, con la línea de resultado completa) y el git show --stat de todos los commits.
+
+
+
+----
+**Prompt 8**
+**Herramienta** Claude Code
+**Prompt**
 
 ### Ajustes humanos de los bloques siguientes (pendientes de colocar bajo su prompt)
 
