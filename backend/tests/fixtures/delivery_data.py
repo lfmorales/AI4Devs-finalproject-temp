@@ -147,6 +147,33 @@ def replace_flights(session: Session, campaign_line_id: int, windows: list[tuple
     return period_ids
 
 
+def add_line_to_campaign(session: Session, existing_line_id: int, line_number: int) -> int:
+    """Add another line to the campaign of an existing one: same dates, DSP, channel and format, one flight.
+
+    The flight reuses the existing line's period, so both lines run the same window under the same campaign.
+    """
+    existing = session.get(CampaignLineRecord, existing_line_id)
+    assert existing is not None
+    flight = session.scalars(
+        select(CampaignLinePeriodRecord).where(CampaignLinePeriodRecord.campaign_line_id == existing_line_id)
+    ).first()
+    assert flight is not None
+    line = CampaignLineRecord(
+        campaign_id=existing.campaign_id, line_number=line_number, start_date=existing.start_date,
+        end_date=existing.end_date, dsp_id=existing.dsp_id, channel_id=existing.channel_id,
+        format_id=existing.format_id, scope="national", market_description="Nacional",
+        contracted_impressions=CONTRACTED_IMPRESSIONS, sale_cpm=Decimal("5.00"),
+    )
+    session.add(line)
+    session.flush()
+    session.add(CampaignLinePeriodRecord(
+        campaign_line_id=line.id, campaign_period_id=flight.campaign_period_id,
+        flight_start=flight.flight_start, flight_end=flight.flight_end, contracted_impressions=CONTRACTED_IMPRESSIONS,
+    ))
+    session.flush()
+    return line.id
+
+
 def period_of_line(session: Session, campaign_line_id: int) -> int:
     """The campaign period of a fixture line's only flight."""
     return session.scalars(
