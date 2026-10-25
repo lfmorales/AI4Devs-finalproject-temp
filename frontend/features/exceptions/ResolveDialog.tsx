@@ -19,9 +19,9 @@ export function ResolveDialog({ exceptionId, submitting, onConfirm, onCancel }: 
   return (
     <Modal title={`Resolver excepción ${exceptionId}`} closable={!submitting} onClose={onCancel}>
       <p>Marcar la excepción {exceptionId} como resuelta. No se reprocesa ninguna entrega.</p>
-      <label htmlFor={noteId} style={{ display: "block", fontWeight: "600" }}>Nota (opcional)</label>
-      <textarea id={noteId} value={note} onChange={(event) => setNote(event.target.value)} rows={3} style={{ width: "100%" }} />
-      <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
+      <label htmlFor={noteId}>Nota (opcional)</label>
+      <textarea id={noteId} value={note} onChange={(event) => setNote(event.target.value)} rows={3} />
+      <div className="dialog-actions">
         <button type="button" className="btn-primary" disabled={submitting} onClick={() => onConfirm(note.trim() === "" ? null : note.trim())}>
           Confirmar resolución
         </button>

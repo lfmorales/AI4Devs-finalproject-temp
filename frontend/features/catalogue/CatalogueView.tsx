@@ -245,11 +245,11 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
     <div>
       <form className="filters" onSubmit={applyFilters}>
         <div>
-          <label htmlFor={searchId} style={{ display: "block", fontWeight: "600" }}>Buscar por nombre</label>
+          <label htmlFor={searchId}>Buscar por nombre</label>
           <input id={searchId} type="search" value={draft.q} onChange={(event) => setDraft({ ...draft, q: event.target.value })} />
         </div>
         <div>
-          <label htmlFor={mappedId} style={{ display: "block", fontWeight: "600" }}>Vinculación</label>
+          <label htmlFor={mappedId}>Vinculación</label>
           <select id={mappedId} value={draft.mapped} onChange={(event) => setDraft({ ...draft, mapped: event.target.value as Filters["mapped"] })}>
             <option value="">Todas</option>
             <option value="true">Vinculadas</option>
@@ -257,7 +257,7 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
           </select>
         </div>
         <div>
-          <label htmlFor={sinceId} style={{ display: "block", fontWeight: "600" }}>Activas desde</label>
+          <label htmlFor={sinceId}>Activas desde</label>
           <input id={sinceId} type="date" aria-describedby={sinceHintId} value={draft.activeSince} onChange={(event) => setDraft({ ...draft, activeSince: event.target.value })} />
           <p id={sinceHintId} className="hint">
             Se compara con la última fecha con fila en Adform, no actividad real.

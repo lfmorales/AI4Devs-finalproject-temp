@@ -43,9 +43,8 @@ export function Modal({ title, closable, onClose, children }: ModalProps) {
         event.preventDefault();
         if (latest.current.closable) latest.current.onClose();
       }}
-      style={{ maxWidth: "40rem", width: "calc(100% - 2rem)", padding: "1rem", border: "1px solid #d1d5db" }}
     >
-      <h2 id={titleId} style={{ fontSize: "1.125rem", fontWeight: "600", marginTop: 0 }}>{title}</h2>
+      <h2 id={titleId}>{title}</h2>
       {children}
     </dialog>
   );

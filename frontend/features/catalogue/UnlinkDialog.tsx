@@ -19,7 +19,7 @@ export function UnlinkDialog({ campaignName, lineItemName, submitting, problem, 
         Se borrarán los días de entrega ingeridos de la línea vinculada a <AdformName name={campaignName} /> / <AdformName name={lineItemName} />. Esta acción no se puede deshacer.
       </p>
       {problem && <div role="alert" className="notice notice-error">{problem}</div>}
-      <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
+      <div className="dialog-actions">
         <button type="button" className="btn-danger" disabled={submitting} onClick={onConfirm}>Confirmar desvinculación</button>
         <button type="button" disabled={submitting} onClick={onCancel}>Cancelar</button>
       </div>

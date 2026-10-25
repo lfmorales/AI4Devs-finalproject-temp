@@ -52,12 +52,12 @@ export function LinePickerDialog({ label, submitting, problem, onConfirm, onCanc
     if (lines.length === 0) return <p>No hay líneas sin mapeo</p>;
     return (
       <>
-        <label htmlFor={searchId} style={{ display: "block", fontWeight: "600" }}>Buscar línea</label>
+        <label htmlFor={searchId}>Buscar línea</label>
         <input id={searchId} type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
         {shown.length === 0 ? (
           <p>Ninguna línea coincide con la búsqueda</p>
         ) : (
-          <div role="radiogroup" aria-label="Líneas sin mapeo" style={{ display: "grid", gap: "0.25rem", margin: "0.5rem 0", maxHeight: "16rem", overflowY: "auto" }}>
+          <div role="radiogroup" aria-label="Líneas sin mapeo">
             {shown.map((line) => (
               <label key={line.id}>
                 <input
@@ -79,7 +79,7 @@ export function LinePickerDialog({ label, submitting, problem, onConfirm, onCanc
     <Modal title={label} closable={!submitting} onClose={onCancel}>
       {body()}
       {problem && <div role="alert" className="notice notice-error">{problem}</div>}
-      <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
+      <div className="dialog-actions">
         <button type="button" className="btn-primary" disabled={submitting || chosen === null} onClick={() => chosen && onConfirm(chosen)}>
           Confirmar vinculación
         </button>
