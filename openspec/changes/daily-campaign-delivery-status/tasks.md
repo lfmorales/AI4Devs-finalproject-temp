@@ -185,7 +185,7 @@ A filter over the list of the active tab of `/exceptions`, in the style of the c
 - With `NEXT_PUBLIC_MASK_NAMES=true` the search by name still works and the names stay blurred.
 - It uses the classes of the global stylesheet; no new CSS unless needed.
 
-- [ ] 8E.1 Add the pure filter (normalisation, searchable text, all terms, type), tests first
+- [x] 8E.1 Add the pure filter (normalisation, searchable text, all terms, type), tests first
 - [ ] 8E.2 Add the controls, the counter, «Limpiar filtros» and the no-match state to the exception queue, tests first
 - [ ] 8E.3 Keep the filter across tabs and after resolving or linking, with no request, URL or storage involved, and under the name masking, tests first
 
