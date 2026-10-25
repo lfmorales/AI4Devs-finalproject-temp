@@ -88,3 +88,7 @@ class IngestionExceptionNotFoundError(DomainError):
 
 class IngestionExceptionAlreadyResolvedError(DomainError):
     """The ingestion exception was already resolved."""
+
+
+class LineDatesOutsideCampaignError(DomainError):
+    """A campaign line starts before its campaign or ends after it."""
