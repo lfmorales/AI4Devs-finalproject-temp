@@ -1334,6 +1334,54 @@ Restricciones: no edites uv.lock; no leas .env; no llames a servicios externos; 
 **Prompt 10**
 **Herramienta** Claude Code
 **Prompt**
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame. Si git status --short no está vacío, para. Solo frontend. No toques el backend.
+
+Objetivo: una hoja de estilos global y mínima, sin Tailwind, sin ningún framework de CSS, sin dependencias nuevas (no edites package.json ni package-lock.json), sin fuentes ni recursos externos (nada de @import url, CDN ni Google Fonts: tipografía del sistema). No cambies ningún texto, role, etiqueta ni orden de elementos, para no tocar los 321 tests. No modifiques ningún test existente.
+
+Antes de escribir nada, haz un inventario del marcado real de cada pantalla (home sin sesión, /campaigns, /campaigns/new, /status, /exceptions, /dsp-catalog, las pantallas de sesión caducada y de acceso denegado, y los cuatro diálogos): qué elementos y atributos ARIA usan para tablas, avisos, errores de campo, estados de carga y vacío, navegación y botones. Dime dónde un selector de elemento o de ARIA no alcanza y haría falta una clase o un atributo data-*. Solo se añaden clases o atributos donde haga falta, y nunca se cambia ningún texto.
+
+Decisiones, a registrar en tasks.md (apartado 8D) y design.md antes del código:
+
+Un fichero app/globals.css importado en el layout raíz. Todo se define con variables CSS en :root y los componentes no repiten colores.
+Tema claro único, con color-scheme: light. Variables de color: fondo de página 
+#F6F4EE, superficie 
+#FFFFFF, borde 
+#DDD8CB, texto 
+#1B2433, texto atenuado 
+#5B6470, cabecera de la aplicación 
+#0F1B2D con texto 
+#F6F4EE, acción 
+#0B6B74 (hover 
+#08555C) con texto blanco, peligro 
+#B42318 con texto blanco, y avisos: advertencia (fondo 
+#FFF4D6, texto 
+#7A4B00, borde 
+#F2B24B), error (fondo 
+#FDECEA, texto 
+#8A1C14), éxito (fondo 
+#E4F4EE, texto 
+#0B5D43) e información (fondo 
+#E8F1F8, texto 
+#12456B). Todos los pares de texto y fondo deben cumplir contraste AA (4,5:1).
+Tipografía: pila del sistema (system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif), 16 px de base, interlineado 1,5, títulos con jerarquía clara y font-variant-numeric: tabular-nums en las tablas.
+Estructura: la navegación como barra superior sobre la cabecera oscura, con el enlace de la página actual marcado con aria-current; contenido centrado, con un ancho máximo de 1280 px y relleno de 24 px; el botón de cerrar sesión alineado a la derecha.
+Tablas: borde fino, cabecera con fondo propio, filas con hover, relleno cómodo, columnas numéricas alineadas a la derecha, y un contenedor con desplazamiento horizontal para que una tabla ancha no rompa la página. Las tres tablas (estado, excepciones, catálogo) deben leerse bien con 1024 px de ancho.
+Avisos del estado («Sin datos recibidos», «Desviación de ritmo») como etiquetas con color y texto, y el texto sigue siendo lo que comunica, no solo el color. Mensajes de error de campo y de formulario, avisos de histórico y estados de carga, vacío y error con sus colores de aviso.
+Formularios: etiqueta sobre el campo, campos a ancho completo con borde y relleno, fieldset y legend con aspecto de tarjeta para cada línea de la campaña, la tabla de flights compacta, y el error de cada campo justo debajo.
+Botones: principal, secundario y de peligro («Desvincular»), con estado deshabilitado visible y el mismo tamaño táctil mínimo (altura de 36 px).
+Diálogos: dialog centrado con relleno, esquinas redondeadas, sombra suave y ::backdrop atenuado; sin romper el funcionamiento modal nativo.
+Pantallas de inicio, sesión caducada y acceso denegado: una tarjeta centrada con el botón principal.
+Accesibilidad: :focus-visible con un contorno de 3 px bien visible en todos los controles (claro sobre la cabecera oscura), @media (prefers-reduced-motion: reduce) sin transiciones, y un enlace «Saltar al contenido» solo si se puede añadir sin cambiar los tests.
+El difuminado de nombres (NEXT_PUBLIC_MASK_NAMES) debe seguir funcionando: no sobrescribas sus estilos en línea.
+
+Pruebas, test primero cuando sea posible: como jsdom no calcula diseño, añade tests que comprueben lo comprobable: que el layout raíz importa globals.css; que la hoja no contiene @import url, http:// ni https://; que define :focus-visible, dialog::backdrop y prefers-reduced-motion; y un test que lee las variables de color de la hoja y calcula la razón de contraste (fórmula WCAG) de cada par de texto y fondo declarado, exigiendo 4,5 o más. Después, que typecheck, vitest y docker compose build frontend sigan pasando.
+
+Commits pequeños con git add de rutas concretas: (1) variables, reinicio y tipografía; (2) estructura y navegación; (3) tablas; (4) formularios y botones; (5) etiquetas y avisos; (6) diálogos; (7) pantallas de inicio y de acceso; (8) los tests de la hoja. Un bloque se da por terminado solo cuando pasan npm run typecheck, vitest dos veces seguidas con la línea de resultado completa y docker compose build frontend. Pega la salida real, el git show --stat de todos los commits, la lista de componentes a los que hayas añadido una clase o un atributo y por qué, y una lista de qué comprobar a mano en el navegador.
+
+**Prompt 11**
+**Herramienta** Claude Code
+**Prompt**
+
 
 ### Ajustes humanos de los bloques siguientes (pendientes de colocar bajo su prompt)
 
