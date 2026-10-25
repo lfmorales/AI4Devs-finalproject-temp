@@ -9,6 +9,7 @@ from sqlalchemy.engine import make_url
 from tests.conftest import BACKEND_ROOT, TEST_DATABASE_URL
 
 BEFORE = "3cd42e61ae55"  # add campaign line flights: lines still hang from a period
+AFTER = "520fbde04e94"  # the migration under test: lines hang from the campaign
 SCRATCH_DB = "adops360_line_model_migration_test"
 
 
@@ -68,7 +69,7 @@ def test_upgrade_makes_the_line_columns_mandatory_and_drops_the_period(scratch):
     with engine.begin() as connection:
         _seed_campaign(connection)
 
-    command.upgrade(config, "head")
+    command.upgrade(config, AFTER)
 
     columns = _line_columns(engine)
     assert "campaign_period_id" not in columns
@@ -82,7 +83,7 @@ def test_upgrade_keeps_the_rows_and_their_flights(scratch):
     with engine.begin() as connection:
         _seed_campaign(connection)
 
-    command.upgrade(config, "head")
+    command.upgrade(config, AFTER)
 
     with engine.connect() as connection:
         assert connection.execute(text("SELECT count(*) FROM campaign_lines")).scalar() == 1
@@ -95,7 +96,7 @@ def test_upgrade_refuses_a_line_without_a_campaign_and_says_to_recreate_the_data
         _seed_campaign(connection, with_campaign_id=False)
 
     with pytest.raises(RuntimeError, match="recreate the development database"):
-        command.upgrade(config, "head")
+        command.upgrade(config, AFTER)
 
     assert "campaign_period_id" in _line_columns(engine)  # nothing was changed
 
@@ -104,9 +105,9 @@ def test_downgrade_restores_the_period_of_the_earliest_flight(scratch):
     config, engine = scratch
     with engine.begin() as connection:
         periods = _seed_campaign(connection)
-    command.upgrade(config, "head")
+    command.upgrade(config, AFTER)
 
-    command.downgrade(config, "-1")
+    command.downgrade(config, BEFORE)
 
     columns = _line_columns(engine)
     assert columns["campaign_period_id"]["nullable"] is False
@@ -122,10 +123,10 @@ def test_downgrade_refuses_a_line_without_flights(scratch):
     config, engine = scratch
     with engine.begin() as connection:
         _seed_campaign(connection, with_flights=False)
-    command.upgrade(config, "head")
+    command.upgrade(config, AFTER)
 
     with pytest.raises(RuntimeError, match="no flights"):
-        command.downgrade(config, "-1")
+        command.downgrade(config, BEFORE)
 
     assert "campaign_period_id" not in _line_columns(engine)  # nothing was changed
 
@@ -135,8 +136,8 @@ def test_upgrade_downgrade_upgrade_runs_clean(scratch):
     with engine.begin() as connection:
         _seed_campaign(connection)
 
-    command.upgrade(config, "head")
-    command.downgrade(config, "-1")
-    command.upgrade(config, "head")
+    command.upgrade(config, AFTER)
+    command.downgrade(config, BEFORE)
+    command.upgrade(config, AFTER)
 
     assert "campaign_period_id" not in _line_columns(engine)
