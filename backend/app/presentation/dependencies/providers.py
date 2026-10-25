@@ -5,7 +5,7 @@ so no other module needs to know which implementations are in use.
 """
 
 from collections.abc import Callable, Iterator
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from functools import lru_cache
 from typing import Annotated
 
@@ -14,6 +14,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.services.authentication_service import AuthenticationService
+from app.application.services.campaign_status_service import CampaignStatusService
 from app.application.services.dsp_mapping_service import DspMappingService
 from app.application.services.ingestion_exception_service import IngestionExceptionService
 from app.config import get_settings
@@ -22,6 +23,9 @@ from app.domain.services.dsp_delivery_client import DspDeliveryClient
 from app.infrastructure.auth.cognito_token_verifier import CognitoTokenVerifier
 from app.infrastructure.dsp.adform_delivery_client import AdformDeliveryClient
 from app.infrastructure.persistence.database import build_engine, build_session_factory
+from app.infrastructure.persistence.repositories.sqlalchemy_campaign_status_repository import (
+    SqlAlchemyCampaignStatusRepository,
+)
 from app.infrastructure.persistence.repositories.sqlalchemy_exception_queue_repository import (
     SqlAlchemyExceptionQueueRepository,
 )
@@ -109,3 +113,15 @@ def get_ingestion_exception_service(
         queue=SqlAlchemyExceptionQueueRepository(session),
         clock=lambda: datetime.now(UTC).replace(tzinfo=None),
     )
+
+
+def get_today() -> date:
+    """The day the request is made (D). A dependency so tests can pin it."""
+    return datetime.now(UTC).date()
+
+
+def get_campaign_status_service(
+    session: Annotated[Session, Depends(get_db_session)],
+    today: Annotated[date, Depends(get_today)],
+) -> CampaignStatusService:
+    return CampaignStatusService(repository=SqlAlchemyCampaignStatusRepository(session), today=lambda: today)

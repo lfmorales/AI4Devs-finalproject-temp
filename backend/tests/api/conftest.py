@@ -139,3 +139,38 @@ def authenticated_client_no_operations_role(test_db_session):
 
     # Clean up all overrides
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client_for_roles(test_db_session):
+    """Factory: a TestClient whose authenticated user holds exactly the given roles. Empty means no role at all."""
+    seed_master_data(test_db_session)
+    created: list = []
+
+    def build(*role_names: str) -> TestClient:
+        email = f"roles_{'_'.join(role_names) or 'none'}@example.com"
+        user = UserRecord(email=email, full_name="Role Test User", is_active=True)
+        test_db_session.add(user)
+        test_db_session.flush()
+        for role_name in role_names:
+            role = test_db_session.query(RoleRecord).filter_by(name=role_name).first()
+            assert role is not None, f"Role {role_name} not found after seeding"
+            test_db_session.add(UserRoleRecord(user_id=user.id, role_id=role.id))
+        test_db_session.flush()
+        app = create_app()
+
+        def override_get_current_user() -> User:
+            record = test_db_session.query(UserRecord).options(selectinload(UserRecord.roles)).filter_by(email=email).one()
+            return User(
+                id=record.id, email=record.email, full_name=record.full_name, is_active=record.is_active,
+                roles=frozenset(RoleName(role.name) for role in record.roles),
+            )
+
+        app.dependency_overrides[providers.get_db_session] = lambda: (yield test_db_session)
+        app.dependency_overrides[auth.get_current_user] = override_get_current_user
+        created.append(app)
+        return TestClient(app)
+
+    yield build
+    for app in created:
+        app.dependency_overrides.clear()
