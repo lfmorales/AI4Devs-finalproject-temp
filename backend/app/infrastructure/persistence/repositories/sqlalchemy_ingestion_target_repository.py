@@ -20,7 +20,7 @@ class SqlAlchemyIngestionTargetRepository(IngestionTargetRepository):
         self._session = session
 
     def find_targets(self, dsp_id: int, window: DeliveryDateRange) -> IngestionTargets:
-        # Status is deliberately not filtered: a campaign that ended days ago still has figures the DSP restates.
+        # Status is deliberately not filtered: a line that ended days ago still has figures the DSP restates.
         # The outer join keeps a line with no validated mapping for this DSP, which is how it is counted as skipped.
         validated_mapping = and_(
             DSPMappingRecord.campaign_line_id == CampaignLineRecord.id,
@@ -34,13 +34,12 @@ class SqlAlchemyIngestionTargetRepository(IngestionTargetRepository):
                 DSPMappingRecord.external_line_item_id,
             )
             .select_from(CampaignLineRecord)
-            .join(CampaignPeriodRecord, CampaignPeriodRecord.id == CampaignLineRecord.campaign_period_id)
-            .join(CampaignRecord, CampaignRecord.id == CampaignPeriodRecord.campaign_id)
             .outerjoin(DSPMappingRecord, validated_mapping)
             .where(
                 CampaignLineRecord.dsp_id == dsp_id,
-                CampaignRecord.start_date <= window.end,
-                CampaignRecord.end_date >= window.start,
+                # The line's own dates decide, not its campaign's: no period and no campaign is joined.
+                CampaignLineRecord.start_date <= window.end,
+                CampaignLineRecord.end_date >= window.start,
             )
             .order_by(
                 CampaignLineRecord.id,

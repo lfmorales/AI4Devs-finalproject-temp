@@ -202,3 +202,85 @@ def test_every_watched_campaign_is_returned_in_id_order(rolled_back_session):
         _campaign(rolled_back_session, first),
         _campaign(rolled_back_session, second),
     )
+
+
+# --- Selection by the line's own dates: the campaign's dates no longer decide. ---
+
+def _narrow_line(session, name: str, line_start: date, line_end: date, dsp: int | None = None) -> int:
+    """A line inside a campaign that runs from July 1 to August 31, with its own, narrower dates."""
+    return insert_campaign_line(
+        session, name, date(2026, 7, 1), date(2026, 8, 31), "active", dsp, line_start=line_start, line_end=line_end
+    )
+
+
+def test_a_line_that_ended_before_the_window_is_not_ingested_while_its_campaign_runs(rolled_back_session, dsp_id):
+    line = _narrow_line(rolled_back_session, "Line ended early", date(2026, 7, 1), date(2026, 8, 2))
+    insert_mapping(rolled_back_session, line, dsp_id)
+    unmapped = _narrow_line(rolled_back_session, "Line ended early, unmapped", date(2026, 7, 1), date(2026, 8, 2))
+
+    targets = _targets(rolled_back_session, dsp_id)
+
+    assert (targets.mapped_lines, targets.unmapped_line_ids) == ((), ())
+    assert line != unmapped
+
+
+def test_a_line_that_ended_inside_the_window_is_ingested_while_its_campaign_runs(rolled_back_session, dsp_id):
+    line = _narrow_line(rolled_back_session, "Line ended in window", date(2026, 7, 1), date(2026, 8, 5))
+    insert_mapping(rolled_back_session, line, dsp_id)
+
+    assert [m.campaign_line_id for m in _targets(rolled_back_session, dsp_id).mapped_lines] == [line]
+
+
+def test_a_line_starting_mid_campaign_inside_the_window_is_ingested(rolled_back_session, dsp_id):
+    line = _narrow_line(rolled_back_session, "Line starts mid window", date(2026, 8, 6), date(2026, 8, 31))
+    insert_mapping(rolled_back_session, line, dsp_id)
+
+    assert [m.campaign_line_id for m in _targets(rolled_back_session, dsp_id).mapped_lines] == [line]
+
+
+def test_a_line_starting_after_the_window_is_neither_ingested_nor_skipped_while_its_campaign_runs(
+    rolled_back_session, dsp_id
+):
+    line = _narrow_line(rolled_back_session, "Line starts later", date(2026, 8, 12), date(2026, 8, 31))
+    insert_mapping(rolled_back_session, line, dsp_id)
+    _narrow_line(rolled_back_session, "Line starts later, unmapped", date(2026, 8, 12), date(2026, 8, 31))
+
+    targets = _targets(rolled_back_session, dsp_id)
+
+    assert (targets.mapped_lines, targets.unmapped_line_ids) == ((), ())
+    assert line
+
+
+def test_a_line_outside_the_window_is_ignored_even_with_an_unvalidated_mapping(rolled_back_session, dsp_id):
+    line = _narrow_line(rolled_back_session, "Outside, unvalidated", date(2026, 7, 1), date(2026, 7, 31))
+    insert_mapping(rolled_back_session, line, dsp_id, validated_at=None)
+
+    targets = _targets(rolled_back_session, dsp_id)
+
+    assert (targets.mapped_lines, targets.unmapped_line_ids) == ((), ())
+
+
+def test_a_line_of_another_dsp_inside_the_window_is_not_considered(rolled_back_session, dsp_id):
+    other_dsp = insert_other_dsp(rolled_back_session)
+    line = _narrow_line(rolled_back_session, "Other DSP in window", date(2026, 8, 4), date(2026, 8, 8), dsp=other_dsp)
+    insert_mapping(rolled_back_session, line, other_dsp)
+
+    assert _targets(rolled_back_session, dsp_id).mapped_lines == ()
+
+
+def test_two_lines_of_one_campaign_are_judged_separately(rolled_back_session, dsp_id):
+    running = _narrow_line(rolled_back_session, "Running line", date(2026, 8, 1), date(2026, 8, 31))
+    insert_mapping(rolled_back_session, running, dsp_id, "1001", "2001")
+    over = _narrow_line(rolled_back_session, "Over line", date(2026, 7, 1), date(2026, 7, 20))
+    insert_mapping(rolled_back_session, over, dsp_id, "1001", "2002")
+
+    assert [m.campaign_line_id for m in _targets(rolled_back_session, dsp_id).mapped_lines] == [running]
+
+
+def test_watched_campaigns_are_decided_by_the_campaign_alone_whatever_its_lines_run(rolled_back_session):
+    # The only line ended long before D-1, yet the campaign is active and includes D-1: it is still watched.
+    line = _narrow_line(rolled_back_session, "Watched, line over", date(2026, 7, 1), date(2026, 7, 10))
+
+    watched = SqlAlchemyIngestionTargetRepository(rolled_back_session).find_watched_campaign_ids(date(2026, 8, 10))
+
+    assert campaign_id_of(rolled_back_session, line) in watched
