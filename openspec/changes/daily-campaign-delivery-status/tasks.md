@@ -161,6 +161,19 @@ Found in the real browser, and not by the tests: the application has no compiled
 - [x] 8C.3 Move `LinePickerDialog` to the shared modal, tests first
 - [x] 8C.4 Move `UnlinkDialog` to the shared modal, tests first
 
+## 8D. Frontend: Global Stylesheet
+
+One hand-written stylesheet, with no framework, no new dependency, no external font or resource, as decided in the design («Global stylesheet»). No text, role, label or element order changes, so the existing tests are untouched. Where jsdom cannot compute layout, the tests check what can be checked: the root layout imports the sheet, the sheet has no `@import url` or absolute URL, it defines `:focus-visible`, `dialog::backdrop` and `prefers-reduced-motion`, and every declared text and background pair reaches 4.5:1 (WCAG formula).
+
+- [ ] 8D.1 Add `app/globals.css` with the colour variables, the reset and the typography, imported by the root layout (with the «Saltar al contenido» link), and remove the inline colours and fonts
+- [ ] 8D.2 Structure and navigation: dark header bar, `aria-current` on the current page, centred content up to 1280 px with 24 px padding, sign-out button to the right
+- [ ] 8D.3 Tables: border, header, hover, numeric columns on the right and a scrolling container, readable at 1024 px
+- [ ] 8D.4 Forms and buttons: label over field, full-width fields, card fieldsets, compact flights table, field errors under the field, primary, secondary and danger buttons with a visible disabled state and a 36 px minimum height
+- [ ] 8D.5 Tags and notices: status flags as coloured tags with text, error, warning, success and information notices, and loading, empty and error states
+- [ ] 8D.6 Dialogs: centred native dialog with padding, rounded corners, soft shadow and dimmed `::backdrop`, without changing how it works as a modal
+- [ ] 8D.7 Home, expired-session and access-denied screens as a centred card with the primary button
+- [ ] 8D.8 Stylesheet tests: root layout import, no external URL, focus, backdrop and reduced motion, and AA contrast of every declared pair
+
 ## 9. Review and Update Existing Unit Tests (MANDATORY)
 
 - [ ] 9.1 Review every test touched by this change and update any asserting superseded behaviour

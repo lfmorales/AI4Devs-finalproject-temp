@@ -137,6 +137,23 @@ It also introduces the first scheduled work in the product. Until now every writ
 - **Warnings.** Mapping creation returns `last_impressions_date` when the pair is in the catalogue (new optional field), to detect pairs that exist but do not deliver. Mapping creation and link return `needs_history_load`: the line's start is before today minus 7 days (Madrid), the previous delivery not being loaded by itself.
 - **Range.** `run_ingestion --from --to`: both or neither, not with `--date`, at most 31 days, `--to` not after D-1 in Madrid; invalid arguments exit 3. One request, the lines overlapping the range, the same service with a window parameter. Absence detection is skipped (`absences: skipped, custom range`). Output stays counts only.
 
+### Global stylesheet
+
+The application has no Tailwind and no CSS framework, and no component uses `className`; every screen was styled with inline `style` props, which also beat any global stylesheet. Decision: one hand-written `app/globals.css`, imported by the root layout, with no dependency, no external font and no external resource (`@import url`, CDN and Google Fonts are out). Every colour is a CSS variable on `:root` and no component repeats a colour. The theme is a single light one (`color-scheme: light`); the system font stack is used at 16 px with a 1.5 line height, and tables use `font-variant-numeric: tabular-nums`. Every text and background pair meets WCAG AA (4.5:1), checked by a test that reads the variables from the sheet.
+
+Colours: page `#F6F4EE`, surface `#FFFFFF`, border `#DDD8CB`, text `#1B2433`, muted text `#5B6470`, application header `#0F1B2D` with text `#F6F4EE`, action `#0B6B74` (hover `#08555C`) with white text, danger `#B42318` with white text, and notices: warning (`#FFF4D6`, text `#7A4B00`, border `#F2B24B`), error (`#FDECEA`, `#8A1C14`), success (`#E4F4EE`, `#0B5D43`) and information (`#E8F1F8`, `#12456B`).
+
+Element and ARIA selectors are used wherever they are enough (`table`, `th`, `fieldset`, `legend`, `label`, `dialog`, `dialog::backdrop`, `nav[aria-label="Principal"]`, `[role="tab"][aria-selected="true"]`, `th[aria-sort]`, field errors as `input + p`). The inline `style` props are removed from the components, because they would override the sheet; the only inline style kept is the name masking of `NEXT_PUBLIC_MASK_NAMES`, which the sheet never overrides. Selectors are not enough in these places, where a class (or a `data-*` attribute) is added and no text, role, label or element order changes:
+
+- Notices: `role="status"` and `role="alert"` mix loading, success, warning and error, and several notices have no role at all (empty states, campaign-list error, form errors, the stale-split hint). They get `notice` plus a modifier.
+- Buttons: the default `button` is the secondary one; the primary and danger buttons, and the links that look like buttons, get `btn-primary`, `btn-danger` or `btn`.
+- Tables: numeric columns (`num`) and a scroll wrapper (`table-scroll`) so a wide table does not break the page.
+- Status flags: each flag in the «Avisos» cell is a tag with its colour and its text.
+- Form grids and the line cards (`form-grid`, `span-all`, `line-card`), the checkbox row, the filter form and the dialog action rows.
+- Centered cards of the home, expired-session and access-denied screens.
+- The navigation marks the current page with `aria-current="page"`, set from the path.
+- A «Saltar al contenido» link is added in the root layout, outside the pages the tests render.
+
 ## Risks / Trade-offs
 
 - **The delivery table grows without bound and the migration adds 8.5 M rows at once.** → Index the columns joins and filters use — the mapping, the campaign period, the delivery date — from the first migration. Partitioning by date is the escape hatch if roll-ups degrade; deliberately not built now, because the access pattern is period-scoped and an index covers it until volumes are known in production.
