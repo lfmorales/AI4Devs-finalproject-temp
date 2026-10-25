@@ -20,7 +20,7 @@ export function UnlinkDialog({ campaignName, lineItemName, submitting, problem, 
       </p>
       {problem && <div role="alert" style={{ backgroundColor: "#fee2e2", padding: "0.75rem", margin: "0.5rem 0" }}>{problem}</div>}
       <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
-        <button type="button" disabled={submitting} onClick={onConfirm}>Confirmar desvinculación</button>
+        <button type="button" className="btn-danger" disabled={submitting} onClick={onConfirm}>Confirmar desvinculación</button>
         <button type="button" disabled={submitting} onClick={onCancel}>Cancelar</button>
       </div>
     </Modal>

@@ -22,7 +22,7 @@ export function ResolveDialog({ exceptionId, submitting, onConfirm, onCancel }: 
       <label htmlFor={noteId} style={{ display: "block", fontWeight: "600" }}>Nota (opcional)</label>
       <textarea id={noteId} value={note} onChange={(event) => setNote(event.target.value)} rows={3} style={{ width: "100%" }} />
       <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
-        <button type="button" disabled={submitting} onClick={() => onConfirm(note.trim() === "" ? null : note.trim())}>
+        <button type="button" className="btn-primary" disabled={submitting} onClick={() => onConfirm(note.trim() === "" ? null : note.trim())}>
           Confirmar resolución
         </button>
         <button type="button" disabled={submitting} onClick={onCancel}>Cancelar</button>

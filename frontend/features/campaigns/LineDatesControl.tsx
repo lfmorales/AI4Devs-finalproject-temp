@@ -12,15 +12,6 @@ interface LineDatesControlProps {
   onDateChange: (field: "start_date" | "end_date", value: string) => void;
 }
 
-const inputStyle = (hasError: boolean) => ({
-  width: "100%",
-  padding: "0.5rem",
-  border: hasError ? "2px solid #dc2626" : "1px solid #d1d5db",
-  borderRadius: "0.375rem",
-});
-
-const errorStyle = { color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" } as const;
-
 /** The line's dates: inherited from the campaign unless the box is cleared. */
 export function LineDatesControl({
   idPrefix,
@@ -33,8 +24,8 @@ export function LineDatesControl({
   onDateChange,
 }: LineDatesControlProps) {
   return (
-    <div style={{ gridColumn: "1 / -1" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+    <div className="span-all">
+      <div className="check">
         <input
           id={`${idPrefix}-inherit`}
           type="checkbox"
@@ -45,9 +36,9 @@ export function LineDatesControl({
       </div>
 
       {!inherit && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.5rem", marginTop: "0.75rem" }}>
+        <div className="form-grid">
           <div>
-            <label htmlFor={`${idPrefix}-start`} style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label htmlFor={`${idPrefix}-start`}>
               Inicio de la línea
             </label>
             <input
@@ -55,12 +46,11 @@ export function LineDatesControl({
               type="date"
               value={startDate}
               onChange={(e) => onDateChange("start_date", e.target.value)}
-              style={inputStyle(Boolean(startError))}
             />
-            {startError && <p style={errorStyle}>{startError}</p>}
+            {startError && <p className="field-error">{startError}</p>}
           </div>
           <div>
-            <label htmlFor={`${idPrefix}-end`} style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label htmlFor={`${idPrefix}-end`}>
               Fin de la línea
             </label>
             <input
@@ -68,9 +58,8 @@ export function LineDatesControl({
               type="date"
               value={endDate}
               onChange={(e) => onDateChange("end_date", e.target.value)}
-              style={inputStyle(Boolean(endError))}
             />
-            {endError && <p style={errorStyle}>{endError}</p>}
+            {endError && <p className="field-error">{endError}</p>}
           </div>
         </div>
       )}

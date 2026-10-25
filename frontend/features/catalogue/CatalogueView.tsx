@@ -190,6 +190,7 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
                   {item.mapped_line_id !== null && (
                     <button
                       type="button"
+                      className="btn-danger"
                       aria-label={`Desvincular: ${item.campaign_name} / ${item.line_item_name}`}
                       onClick={() => { setUnlinkProblem(null); setUnlinkingKey(pairKey(item)); }}
                     >
@@ -211,7 +212,7 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
           </tbody>
         </table>
         </div>
-        <nav aria-label="Paginación del catálogo" style={{ display: "flex", gap: "1rem", alignItems: "center", marginTop: "1rem" }}>
+        <nav aria-label="Paginación del catálogo">
           <button type="button" disabled={page.offset === 0} onClick={() => setOffset(Math.max(0, page.offset - PAGE_SIZE))}>Anterior</button>
           <span>Mostrando {formatInteger(page.offset + 1)}–{formatInteger(page.offset + page.items.length)} de {formatInteger(page.total)}</span>
           <button type="button" disabled={page.offset + page.items.length >= page.total} onClick={() => setOffset(page.offset + PAGE_SIZE)}>Siguiente</button>
@@ -242,7 +243,7 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
 
   return (
     <div>
-      <form onSubmit={applyFilters} style={{ display: "flex", gap: "1rem", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "1rem" }}>
+      <form className="filters" onSubmit={applyFilters}>
         <div>
           <label htmlFor={searchId} style={{ display: "block", fontWeight: "600" }}>Buscar por nombre</label>
           <input id={searchId} type="search" value={draft.q} onChange={(event) => setDraft({ ...draft, q: event.target.value })} />
@@ -258,11 +259,11 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
         <div>
           <label htmlFor={sinceId} style={{ display: "block", fontWeight: "600" }}>Activas desde</label>
           <input id={sinceId} type="date" aria-describedby={sinceHintId} value={draft.activeSince} onChange={(event) => setDraft({ ...draft, activeSince: event.target.value })} />
-          <p id={sinceHintId} style={{ fontSize: "0.75rem", margin: 0 }}>
+          <p id={sinceHintId} className="hint">
             Se compara con la última fecha con fila en Adform, no actividad real.
           </p>
         </div>
-        <button type="submit">Filtrar</button>
+        <button type="submit" className="btn-primary">Filtrar</button>
       </form>
       {outcome && (
         <div role="status" style={{ backgroundColor: "#dcfce7", padding: "1rem", marginBottom: "1rem" }}>

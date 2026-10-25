@@ -470,79 +470,61 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: "64rem", margin: "0 auto", padding: "2rem" }}>
-      <h1 style={{ fontSize: "1.875rem", fontWeight: "bold", marginBottom: "2rem" }}>Nueva campaña</h1>
+    <form className="campaign-form" onSubmit={handleSubmit}>
+      <h1>Nueva campaña</h1>
 
       {loadError && (
-        <div style={{ backgroundColor: "#fee2e2", padding: "1rem", marginBottom: "1rem", borderRadius: "0.375rem", color: "#7f1d1d" }}>
+        <div className="notice notice-error">
           {loadError}
         </div>
       )}
 
       {submitError && (
-        <div style={{ backgroundColor: "#fee2e2", padding: "1rem", marginBottom: "1rem", borderRadius: "0.375rem", color: "#7f1d1d" }}>
+        <div className="notice notice-error">
           {submitError}
         </div>
       )}
 
       {/* Header Section */}
-      <fieldset style={{ marginBottom: "2rem", border: "none", padding: "0" }}>
-        <legend style={{ fontSize: "1.125rem", fontWeight: "600", marginBottom: "1rem" }}>Información de la campaña</legend>
+      <fieldset>
+        <legend>Información de la campaña</legend>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.5rem", marginBottom: "1.5rem" }}>
+        <div className="form-grid">
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Nombre de la campaña *
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => handleHeaderChange("name", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.name ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             />
             {fieldErrors.name && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.name}</p>
+              <p className="field-error">{fieldErrors.name}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Nombre mostrado *
             </label>
             <input
               type="text"
               value={formData.display_name}
               onChange={(e) => handleHeaderChange("display_name", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.display_name ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             />
             {fieldErrors.display_name && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.display_name}</p>
+              <p className="field-error">{fieldErrors.display_name}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Agencia *
             </label>
             <select
               value={formData.agency_id}
               onChange={(e) => handleHeaderChange("agency_id", Number(e.target.value))}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.agency_id ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             >
               <option value="">Selecciona una agencia</option>
               {masterData.agencies.map((agency) => (
@@ -552,23 +534,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
               ))}
             </select>
             {fieldErrors.agency_id && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.agency_id}</p>
+              <p className="field-error">{fieldErrors.agency_id}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Anunciante *
             </label>
             <select
               value={formData.advertiser_id}
               onChange={(e) => handleHeaderChange("advertiser_id", Number(e.target.value))}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.advertiser_id ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             >
               <option value="">Selecciona un anunciante</option>
               {masterData.advertisers.map((advertiser) => (
@@ -578,23 +554,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
               ))}
             </select>
             {fieldErrors.advertiser_id && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.advertiser_id}</p>
+              <p className="field-error">{fieldErrors.advertiser_id}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Tipo de campaña *
             </label>
             <select
               value={formData.campaign_type_id}
               onChange={(e) => handleHeaderChange("campaign_type_id", Number(e.target.value))}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.campaign_type_id ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             >
               <option value="">Selecciona un tipo</option>
               {masterData.campaignTypes.map((type) => (
@@ -604,23 +574,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
               ))}
             </select>
             {fieldErrors.campaign_type_id && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.campaign_type_id}</p>
+              <p className="field-error">{fieldErrors.campaign_type_id}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Sector *
             </label>
             <select
               value={formData.sector_id}
               onChange={(e) => handleHeaderChange("sector_id", Number(e.target.value))}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.sector_id ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             >
               <option value="">Selecciona un sector</option>
               {masterData.sectors.map((sector) => (
@@ -630,23 +594,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
               ))}
             </select>
             {fieldErrors.sector_id && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.sector_id}</p>
+              <p className="field-error">{fieldErrors.sector_id}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Comercial *
             </label>
             <select
               value={formData.sales_rep_id}
               onChange={(e) => handleHeaderChange("sales_rep_id", Number(e.target.value))}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.sales_rep_id ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             >
               <option value="">Selecciona un comercial</option>
               {masterData.salesReps.map((rep) => (
@@ -656,132 +614,94 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
               ))}
             </select>
             {fieldErrors.sales_rep_id && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.sales_rep_id}</p>
+              <p className="field-error">{fieldErrors.sales_rep_id}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Fecha de inicio *
             </label>
             <input
               type="date"
               value={formData.start_date}
               onChange={(e) => handleHeaderChange("start_date", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.start_date ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             />
             {fieldErrors.start_date && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.start_date}</p>
+              <p className="field-error">{fieldErrors.start_date}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Fecha de fin *
             </label>
             <input
               type="date"
               value={formData.end_date}
               onChange={(e) => handleHeaderChange("end_date", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.end_date ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             />
             {fieldErrors.end_date && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.end_date}</p>
+              <p className="field-error">{fieldErrors.end_date}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Referencia de orden *
             </label>
             <input
               type="text"
               value={formData.order_reference}
               onChange={(e) => handleHeaderChange("order_reference", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.order_reference ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             />
             {fieldErrors.order_reference && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.order_reference}</p>
+              <p className="field-error">{fieldErrors.order_reference}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Fecha de recepción *
             </label>
             <input
               type="date"
               value={formData.order_received_on}
               onChange={(e) => handleHeaderChange("order_received_on", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.order_received_on ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             />
             {fieldErrors.order_received_on && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.order_received_on}</p>
+              <p className="field-error">{fieldErrors.order_received_on}</p>
             )}
           </div>
         </div>
       </fieldset>
 
       {/* Lines Section */}
-      <fieldset style={{ marginBottom: "2rem", border: "none", padding: "0" }}>
-        <legend style={{ fontSize: "1.125rem", fontWeight: "600", marginBottom: "1rem" }}>Líneas de campaña</legend>
+      <fieldset>
+        <legend>Líneas de campaña</legend>
 
         {formData.lines.map((line, lineIndex) => (
-          <div key={line.id} style={{ marginBottom: "1.5rem", padding: "1rem", border: "1px solid #e5e7eb", borderRadius: "0.375rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <h3 style={{ fontSize: "1rem", fontWeight: "600" }}>Línea {lineIndex + 1}</h3>
+          <div key={line.id} className="line-card">
+            <div className="line-card-header">
+              <h3>Línea {lineIndex + 1}</h3>
               <button
                 type="button"
+                className="btn-danger"
                 onClick={() => removeLine(line.id)}
                 disabled={formData.lines.length === 1}
-                style={{
-                  padding: "0.5rem 1rem",
-                  backgroundColor: formData.lines.length === 1 ? "#d1d5db" : "#dc2626",
-                  color: "white",
-                  borderRadius: "0.375rem",
-                  border: "none",
-                  cursor: formData.lines.length === 1 ? "not-allowed" : "pointer",
-                  opacity: formData.lines.length === 1 ? 0.5 : 1,
-                }}
               >
                 Quitar línea
               </button>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.5rem" }}>
+            <div className="form-grid">
               <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                <label>
                   DSP *
                 </label>
                 <select
                   value={line.dsp_id}
                   onChange={(e) => handleLineChange(line.id, "dsp_id", Number(e.target.value))}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    border: fieldErrors[`lines.${lineIndex}.dsp_id`] ? "2px solid #dc2626" : "1px solid #d1d5db",
-                    borderRadius: "0.375rem",
-                  }}
                 >
                   <option value="">Selecciona un DSP</option>
                   {masterData.dsps.map((dsp) => (
@@ -791,23 +711,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                   ))}
                 </select>
                 {fieldErrors[`lines.${lineIndex}.dsp_id`] && (
-                  <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors[`lines.${lineIndex}.dsp_id`]}</p>
+                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.dsp_id`]}</p>
                 )}
               </div>
 
               <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                <label>
                   Canal *
                 </label>
                 <select
                   value={line.channel_id}
                   onChange={(e) => handleLineChange(line.id, "channel_id", Number(e.target.value))}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    border: fieldErrors[`lines.${lineIndex}.channel_id`] ? "2px solid #dc2626" : "1px solid #d1d5db",
-                    borderRadius: "0.375rem",
-                  }}
                 >
                   <option value="">Selecciona un canal</option>
                   {masterData.channels.map((channel) => (
@@ -817,23 +731,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                   ))}
                 </select>
                 {fieldErrors[`lines.${lineIndex}.channel_id`] && (
-                  <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors[`lines.${lineIndex}.channel_id`]}</p>
+                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.channel_id`]}</p>
                 )}
               </div>
 
               <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                <label>
                   Formato *
                 </label>
                 <select
                   value={line.format_id}
                   onChange={(e) => handleLineChange(line.id, "format_id", Number(e.target.value))}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    border: fieldErrors[`lines.${lineIndex}.format_id`] ? "2px solid #dc2626" : "1px solid #d1d5db",
-                    borderRadius: "0.375rem",
-                  }}
                 >
                   <option value="">Selecciona un formato</option>
                   {masterData.formats.map((format) => (
@@ -843,55 +751,43 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                   ))}
                 </select>
                 {fieldErrors[`lines.${lineIndex}.format_id`] && (
-                  <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors[`lines.${lineIndex}.format_id`]}</p>
+                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.format_id`]}</p>
                 )}
               </div>
 
               <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                <label>
                   Alcance *
                 </label>
                 <select
                   value={line.scope}
                   onChange={(e) => handleLineChange(line.id, "scope", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    border: fieldErrors[`lines.${lineIndex}.scope`] ? "2px solid #dc2626" : "1px solid #d1d5db",
-                    borderRadius: "0.375rem",
-                  }}
                 >
                   <option value="">Selecciona alcance</option>
                   <option value="national">Nacional</option>
                   <option value="international">Internacional</option>
                 </select>
                 {fieldErrors[`lines.${lineIndex}.scope`] && (
-                  <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors[`lines.${lineIndex}.scope`]}</p>
+                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.scope`]}</p>
                 )}
               </div>
 
               <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                <label>
                   Descripción del mercado *
                 </label>
                 <input
                   type="text"
                   value={line.market_description}
                   onChange={(e) => handleLineChange(line.id, "market_description", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    border: fieldErrors[`lines.${lineIndex}.market_description`] ? "2px solid #dc2626" : "1px solid #d1d5db",
-                    borderRadius: "0.375rem",
-                  }}
                 />
                 {fieldErrors[`lines.${lineIndex}.market_description`] && (
-                  <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors[`lines.${lineIndex}.market_description`]}</p>
+                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.market_description`]}</p>
                 )}
               </div>
 
               <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                <label>
                   Impresiones contratadas *
                 </label>
                 <input
@@ -899,20 +795,14 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                   min="1"
                   value={line.contracted_impressions}
                   onChange={(e) => handleLineChange(line.id, "contracted_impressions", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    border: fieldErrors[`lines.${lineIndex}.contracted_impressions`] ? "2px solid #dc2626" : "1px solid #d1d5db",
-                    borderRadius: "0.375rem",
-                  }}
                 />
                 {fieldErrors[`lines.${lineIndex}.contracted_impressions`] && (
-                  <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors[`lines.${lineIndex}.contracted_impressions`]}</p>
+                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.contracted_impressions`]}</p>
                 )}
               </div>
 
               <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                <label>
                   CPM (venta) *
                 </label>
                 <input
@@ -920,15 +810,9 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                   placeholder="0.00"
                   value={line.sale_cpm}
                   onChange={(e) => handleLineChange(line.id, "sale_cpm", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    border: fieldErrors[`lines.${lineIndex}.sale_cpm`] ? "2px solid #dc2626" : "1px solid #d1d5db",
-                    borderRadius: "0.375rem",
-                  }}
                 />
                 {fieldErrors[`lines.${lineIndex}.sale_cpm`] && (
-                  <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors[`lines.${lineIndex}.sale_cpm`]}</p>
+                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.sale_cpm`]}</p>
                 )}
               </div>
 
@@ -964,53 +848,28 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
         <button
           type="button"
           onClick={addLine}
-          style={{
-            padding: "0.5rem 1rem",
-            backgroundColor: "#3b82f6",
-            color: "white",
-            borderRadius: "0.375rem",
-            border: "none",
-            cursor: "pointer",
-            marginBottom: "1rem",
-          }}
         >
           Añadir línea
         </button>
 
         {fieldErrors.lines && (
-          <p style={{ color: "#dc2626", fontSize: "0.875rem" }}>{fieldErrors.lines}</p>
+          <p className="field-error">{fieldErrors.lines}</p>
         )}
       </fieldset>
 
       {/* Submit Button */}
-      <div style={{ display: "flex", gap: "1rem" }}>
+      <div className="form-actions">
         <button
           type="submit"
+          className="btn-primary"
           disabled={submitting}
-          style={{
-            padding: "0.75rem 2rem",
-            backgroundColor: submitting ? "#9ca3af" : "#10b981",
-            color: "white",
-            fontWeight: "600",
-            borderRadius: "0.375rem",
-            border: "none",
-            cursor: submitting ? "not-allowed" : "pointer",
-          }}
         >
           {submitting ? "Registrando…" : "Registrar campaña"}
         </button>
 
         <a
+          className="btn"
           href="/campaigns"
-          style={{
-            padding: "0.75rem 2rem",
-            backgroundColor: "#6b7280",
-            color: "white",
-            fontWeight: "600",
-            borderRadius: "0.375rem",
-            textDecoration: "none",
-            display: "inline-block",
-          }}
         >
           Cancelar
         </a>

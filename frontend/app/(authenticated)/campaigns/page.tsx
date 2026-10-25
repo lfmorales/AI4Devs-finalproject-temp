@@ -82,7 +82,7 @@ export default function CampaignsPage() {
       <div className="page-header">
         <h1>Campañas</h1>
         <div>
-          <Link href="/campaigns/new">Nueva campaña</Link>
+          <Link className="btn btn-primary" href="/campaigns/new">Nueva campaña</Link>
         </div>
       </div>
 

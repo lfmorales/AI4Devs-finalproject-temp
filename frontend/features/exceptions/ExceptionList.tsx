@@ -140,7 +140,7 @@ export function ExceptionList({ status, onFatal }: { status: ExceptionStatus; on
                 <td className="num">{formatInteger(row.clicks_total)}</td>
                 <td>
                   {status === "open" ? (
-                    <span style={{ display: "flex", gap: "0.5rem" }}>
+                    <span className="row-actions">
                       {row.exception_type === "unmatched_delivery" && (
                         <button
                           type="button"
