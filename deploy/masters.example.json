@@ -1,0 +1,31 @@
+{
+  "holding_groups": [
+    { "name": "Example Holding Group" }
+  ],
+  "agencies": [
+    { "name": "Example Agency", "holding_group": "Example Holding Group" }
+  ],
+  "advertisers": [
+    { "name": "Example Advertiser" }
+  ],
+  "dsps": [
+    { "name": "Adform" },
+    { "name": "Equativ" },
+    { "name": "Displayce", "is_active": false }
+  ],
+  "channels": [
+    { "name": "Example Channel" }
+  ],
+  "formats": [
+    { "name": "Example Format" }
+  ],
+  "campaign_types": [
+    { "name": "Example Campaign Type" }
+  ],
+  "sectors": [
+    { "name": "Example Sector" }
+  ],
+  "sales_reps": [
+    { "name": "Example Sales Rep" }
+  ]
+}
