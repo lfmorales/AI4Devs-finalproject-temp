@@ -99,7 +99,7 @@
 
 ## 7. Backend: Scheduled Run
 
-- [ ] 7.1 Implement the nightly ingestion as `python -m scripts.run_ingestion [--date YYYY-MM-DD]`, a container command invoked by the host scheduler, using the same service as every other route, with an advisory lock and the exit codes 0 (succeeded), 1 (failed), 2 (another run holds the lock) and 3 (missing configuration), and tests for success, client failure, busy lock, missing configuration and a repeated window **(la línea de crontab de ejemplo está en el design)**
+- [x] 7.1 Implement the nightly ingestion as `python -m scripts.run_ingestion [--date YYYY-MM-DD]`, a container command invoked by the host scheduler, using the same service as every other route, with an advisory lock and the exit codes 0 (succeeded), 1 (failed), 2 (another run holds the lock) and 3 (missing configuration), and tests for success, client failure, busy lock, missing configuration and a repeated window **(la línea de crontab de ejemplo está en el design)**
 - [ ] 7.2 Verify the status view reads the last successful batch so a stale page is visibly stale, asserted by a test with a failed most-recent run **(deferred: indicador de página desactualizada)**
 - [x] 7.3 Calculate today and the ingestion window in the configured time zone (`Europe/Madrid` by default) in one function used by the command, the API's `get_today` and the Adform client, with tests for the change of day between 22:00 and 02:00 in Madrid and for the daylight saving changes
 - [ ] 7.4 Write a test with synthetic data asserting that no value, identifier, name, amount, token or DSP error text appears in what the command prints
