@@ -52,8 +52,6 @@ class CampaignLine:
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     flights: list[CampaignLineFlight] = field(default_factory=list)
-    # Transitional: the column is still mandatory and is filled from the first flight. Removed with the repository.
-    campaign_period_id: Optional[int] = None
 
     def __post_init__(self):
         """Validate scope enumeration."""

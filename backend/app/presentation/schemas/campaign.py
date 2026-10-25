@@ -58,11 +58,24 @@ class CampaignCreateRequest(BaseModel):
     lines: list[CampaignLineCreateRequest] = Field(..., min_length=1)
 
 
+class CampaignLineFlightResponse(BaseModel):
+    """Response schema for a flight: the volume of a line in one calendar month."""
+
+    campaign_period_id: int
+    period_year: int
+    period_month: int
+    flight_start: date
+    flight_end: date
+    contracted_impressions: int
+
+
 class CampaignLineResponse(BaseModel):
-    """Response schema for campaign line."""
+    """Response schema for campaign line. It has no period of its own: its flights do."""
 
     id: int
-    campaign_period_id: int
+    line_number: int
+    start_date: date
+    end_date: date
     dsp_id: int
     channel_id: int
     format_id: int
@@ -71,6 +84,7 @@ class CampaignLineResponse(BaseModel):
     contracted_impressions: int
     sale_cpm: Decimal
     currency: str = "EUR"
+    flights: list[CampaignLineFlightResponse] = Field(default_factory=list)
 
 
 class CampaignPeriodResponse(BaseModel):

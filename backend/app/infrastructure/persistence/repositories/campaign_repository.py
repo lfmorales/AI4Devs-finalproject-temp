@@ -103,7 +103,6 @@ class CampaignRepositoryImpl(CampaignRepositoryInterface):
             for line, line_model in line_models:
                 line.id = line_model.id
                 line.campaign_id = campaign_id
-                line.campaign_period_id = line_model.campaign_period_id  # read by the response until 6A.10
                 for flight in line.flights:
                     period_model = period_models_by_key[(flight.period_year, flight.period_month)]
                     flight_model = CampaignLinePeriodRecord(

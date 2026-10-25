@@ -59,7 +59,6 @@ def test_campaign_line_with_contracted_volume():
 
     line = CampaignLine(
         id=None,
-        campaign_period_id=1,
         purchase_order_version_id=1,
         dsp_id=1,
         channel_id=1,
@@ -84,7 +83,6 @@ def test_campaign_line_rejects_invalid_scope():
     with pytest.raises(ValueError):
         CampaignLine(
             id=None,
-            campaign_period_id=1,
             purchase_order_version_id=1,
             dsp_id=1,
             channel_id=1,

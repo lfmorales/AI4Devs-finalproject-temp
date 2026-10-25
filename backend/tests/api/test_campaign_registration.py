@@ -350,8 +350,8 @@ def test_register_campaign_duplicate_name_no_purchase_order_created(authenticate
     assert po_before == po_after, f"Purchase order created despite 409 error. Before: {po_before}, After: {po_after}"
 
 
-def test_register_campaign_lines_have_valid_period_ids(authenticated_client):
-    """Test that each line's campaign_period_id matches a period in the response."""
+def test_register_campaign_flights_point_at_the_campaign_periods(authenticated_client):
+    """Each flight of a line points at one of the periods listed in the response."""
     payload = {
         "name": "CAMP-PERIOD-ID-TEST",
         "display_name": "Campaign Period ID Test",
@@ -383,12 +383,14 @@ def test_register_campaign_lines_have_valid_period_ids(authenticated_client):
     data = response.json()
     period_ids = {p["id"] for p in data["periods"]}
 
-    # Verify each line has a campaign_period_id that exists in the periods list
+    # A line has no period of its own: each of its flights points at one of the campaign's periods.
     for line in data["lines"]:
-        campaign_period_id = line.get("campaign_period_id")
-        assert campaign_period_id is not None, f"Line {line['id']} has no campaign_period_id"
-        assert campaign_period_id != 0, f"Line {line['id']} has campaign_period_id=0 (should be > 0)"
-        assert campaign_period_id in period_ids, f"Line {line['id']} campaign_period_id={campaign_period_id} does not match any period id in {period_ids}"
+        assert "campaign_period_id" not in line
+        assert line["flights"], f"Line {line['id']} has no flights"
+        for flight in line["flights"]:
+            assert flight["campaign_period_id"] in period_ids, (
+                f"Flight of line {line['id']} points at period {flight['campaign_period_id']}, not in {period_ids}"
+            )
 
 
 def test_register_campaign_without_operations_role(authenticated_client_no_operations_role):
