@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     # Optional so the application starts without a DSP; a connector that needs them reports it is not configured.
     adform_client_id: str | None = None
     adform_client_secret: SecretStr | None = None
+    # The zone "today" and the D-7 to D-1 window are calendar days of; the UTC date is wrong around midnight in Madrid.
+    app_timezone: str = "Europe/Madrid"
 
     @property
     def cognito_issuer(self) -> str:

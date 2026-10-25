@@ -19,6 +19,7 @@ from app.application.services.dsp_mapping_service import DspMappingService
 from app.application.services.ingestion_exception_service import IngestionExceptionService
 from app.config import get_settings
 from app.domain.exceptions import DspNotConfiguredError
+from app.domain.services.local_calendar import local_today, utc_now
 from app.domain.services.dsp_delivery_client import DspDeliveryClient
 from app.infrastructure.auth.cognito_token_verifier import CognitoTokenVerifier
 from app.infrastructure.dsp.adform_delivery_client import AdformDeliveryClient
@@ -90,6 +91,7 @@ def get_dsp_client_resolver() -> Callable[[str], DspDeliveryClient | None]:
             client_secret=settings.adform_client_secret,
             http_client=_dsp_http_client(),
             max_poll_attempts=_REQUEST_PATH_MAX_POLL_ATTEMPTS,
+            today=lambda: local_today(settings.app_timezone, _utc_now),
         )
 
     return resolve
@@ -115,9 +117,13 @@ def get_ingestion_exception_service(
     )
 
 
+def _utc_now() -> datetime:
+    return utc_now()
+
+
 def get_today() -> date:
-    """The day the request is made (D). A dependency so tests can pin it."""
-    return datetime.now(UTC).date()
+    """The day the request is made (D) in the configured zone. A dependency so tests can pin it."""
+    return local_today(get_settings().app_timezone, _utc_now)
 
 
 def get_campaign_status_service(
