@@ -8,13 +8,24 @@ import { createApiClient, type ApiError } from "@/lib/api/client";
 import {
   createDspMapping,
   listDspCatalog,
+  unlinkLine,
   type DspCatalogItem,
   type DspCatalogPage,
   type UnmappedLine,
 } from "@/lib/api/dsp-catalog";
 import { useApiCall } from "@/lib/api/useApiCall";
 import { formatInteger } from "@/lib/format/integer";
-import { MAPPING_ERROR_MESSAGES, MAPPING_FAILED_MESSAGE, NO_RECENT_DELIVERY, VALIDATION_MESSAGES } from "./messages";
+import {
+  MAPPING_ERROR_MESSAGES,
+  MAPPING_FAILED_MESSAGE,
+  NO_RECENT_DELIVERY,
+  removedDaysMessage,
+  UNLINK_ERROR_MESSAGES,
+  UNLINK_FAILED_MESSAGE,
+  unlinkLeavesTheRowUnlinked,
+  VALIDATION_MESSAGES,
+} from "./messages";
+import { UnlinkDialog } from "./UnlinkDialog";
 
 const PAGE_SIZE = 50;
 const HEADER_STYLE = { textAlign: "left", padding: "0.5rem 1rem", fontWeight: "600" } as const;
@@ -51,6 +62,9 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
   const [submitting, setSubmitting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<LinkOutcome | null>(null);
+  const [unlinkingKey, setUnlinkingKey] = useState<string | null>(null);
+  const [unlinkProblem, setUnlinkProblem] = useState<string | null>(null);
+  const [unlinkNotice, setUnlinkNotice] = useState<string | null>(null);
   const searchId = useId();
   const mappedId = useId();
   const sinceId = useId();
@@ -77,6 +91,35 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
     setOffset(0);
   }
 
+  function withMappedLine(page: DspCatalogPage, item: DspCatalogItem, mappedLineId: number | null): DspCatalogPage {
+    return { ...page, items: page.items.map((row) => (pairKey(row) === pairKey(item) ? { ...row, mapped_line_id: mappedLineId } : row)) };
+  }
+
+  async function unlink(page: DspCatalogPage, item: DspCatalogItem) {
+    if (item.mapped_line_id === null) return;
+    setSubmitting(true);
+    setUnlinkProblem(null);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!baseUrl) throw new Error("API URL not configured");
+      const result = await unlinkLine(createApiClient({ baseUrl }), item.mapped_line_id);
+      setOutcome(null);
+      setUnlinkNotice(removedDaysMessage(result.removed_delivery_days));
+      setData(withMappedLine(page, item, null));
+      setUnlinkingKey(null);
+    } catch (caught) {
+      const error = caught as Partial<ApiError>;
+      if (error.kind === "unauthenticated" || error.kind === "forbidden") {
+        onFatal(error.kind);
+        return;
+      }
+      if (unlinkLeavesTheRowUnlinked(error.code)) setData(withMappedLine(page, item, null));
+      setUnlinkProblem((error.code && UNLINK_ERROR_MESSAGES[error.code]) || UNLINK_FAILED_MESSAGE);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function link(page: DspCatalogPage, item: DspCatalogItem, line: UnmappedLine) {
     setSubmitting(true);
     setProblem(null);
@@ -89,8 +132,9 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
       });
       const messages = [VALIDATION_MESSAGES[result.validation]];
       if (result.last_impressions_date === null) messages.push(NO_RECENT_DELIVERY);
+      setUnlinkNotice(null);
       setOutcome({ lineName: `${line.campaign_name}, línea ${line.line_number}`, messages, needsHistoryLoad: result.needs_history_load });
-      setData({ ...page, items: page.items.map((row) => (pairKey(row) === pairKey(item) ? { ...row, mapped_line_id: line.id } : row)) });
+      setData(withMappedLine(page, item, line.id));
       setLinkingKey(null);
     } catch (caught) {
       const error = caught as Partial<ApiError>;
@@ -120,6 +164,7 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
       );
     }
     const linking = page.items.find((item) => pairKey(item) === linkingKey) ?? null;
+    const unlinking = page.items.find((item) => pairKey(item) === unlinkingKey) ?? null;
     return (
       <>
         <table aria-label="Catálogo Adform" style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -142,6 +187,15 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
                 <td style={CELL_STYLE}>{item.last_impressions_date ?? "—"}</td>
                 <td style={CELL_STYLE}>{item.mapped_line_id === null ? "No" : "Sí"}</td>
                 <td style={CELL_STYLE}>
+                  {item.mapped_line_id !== null && (
+                    <button
+                      type="button"
+                      aria-label={`Desvincular: ${item.campaign_name} / ${item.line_item_name}`}
+                      onClick={() => { setUnlinkProblem(null); setUnlinkingKey(pairKey(item)); }}
+                    >
+                      Desvincular
+                    </button>
+                  )}
                   {item.mapped_line_id === null && (
                     <button
                       type="button"
@@ -161,6 +215,16 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
           <span>Mostrando {formatInteger(page.offset + 1)}–{formatInteger(page.offset + page.items.length)} de {formatInteger(page.total)}</span>
           <button type="button" disabled={page.offset + page.items.length >= page.total} onClick={() => setOffset(page.offset + PAGE_SIZE)}>Siguiente</button>
         </nav>
+        {unlinking && (
+          <UnlinkDialog
+            campaignName={unlinking.campaign_name}
+            lineItemName={unlinking.line_item_name}
+            submitting={submitting}
+            problem={unlinkProblem}
+            onConfirm={() => void unlink(page, unlinking)}
+            onCancel={() => setUnlinkingKey(null)}
+          />
+        )}
         {linking && (
           <LinePickerDialog
             label="Vincular la pareja a una línea"
@@ -203,6 +267,11 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
         <div role="status" style={{ backgroundColor: "#dcfce7", padding: "1rem", marginBottom: "1rem" }}>
           <p>Pareja vinculada a {outcome.lineName}.</p>
           {outcome.messages.map((message) => <p key={message}>{message}</p>)}
+        </div>
+      )}
+      {unlinkNotice && (
+        <div role="status" style={{ backgroundColor: "#dcfce7", padding: "1rem", marginBottom: "1rem" }}>
+          <p>{unlinkNotice}</p>
         </div>
       )}
       {outcome?.needsHistoryLoad && (
