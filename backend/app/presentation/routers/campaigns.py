@@ -58,11 +58,11 @@ async def register_campaign(
     - Scope enumeration
 
     Creates:
-    - Campaign with auto-expanded periods
-    - Campaign lines with DSP mappings
+    - Campaign with auto-expanded periods (its calendar)
+    - Campaign lines, numbered, with their dates and the flights their volume is split into
     - Purchase order version 1
 
-    Returns: Campaign with periods and lines
+    Returns: Campaign with periods and lines (each with its flights)
     """
     try:
         campaign = await service.register_campaign(
@@ -111,7 +111,9 @@ async def register_campaign(
         lines=[
             {
                 "id": l.id,
-                "campaign_period_id": l.campaign_period_id,
+                "line_number": l.line_number,
+                "start_date": l.start_date,
+                "end_date": l.end_date,
                 "dsp_id": l.dsp_id,
                 "channel_id": l.channel_id,
                 "format_id": l.format_id,
@@ -120,6 +122,17 @@ async def register_campaign(
                 "contracted_impressions": l.volume.contracted_impressions,
                 "sale_cpm": l.volume.sale_cpm,
                 "currency": l.currency,
+                "flights": [
+                    {
+                        "campaign_period_id": f.campaign_period_id,
+                        "period_year": f.period_year,
+                        "period_month": f.period_month,
+                        "flight_start": f.flight_start,
+                        "flight_end": f.flight_end,
+                        "contracted_impressions": f.contracted_impressions,
+                    }
+                    for f in l.flights
+                ],
             }
             for l in campaign.lines
         ],

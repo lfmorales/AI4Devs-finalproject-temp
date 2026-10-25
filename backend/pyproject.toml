@@ -11,12 +11,12 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "alembic>=1.14",
     "pyjwt[crypto]>=2.10",
+    "httpx>=0.28",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.3",
-    "httpx>=0.28",
 ]
 
 [tool.uv]
@@ -29,4 +29,7 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-ra"
+addopts = "-ra -m 'not slow'"
+markers = [
+    "slow: takes tens of seconds, excluded by default; run with `pytest -m slow`",
+]

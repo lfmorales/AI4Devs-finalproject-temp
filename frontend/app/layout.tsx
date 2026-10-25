@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import "./globals.css";
+
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 
 export const metadata: Metadata = {
@@ -12,8 +14,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
+        <a className="skip-link" href="#contenido">Saltar al contenido</a>
         <AuthProvider>
-          <main>{children}</main>
+          <main id="contenido">{children}</main>
         </AuthProvider>
       </body>
     </html>

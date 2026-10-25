@@ -67,7 +67,7 @@ def test_db_session_factory(test_engine):
 
 
 @pytest.fixture
-def test_db_session(test_engine):
+def rolled_back_session(test_engine):
     """A session whose changes are rolled back when the test ends.
 
     The session joins an outer transaction through savepoints, so commit() and rollback()
@@ -86,3 +86,9 @@ def test_db_session(test_engine):
         session.close()
         outer_transaction.rollback()
         connection.close()
+
+
+@pytest.fixture
+def test_db_session(rolled_back_session):
+    """The default per-test session. Infrastructure tests shadow it; see tests/infrastructure/conftest.py."""
+    return rolled_back_session

@@ -10,7 +10,7 @@ This change ingests delivery automatically and makes both failures visible the d
 
 ## What Changes
 
-- **Nightly D-1 ingestion from the Adform API** for every active campaign line that carries a validated DSP mapping, recording impressions, clicks, media cost and measurable and viewable impressions per line and day.
+- **Nightly ingestion of D-7 to D-1 from the Adform API** for every campaign line that carries a validated DSP mapping and whose campaign overlaps the ingestion window, recording impressions, clicks, media cost and measurable and viewable impressions per line and day.
 - **Ingestion is idempotent over a rolling 7-day window.** Re-running a range replaces it rather than appending, because DSPs restate figures after the fact.
 - **Every run is recorded as a batch** with its route, source, timing, outcome and row count, replacing the hand-typed load labels of the current system.
 - **Manual upload as a first-class route**, not a fallback bolted on later: it shares the ingestion contract, and it is both the only path that exists today and the migration route for the historical corpus.

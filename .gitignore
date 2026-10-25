@@ -33,3 +33,12 @@
 # with no delivery, by agency, brand and contracted revenue. Ignored by exact path
 # rather than as *.csv, so that CSV fixtures and seed data stay trackable.
 docs/campanas-sin-entrega.csv
+
+# TLS material: certificates and keys are issued on the instance and never versioned.
+*.pem
+*.key
+*.crt
+letsencrypt/
+
+# The real master data to load in production (docs/deploy.md); deploy/masters.example.json is the template.
+deploy/masters.json

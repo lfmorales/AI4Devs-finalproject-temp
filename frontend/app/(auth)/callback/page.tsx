@@ -33,10 +33,10 @@ export default function CallbackPage() {
 
   if (failed) {
     return (
-      <p role="alert">
+      <p role="alert" className="notice notice-error">
         Sign-in could not be completed. <a href="/">Return to the start page</a> and try again.
       </p>
     );
   }
-  return <p role="status">Completing sign-in…</p>;
+  return <p role="status" className="notice notice-info">Completing sign-in…</p>;
 }

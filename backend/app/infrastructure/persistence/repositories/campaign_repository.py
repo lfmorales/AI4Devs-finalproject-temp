@@ -8,6 +8,7 @@ from app.infrastructure.persistence.models.campaign import (
     CampaignRecord,
     CampaignPeriodRecord,
     CampaignLineRecord,
+    CampaignLinePeriodRecord,
 )
 
 
@@ -23,6 +24,9 @@ class CampaignRepositoryImpl(CampaignRepositoryInterface):
 
         Raises: IntegrityError if constraints violated (e.g., duplicate name)
         """
+        if any(not line.flights for line in campaign.lines):
+            raise ValueError("every campaign line needs at least one flight")
+
         try:
             # Create campaign model
             campaign_model = CampaignRecord(
@@ -69,20 +73,15 @@ class CampaignRepositoryImpl(CampaignRepositoryInterface):
                 period.id = period_model.id
                 period.campaign_id = campaign_id
 
-            # Create line models
+            # Create line models, each with its flights. A flight points at the period of its own month.
             line_models = []
+            flight_models = []
             for line in campaign.lines:
-                # Find period ID for this line
-                period_key = None
-                for p in campaign.periods:
-                    # Match by year/month
-                    period_key = (p.period_year, p.period_month)
-                    break
-
-                period_id = period_key and period_models_by_key[period_key].id
-
                 line_model = CampaignLineRecord(
-                    campaign_period_id=period_id,
+                    campaign_id=campaign_id,
+                    line_number=line.line_number,
+                    start_date=line.start_date,
+                    end_date=line.end_date,
                     purchase_order_version_id=line.purchase_order_version_id,
                     dsp_id=line.dsp_id,
                     channel_id=line.channel_id,
@@ -98,10 +97,26 @@ class CampaignRepositoryImpl(CampaignRepositoryInterface):
 
             self.session.flush()
 
-            # Update domain lines with assigned IDs and period references
             for line, line_model in line_models:
                 line.id = line_model.id
-                line.campaign_period_id = line_model.campaign_period_id
+                line.campaign_id = campaign_id
+                for flight in line.flights:
+                    period_model = period_models_by_key[(flight.period_year, flight.period_month)]
+                    flight_model = CampaignLinePeriodRecord(
+                        campaign_line_id=line_model.id,
+                        campaign_period_id=period_model.id,
+                        flight_start=flight.flight_start,
+                        flight_end=flight.flight_end,
+                        contracted_impressions=flight.contracted_impressions,
+                    )
+                    self.session.add(flight_model)
+                    flight_models.append((flight, flight_model))
+
+            self.session.flush()
+
+            for flight, flight_model in flight_models:
+                flight.id = flight_model.id
+                flight.campaign_period_id = flight_model.campaign_period_id
 
             self.session.commit()
             return campaign_id

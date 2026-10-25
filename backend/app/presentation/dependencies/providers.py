@@ -4,17 +4,51 @@ Tests replace get_authentication_service through app.dependency_overrides,
 so no other module needs to know which implementations are in use.
 """
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from datetime import UTC, date, datetime
 from functools import lru_cache
 from typing import Annotated
 
+import httpx
 from fastapi import Depends
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.services.authentication_service import AuthenticationService
+from app.application.services.campaign_line_service import CampaignLineService
+from app.application.services.campaign_status_service import CampaignStatusService
+from app.application.services.dsp_catalog_service import DspCatalogService
+from app.application.services.dsp_mapping_service import DspMappingService
+from app.application.services.exception_linking_service import ExceptionLinkingService
+from app.application.services.ingestion_exception_service import IngestionExceptionService
+from app.application.services.line_mapping_removal_service import LineMappingRemovalService
 from app.config import get_settings
+from app.domain.exceptions import DspNotConfiguredError
+from app.domain.services.local_calendar import local_today, utc_now
+from app.domain.services.dsp_delivery_client import DspDeliveryClient
 from app.infrastructure.auth.cognito_token_verifier import CognitoTokenVerifier
+from app.infrastructure.dsp.adform_delivery_client import AdformDeliveryClient
 from app.infrastructure.persistence.database import build_engine, build_session_factory
+from app.infrastructure.persistence.repositories.sqlalchemy_campaign_line_query_repository import (
+    SqlAlchemyCampaignLineQueryRepository,
+)
+from app.infrastructure.persistence.repositories.sqlalchemy_campaign_status_repository import (
+    SqlAlchemyCampaignStatusRepository,
+)
+from app.infrastructure.persistence.repositories.sqlalchemy_dsp_catalog_query_repository import (
+    SqlAlchemyDspCatalogQueryRepository,
+)
+from app.infrastructure.persistence.repositories.sqlalchemy_exception_link_repository import (
+    SqlAlchemyExceptionLinkRepository,
+)
+from app.infrastructure.persistence.repositories.sqlalchemy_exception_queue_repository import (
+    SqlAlchemyExceptionQueueRepository,
+)
+from app.infrastructure.persistence.repositories.sqlalchemy_dsp_mapping_repository import (
+    SqlAlchemyDspMappingRepository,
+)
+from app.infrastructure.persistence.repositories.sqlalchemy_line_mapping_removal_repository import (
+    SqlAlchemyLineMappingRemovalRepository,
+)
 from app.infrastructure.persistence.repositories.sqlalchemy_user_repository import (
     SqlAlchemyUserRepository,
 )
@@ -48,3 +82,97 @@ def get_authentication_service(
         token_verifier=_token_verifier(),
         user_repository=SqlAlchemyUserRepository(session),
     )
+
+
+@lru_cache
+def _dsp_http_client() -> httpx.Client:
+    return httpx.Client(timeout=httpx.Timeout(30.0))
+
+
+# A request must not wait minutes for a report: ten polls at three seconds, then the DSP counts as unreachable.
+_REQUEST_PATH_MAX_POLL_ATTEMPTS = 10
+
+
+def get_dsp_client_resolver() -> Callable[[str], DspDeliveryClient | None]:
+    """Maps a DSP name to its connector, or None when it has none yet."""
+    settings = get_settings()
+
+    def resolve(dsp_name: str) -> DspDeliveryClient | None:
+        if dsp_name != "Adform":
+            return None
+        if not settings.adform_client_id or settings.adform_client_secret is None:
+            raise DspNotConfiguredError("Adform credentials are not configured")
+        return AdformDeliveryClient(
+            client_id=settings.adform_client_id,
+            client_secret=settings.adform_client_secret,
+            http_client=_dsp_http_client(),
+            max_poll_attempts=_REQUEST_PATH_MAX_POLL_ATTEMPTS,
+            today=lambda: local_today(settings.app_timezone, _utc_now),
+        )
+
+    return resolve
+
+
+def get_today() -> date:
+    """The day the request is made (D) in the configured zone. A dependency so tests can pin it."""
+    return local_today(get_settings().app_timezone, _utc_now)
+
+
+def get_dsp_mapping_service(
+    session: Annotated[Session, Depends(get_db_session)],
+    resolver: Annotated[Callable[[str], DspDeliveryClient | None], Depends(get_dsp_client_resolver)],
+    today: Annotated[date, Depends(get_today)],
+) -> DspMappingService:
+    return DspMappingService(
+        repository=SqlAlchemyDspMappingRepository(session),
+        client_for_dsp=resolver,
+        clock=lambda: datetime.now(UTC).replace(tzinfo=None),
+        catalog=SqlAlchemyDspCatalogQueryRepository(session),
+        today=lambda: today,
+    )
+
+
+def get_ingestion_exception_service(
+    session: Annotated[Session, Depends(get_db_session)],
+) -> IngestionExceptionService:
+    return IngestionExceptionService(
+        queue=SqlAlchemyExceptionQueueRepository(session),
+        clock=lambda: datetime.now(UTC).replace(tzinfo=None),
+    )
+
+
+def get_exception_linking_service(
+    session: Annotated[Session, Depends(get_db_session)],
+    today: Annotated[date, Depends(get_today)],
+) -> ExceptionLinkingService:
+    return ExceptionLinkingService(
+        links=SqlAlchemyExceptionLinkRepository(session),
+        queue=SqlAlchemyExceptionQueueRepository(session),
+        clock=lambda: datetime.now(UTC).replace(tzinfo=None),
+        today=lambda: today,
+    )
+
+
+def get_line_mapping_removal_service(
+    session: Annotated[Session, Depends(get_db_session)],
+) -> LineMappingRemovalService:
+    return LineMappingRemovalService(SqlAlchemyLineMappingRemovalRepository(session))
+
+
+def get_dsp_catalog_service(session: Annotated[Session, Depends(get_db_session)]) -> DspCatalogService:
+    return DspCatalogService(repository=SqlAlchemyDspCatalogQueryRepository(session))
+
+
+def get_campaign_line_service(session: Annotated[Session, Depends(get_db_session)]) -> CampaignLineService:
+    return CampaignLineService(repository=SqlAlchemyCampaignLineQueryRepository(session))
+
+
+def _utc_now() -> datetime:
+    return utc_now()
+
+
+def get_campaign_status_service(
+    session: Annotated[Session, Depends(get_db_session)],
+    today: Annotated[date, Depends(get_today)],
+) -> CampaignStatusService:
+    return CampaignStatusService(repository=SqlAlchemyCampaignStatusRepository(session), today=lambda: today)

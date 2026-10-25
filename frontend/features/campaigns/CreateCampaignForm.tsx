@@ -3,7 +3,28 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createApiClient, ApiError } from "@/lib/api/client";
+import { previewFlights } from "@/lib/api/flights";
+import { lineErrorMessage, registrationLineErrors } from "./error-messages";
+import { FlightEditor } from "./FlightEditor";
+import { LineDatesControl } from "./LineDatesControl";
+import {
+  editVolume,
+  isStale,
+  manualSplitProblem,
+  monthlyVolumesOf,
+  newPreview,
+  previewRequestFor,
+  resetToProportional,
+  type LinePreview,
+} from "./line-flights";
 import { createCampaignSchema, type CampaignCreateRequest } from "./schema";
+
+type PreviewOutcome =
+  | { ok: true; id: string; preview: LinePreview }
+  | { ok: false; id: string; error: unknown };
+
+const STALE_PREVIEW_MESSAGE = "Las fechas o el volumen han cambiado: vuelve a calcular el reparto.";
+const GENERIC_PREVIEW_ERROR = "No se pudo calcular el reparto. Inténtalo de nuevo.";
 
 interface MasterItem {
   id: number;
@@ -23,6 +44,14 @@ interface CampaignLine {
   market_description: string;
   contracted_impressions: string;
   sale_cpm: string;
+  /** True: the line runs over the campaign's dates and sends none of its own. */
+  inherit_dates: boolean;
+  start_date: string;
+  end_date: string;
+  /** The last «Calcular reparto» result; stale as soon as the dates or the volume stop matching it. */
+  preview: LinePreview | null;
+  calculating: boolean;
+  previewError: string | null;
 }
 
 interface FormData {
@@ -94,6 +123,12 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
         market_description: "",
         contracted_impressions: "",
         sale_cpm: "",
+        inherit_dates: true,
+        start_date: "",
+        end_date: "",
+        preview: null,
+        calculating: false,
+        previewError: null,
       },
     ],
   });
@@ -159,7 +194,7 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
     }
   }, [fieldErrors]);
 
-  const handleLineChange = (lineId: string, field: keyof CampaignLine, value: string | number) => {
+  const handleLineChange = (lineId: string, field: "dsp_id" | "channel_id" | "format_id" | "scope" | "market_description" | "contracted_impressions" | "sale_cpm" | "inherit_dates" | "start_date" | "end_date", value: string | number | boolean) => {
     const lineIndex = formData.lines.findIndex((l) => l.id === lineId);
     setFormData((prev) => ({
       ...prev,
@@ -178,6 +213,49 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
     }
   };
 
+  const updateLine = (lineId: string, change: (line: CampaignLine) => CampaignLine) => {
+    setFormData((prev) => ({ ...prev, lines: prev.lines.map((line) => (line.id === lineId ? change(line) : line)) }));
+  };
+
+  /** The request «Calcular reparto» would send for a line, or null while its inputs are not valid. */
+  const requestFor = (line: CampaignLine) =>
+    previewRequestFor({
+      campaignStart: formData.start_date,
+      campaignEnd: formData.end_date,
+      inheritDates: line.inherit_dates,
+      lineStart: line.start_date,
+      lineEnd: line.end_date,
+      total: line.contracted_impressions,
+    });
+
+  /** What the error mapping needs to know about each line. */
+  const lineKinds = () =>
+    formData.lines.map((line) => ({
+      id: line.id,
+      hasOwnDates: !line.inherit_dates,
+      isManual: Boolean(line.preview?.manual && !isStale(line.preview, requestFor(line))),
+    }));
+
+  const calculateSplit = async (lineId: string) => {
+    const line = formData.lines.find((l) => l.id === lineId);
+    const request = line ? requestFor(line) : null;
+    if (!line || !request) return;
+
+    updateLine(lineId, (l) => ({ ...l, calculating: true, previewError: null }));
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!baseUrl) throw new Error("API URL not configured");
+      const response = await previewFlights(createApiClient({ baseUrl }), request);
+      updateLine(lineId, (l) => ({ ...l, calculating: false, preview: newPreview(request, response.flights) }));
+    } catch (err) {
+      const apiError = err && typeof err === "object" && "kind" in err ? (err as ApiError) : null;
+      if (apiError?.kind === "unauthenticated") onAuthError?.("unauthenticated");
+      if (apiError?.kind === "forbidden") onAuthError?.("forbidden");
+      const message = lineErrorMessage(apiError?.code) ?? GENERIC_PREVIEW_ERROR;
+      updateLine(lineId, (l) => ({ ...l, calculating: false, preview: null, previewError: message }));
+    }
+  };
+
   const addLine = () => {
     const newId = `line-${Date.now()}`;
     setFormData((prev) => ({
@@ -193,6 +271,12 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
           market_description: "",
           contracted_impressions: "",
           sale_cpm: "",
+          inherit_dates: true,
+          start_date: "",
+          end_date: "",
+          preview: null,
+          calculating: false,
+          previewError: null,
         },
       ],
     }));
@@ -217,6 +301,10 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
     setFieldErrors({});
 
     try {
+      // A split is sent only when the user edited it (manual) and it still matches the form.
+      const currentManual = (line: CampaignLine) =>
+        line.preview?.manual && !isStale(line.preview, requestFor(line)) ? line.preview : null;
+
       // Convert form data to API format
       const campaignData = {
         name: formData.name,
@@ -230,42 +318,99 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
         end_date: formData.end_date,
         order_reference: formData.order_reference,
         order_received_on: formData.order_received_on,
-        lines: formData.lines.map((line) => ({
-          dsp_id: Number(line.dsp_id),
-          channel_id: Number(line.channel_id),
-          format_id: Number(line.format_id),
-          scope: line.scope,
-          market_description: line.market_description,
-          contracted_impressions: Number(line.contracted_impressions),
-          sale_cpm: line.sale_cpm,
-        })),
+        lines: formData.lines.map((line) => {
+          const manual = currentManual(line);
+          return {
+            dsp_id: Number(line.dsp_id),
+            channel_id: Number(line.channel_id),
+            format_id: Number(line.format_id),
+            scope: line.scope,
+            market_description: line.market_description,
+            contracted_impressions: Number(line.contracted_impressions),
+            sale_cpm: line.sale_cpm,
+            // Own dates only when the line does not inherit the campaign's.
+            ...(line.inherit_dates ? {} : { start_date: line.start_date, end_date: line.end_date }),
+            ...(manual ? { monthly_volumes: monthlyVolumesOf(manual) } : {}),
+          };
+        }),
       };
 
       // Validate with schema using safeParse
       const validation = createCampaignSchema.safeParse(campaignData);
+      const fieldErrorsMap: Record<string, string> = {};
       if (!validation.success) {
-        const fieldErrorsMap: Record<string, string> = {};
-
         for (const issue of validation.error.issues) {
-          const fieldPath = issue.path.join(".");
-          fieldErrorsMap[fieldPath] = issue.message;
-        }
-
-        setFieldErrors(fieldErrorsMap);
-        if (Object.keys(fieldErrorsMap).length > 0) {
-          setSubmitError("Por favor corrige los errores antes de enviar.");
-          setSubmitting(false);
-          return;
+          fieldErrorsMap[issue.path.join(".")] = issue.message;
         }
       }
 
-      // Submit to API
+      // A manual split is checked against the months of its own preview; a stale one is never sent.
+      const lineProblems: Record<string, string> = {};
+      for (const line of formData.lines) {
+        if (!line.preview?.manual) continue;
+        lineProblems[line.id] = isStale(line.preview, requestFor(line))
+          ? STALE_PREVIEW_MESSAGE
+          : (manualSplitProblem(line.preview) ?? "");
+      }
+      const blockedLines = Object.entries(lineProblems).filter(([, message]) => message !== "");
+
+      if (Object.keys(fieldErrorsMap).length > 0 || blockedLines.length > 0) {
+        setFieldErrors(fieldErrorsMap);
+        setFormData((prev) => ({
+          ...prev,
+          lines: prev.lines.map((line) => ({ ...line, previewError: lineProblems[line.id] || null })),
+        }));
+        setSubmitError("Por favor corrige los errores antes de enviar.");
+        return;
+      }
+
+      // Every line without a current preview is previewed now, silently. The request is per line, so a
+      // failure belongs to exactly that line. The registration goes out only if all of them pass.
       const baseUrl = process.env.NEXT_PUBLIC_API_URL;
       if (!baseUrl) {
         throw new Error("API URL not configured");
       }
-
       const client = createApiClient({ baseUrl });
+
+      const needPreview = formData.lines.filter(
+        (line) => !line.preview || isStale(line.preview, requestFor(line)),
+      );
+      const outcomes: PreviewOutcome[] = await Promise.all(
+        needPreview.map(async (line) => {
+          const request = requestFor(line);
+          if (!request) return { ok: false, id: line.id, error: new Error("invalid preview inputs") };
+          try {
+            const response = await previewFlights(client, request);
+            return { ok: true, id: line.id, preview: newPreview(request, response.flights) };
+          } catch (error) {
+            return { ok: false, id: line.id, error };
+          }
+        }),
+      );
+
+      const failures = outcomes.filter((outcome) => !outcome.ok);
+      const authFailure = failures
+        .map((outcome) => (outcome.ok ? {} : (outcome.error as Partial<ApiError>)))
+        .find((error) => error.kind === "unauthenticated" || error.kind === "forbidden");
+      if (authFailure) {
+        // The page takes over (session expired / access denied).
+        throw authFailure;
+      }
+      setFormData((prev) => ({
+        ...prev,
+        lines: prev.lines.map((line) => {
+          const outcome = outcomes.find((o) => o.id === line.id);
+          if (!outcome) return { ...line, previewError: null };
+          if (outcome.ok) return { ...line, preview: outcome.preview, previewError: null };
+          const code = (outcome.error as Partial<ApiError>).code;
+          return { ...line, previewError: lineErrorMessage(code) ?? GENERIC_PREVIEW_ERROR };
+        }),
+      }));
+      if (failures.length > 0) {
+        setSubmitError("Por favor corrige los errores antes de enviar.");
+        return;
+      }
+
       await client.post("/campaigns", campaignData);
 
       // On success, redirect to campaigns list
@@ -282,6 +427,14 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
           // Access denied - notify parent component
           onAuthError?.("forbidden");
           setSubmitError("No tienes permiso para registrar campañas.");
+        } else if (apiError.status === 422 && registrationLineErrors(apiError.code, lineKinds()) !== null) {
+          // The code names no line: it is shown on the lines that can have caused it, or on the form.
+          const placement = registrationLineErrors(apiError.code, lineKinds())!;
+          setFormData((prev) => ({
+            ...prev,
+            lines: prev.lines.map((line) => ({ ...line, previewError: placement.byLine[line.id] ?? null })),
+          }));
+          setSubmitError(placement.formLevel ?? "Por favor corrige los errores antes de enviar.");
         } else if (apiError.status === 409 && apiError.code === "duplicate_campaign_name") {
           // Duplicate campaign name - set error in the field
           setFieldErrors({
@@ -307,87 +460,71 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
       } else {
         setSubmitError("Error al registrar la campaña. Intenta de nuevo más tarde.");
       }
+    } finally {
+      setSubmitting(false);
     }
   };
 
   if (loading) {
-    return <div role="status">Cargando formulario…</div>;
+    return <div role="status" className="notice notice-info">Cargando formulario…</div>;
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: "64rem", margin: "0 auto", padding: "2rem" }}>
-      <h1 style={{ fontSize: "1.875rem", fontWeight: "bold", marginBottom: "2rem" }}>Nueva campaña</h1>
+    <form className="campaign-form" onSubmit={handleSubmit}>
+      <h1>Nueva campaña</h1>
 
       {loadError && (
-        <div style={{ backgroundColor: "#fee2e2", padding: "1rem", marginBottom: "1rem", borderRadius: "0.375rem", color: "#7f1d1d" }}>
+        <div className="notice notice-error">
           {loadError}
         </div>
       )}
 
       {submitError && (
-        <div style={{ backgroundColor: "#fee2e2", padding: "1rem", marginBottom: "1rem", borderRadius: "0.375rem", color: "#7f1d1d" }}>
+        <div className="notice notice-error">
           {submitError}
         </div>
       )}
 
       {/* Header Section */}
-      <fieldset style={{ marginBottom: "2rem", border: "none", padding: "0" }}>
-        <legend style={{ fontSize: "1.125rem", fontWeight: "600", marginBottom: "1rem" }}>Información de la campaña</legend>
+      <fieldset>
+        <legend>Información de la campaña</legend>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.5rem", marginBottom: "1.5rem" }}>
+        <div className="form-grid">
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Nombre de la campaña *
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => handleHeaderChange("name", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.name ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             />
             {fieldErrors.name && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.name}</p>
+              <p className="field-error">{fieldErrors.name}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Nombre mostrado *
             </label>
             <input
               type="text"
               value={formData.display_name}
               onChange={(e) => handleHeaderChange("display_name", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.display_name ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             />
             {fieldErrors.display_name && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.display_name}</p>
+              <p className="field-error">{fieldErrors.display_name}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Agencia *
             </label>
             <select
               value={formData.agency_id}
               onChange={(e) => handleHeaderChange("agency_id", Number(e.target.value))}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.agency_id ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             >
               <option value="">Selecciona una agencia</option>
               {masterData.agencies.map((agency) => (
@@ -397,23 +534,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
               ))}
             </select>
             {fieldErrors.agency_id && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.agency_id}</p>
+              <p className="field-error">{fieldErrors.agency_id}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Anunciante *
             </label>
             <select
               value={formData.advertiser_id}
               onChange={(e) => handleHeaderChange("advertiser_id", Number(e.target.value))}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.advertiser_id ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             >
               <option value="">Selecciona un anunciante</option>
               {masterData.advertisers.map((advertiser) => (
@@ -423,23 +554,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
               ))}
             </select>
             {fieldErrors.advertiser_id && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.advertiser_id}</p>
+              <p className="field-error">{fieldErrors.advertiser_id}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Tipo de campaña *
             </label>
             <select
               value={formData.campaign_type_id}
               onChange={(e) => handleHeaderChange("campaign_type_id", Number(e.target.value))}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.campaign_type_id ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             >
               <option value="">Selecciona un tipo</option>
               {masterData.campaignTypes.map((type) => (
@@ -449,23 +574,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
               ))}
             </select>
             {fieldErrors.campaign_type_id && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.campaign_type_id}</p>
+              <p className="field-error">{fieldErrors.campaign_type_id}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Sector *
             </label>
             <select
               value={formData.sector_id}
               onChange={(e) => handleHeaderChange("sector_id", Number(e.target.value))}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.sector_id ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             >
               <option value="">Selecciona un sector</option>
               {masterData.sectors.map((sector) => (
@@ -475,23 +594,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
               ))}
             </select>
             {fieldErrors.sector_id && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.sector_id}</p>
+              <p className="field-error">{fieldErrors.sector_id}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Comercial *
             </label>
             <select
               value={formData.sales_rep_id}
               onChange={(e) => handleHeaderChange("sales_rep_id", Number(e.target.value))}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.sales_rep_id ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             >
               <option value="">Selecciona un comercial</option>
               {masterData.salesReps.map((rep) => (
@@ -501,132 +614,94 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
               ))}
             </select>
             {fieldErrors.sales_rep_id && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.sales_rep_id}</p>
+              <p className="field-error">{fieldErrors.sales_rep_id}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Fecha de inicio *
             </label>
             <input
               type="date"
               value={formData.start_date}
               onChange={(e) => handleHeaderChange("start_date", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.start_date ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             />
             {fieldErrors.start_date && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.start_date}</p>
+              <p className="field-error">{fieldErrors.start_date}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Fecha de fin *
             </label>
             <input
               type="date"
               value={formData.end_date}
               onChange={(e) => handleHeaderChange("end_date", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.end_date ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             />
             {fieldErrors.end_date && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.end_date}</p>
+              <p className="field-error">{fieldErrors.end_date}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Referencia de orden *
             </label>
             <input
               type="text"
               value={formData.order_reference}
               onChange={(e) => handleHeaderChange("order_reference", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.order_reference ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             />
             {fieldErrors.order_reference && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.order_reference}</p>
+              <p className="field-error">{fieldErrors.order_reference}</p>
             )}
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+            <label>
               Fecha de recepción *
             </label>
             <input
               type="date"
               value={formData.order_received_on}
               onChange={(e) => handleHeaderChange("order_received_on", e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.5rem",
-                border: fieldErrors.order_received_on ? "2px solid #dc2626" : "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-              }}
             />
             {fieldErrors.order_received_on && (
-              <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors.order_received_on}</p>
+              <p className="field-error">{fieldErrors.order_received_on}</p>
             )}
           </div>
         </div>
       </fieldset>
 
       {/* Lines Section */}
-      <fieldset style={{ marginBottom: "2rem", border: "none", padding: "0" }}>
-        <legend style={{ fontSize: "1.125rem", fontWeight: "600", marginBottom: "1rem" }}>Líneas de campaña</legend>
+      <fieldset>
+        <legend>Líneas de campaña</legend>
 
         {formData.lines.map((line, lineIndex) => (
-          <div key={line.id} style={{ marginBottom: "1.5rem", padding: "1rem", border: "1px solid #e5e7eb", borderRadius: "0.375rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <h3 style={{ fontSize: "1rem", fontWeight: "600" }}>Línea {lineIndex + 1}</h3>
+          <div key={line.id} className="line-card">
+            <div className="line-card-header">
+              <h3>Línea {lineIndex + 1}</h3>
               <button
                 type="button"
+                className="btn-danger"
                 onClick={() => removeLine(line.id)}
                 disabled={formData.lines.length === 1}
-                style={{
-                  padding: "0.5rem 1rem",
-                  backgroundColor: formData.lines.length === 1 ? "#d1d5db" : "#dc2626",
-                  color: "white",
-                  borderRadius: "0.375rem",
-                  border: "none",
-                  cursor: formData.lines.length === 1 ? "not-allowed" : "pointer",
-                  opacity: formData.lines.length === 1 ? 0.5 : 1,
-                }}
               >
                 Quitar línea
               </button>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.5rem" }}>
+            <div className="form-grid">
               <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                <label>
                   DSP *
                 </label>
                 <select
                   value={line.dsp_id}
                   onChange={(e) => handleLineChange(line.id, "dsp_id", Number(e.target.value))}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    border: fieldErrors[`lines.${lineIndex}.dsp_id`] ? "2px solid #dc2626" : "1px solid #d1d5db",
-                    borderRadius: "0.375rem",
-                  }}
                 >
                   <option value="">Selecciona un DSP</option>
                   {masterData.dsps.map((dsp) => (
@@ -636,23 +711,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                   ))}
                 </select>
                 {fieldErrors[`lines.${lineIndex}.dsp_id`] && (
-                  <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors[`lines.${lineIndex}.dsp_id`]}</p>
+                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.dsp_id`]}</p>
                 )}
               </div>
 
               <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                <label>
                   Canal *
                 </label>
                 <select
                   value={line.channel_id}
                   onChange={(e) => handleLineChange(line.id, "channel_id", Number(e.target.value))}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    border: fieldErrors[`lines.${lineIndex}.channel_id`] ? "2px solid #dc2626" : "1px solid #d1d5db",
-                    borderRadius: "0.375rem",
-                  }}
                 >
                   <option value="">Selecciona un canal</option>
                   {masterData.channels.map((channel) => (
@@ -662,23 +731,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                   ))}
                 </select>
                 {fieldErrors[`lines.${lineIndex}.channel_id`] && (
-                  <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors[`lines.${lineIndex}.channel_id`]}</p>
+                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.channel_id`]}</p>
                 )}
               </div>
 
               <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                <label>
                   Formato *
                 </label>
                 <select
                   value={line.format_id}
                   onChange={(e) => handleLineChange(line.id, "format_id", Number(e.target.value))}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    border: fieldErrors[`lines.${lineIndex}.format_id`] ? "2px solid #dc2626" : "1px solid #d1d5db",
-                    borderRadius: "0.375rem",
-                  }}
                 >
                   <option value="">Selecciona un formato</option>
                   {masterData.formats.map((format) => (
@@ -688,55 +751,43 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                   ))}
                 </select>
                 {fieldErrors[`lines.${lineIndex}.format_id`] && (
-                  <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors[`lines.${lineIndex}.format_id`]}</p>
+                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.format_id`]}</p>
                 )}
               </div>
 
               <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                <label>
                   Alcance *
                 </label>
                 <select
                   value={line.scope}
                   onChange={(e) => handleLineChange(line.id, "scope", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    border: fieldErrors[`lines.${lineIndex}.scope`] ? "2px solid #dc2626" : "1px solid #d1d5db",
-                    borderRadius: "0.375rem",
-                  }}
                 >
                   <option value="">Selecciona alcance</option>
                   <option value="national">Nacional</option>
                   <option value="international">Internacional</option>
                 </select>
                 {fieldErrors[`lines.${lineIndex}.scope`] && (
-                  <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors[`lines.${lineIndex}.scope`]}</p>
+                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.scope`]}</p>
                 )}
               </div>
 
               <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                <label>
                   Descripción del mercado *
                 </label>
                 <input
                   type="text"
                   value={line.market_description}
                   onChange={(e) => handleLineChange(line.id, "market_description", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    border: fieldErrors[`lines.${lineIndex}.market_description`] ? "2px solid #dc2626" : "1px solid #d1d5db",
-                    borderRadius: "0.375rem",
-                  }}
                 />
                 {fieldErrors[`lines.${lineIndex}.market_description`] && (
-                  <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors[`lines.${lineIndex}.market_description`]}</p>
+                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.market_description`]}</p>
                 )}
               </div>
 
               <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                <label>
                   Impresiones contratadas *
                 </label>
                 <input
@@ -744,20 +795,14 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                   min="1"
                   value={line.contracted_impressions}
                   onChange={(e) => handleLineChange(line.id, "contracted_impressions", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    border: fieldErrors[`lines.${lineIndex}.contracted_impressions`] ? "2px solid #dc2626" : "1px solid #d1d5db",
-                    borderRadius: "0.375rem",
-                  }}
                 />
                 {fieldErrors[`lines.${lineIndex}.contracted_impressions`] && (
-                  <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors[`lines.${lineIndex}.contracted_impressions`]}</p>
+                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.contracted_impressions`]}</p>
                 )}
               </div>
 
               <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                <label>
                   CPM (venta) *
                 </label>
                 <input
@@ -765,17 +810,37 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                   placeholder="0.00"
                   value={line.sale_cpm}
                   onChange={(e) => handleLineChange(line.id, "sale_cpm", e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    border: fieldErrors[`lines.${lineIndex}.sale_cpm`] ? "2px solid #dc2626" : "1px solid #d1d5db",
-                    borderRadius: "0.375rem",
-                  }}
                 />
                 {fieldErrors[`lines.${lineIndex}.sale_cpm`] && (
-                  <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors[`lines.${lineIndex}.sale_cpm`]}</p>
+                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.sale_cpm`]}</p>
                 )}
               </div>
+
+              <LineDatesControl
+                idPrefix={line.id}
+                inherit={line.inherit_dates}
+                startDate={line.start_date}
+                endDate={line.end_date}
+                startError={fieldErrors[`lines.${lineIndex}.start_date`]}
+                endError={fieldErrors[`lines.${lineIndex}.end_date`]}
+                onInheritChange={(inherit) => handleLineChange(line.id, "inherit_dates", inherit)}
+                onDateChange={(field, value) => handleLineChange(line.id, field, value)}
+              />
+
+              <FlightEditor
+                canCalculate={requestFor(line) !== null}
+                calculating={line.calculating}
+                preview={line.preview && !isStale(line.preview, requestFor(line)) ? line.preview : null}
+                stale={line.preview !== null && isStale(line.preview, requestFor(line))}
+                error={line.previewError}
+                onCalculate={() => void calculateSplit(line.id)}
+                onEditVolume={(index, value) =>
+                  updateLine(line.id, (l) => (l.preview ? { ...l, preview: editVolume(l.preview, index, value) } : l))
+                }
+                onReset={() =>
+                  updateLine(line.id, (l) => (l.preview ? { ...l, preview: resetToProportional(l.preview) } : l))
+                }
+              />
             </div>
           </div>
         ))}
@@ -783,53 +848,28 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
         <button
           type="button"
           onClick={addLine}
-          style={{
-            padding: "0.5rem 1rem",
-            backgroundColor: "#3b82f6",
-            color: "white",
-            borderRadius: "0.375rem",
-            border: "none",
-            cursor: "pointer",
-            marginBottom: "1rem",
-          }}
         >
           Añadir línea
         </button>
 
         {fieldErrors.lines && (
-          <p style={{ color: "#dc2626", fontSize: "0.875rem" }}>{fieldErrors.lines}</p>
+          <p className="field-error">{fieldErrors.lines}</p>
         )}
       </fieldset>
 
       {/* Submit Button */}
-      <div style={{ display: "flex", gap: "1rem" }}>
+      <div className="form-actions">
         <button
           type="submit"
+          className="btn-primary"
           disabled={submitting}
-          style={{
-            padding: "0.75rem 2rem",
-            backgroundColor: submitting ? "#9ca3af" : "#10b981",
-            color: "white",
-            fontWeight: "600",
-            borderRadius: "0.375rem",
-            border: "none",
-            cursor: submitting ? "not-allowed" : "pointer",
-          }}
         >
           {submitting ? "Registrando…" : "Registrar campaña"}
         </button>
 
         <a
+          className="btn"
           href="/campaigns"
-          style={{
-            padding: "0.75rem 2rem",
-            backgroundColor: "#6b7280",
-            color: "white",
-            fontWeight: "600",
-            borderRadius: "0.375rem",
-            textDecoration: "none",
-            display: "inline-block",
-          }}
         >
           Cancelar
         </a>

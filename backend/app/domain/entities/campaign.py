@@ -19,11 +19,26 @@ class CampaignPeriod:
 
 
 @dataclass
+class CampaignLineFlight:
+    """The volume of one campaign line in one calendar month, over the days the two share."""
+
+    period_year: int
+    period_month: int
+    flight_start: date
+    flight_end: date
+    contracted_impressions: int
+    campaign_period_id: Optional[int] = None
+    id: Optional[int] = None
+
+
+@dataclass
 class CampaignLine:
-    """Campaign execution spec for a period, DSP and channel."""
+    """Campaign execution spec for a DSP and channel, hanging from the campaign with its own dates.
+
+    The months it runs in are its flights; the line holds the total volume and the price.
+    """
 
     id: Optional[int]
-    campaign_period_id: int
     purchase_order_version_id: Optional[int]
     dsp_id: int
     channel_id: int
@@ -32,6 +47,11 @@ class CampaignLine:
     market_description: str
     volume: ContractedVolume
     currency: str = "EUR"
+    campaign_id: Optional[int] = None
+    line_number: Optional[int] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    flights: list[CampaignLineFlight] = field(default_factory=list)
 
     def __post_init__(self):
         """Validate scope enumeration."""

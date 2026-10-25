@@ -1,83 +1,219 @@
 ## 0. Setup: Create Feature Branch (MANDATORY - FIRST STEP)
 
-- [ ] 0.1 Create feature branch `feature/daily-campaign-delivery-status` from `main` and verify `git status` reports it as current
-- [ ] 0.2 Verify `register-campaign-from-purchase-order` is applied: campaign lines and validated DSP mappings exist to ingest against
+- [x] 0.1 Create feature branch `feature/daily-campaign-delivery-status` from `final-project-LFMC` and verify `git status` reports it as current **(desviación: rama creada desde final-project-LFMC, no desde main)** (deviation: branch created from final-project-LFMC, not main)
+- [x] 0.2 Verify `register-campaign-from-purchase-order` is applied: campaign lines and validated DSP mappings exist to ingest against
 
 ## 1. Database: Delivery Schema
 
-- [ ] 1.1 Write failing tests for the delivery model asserting exact-decimal media cost and that delivered and contracted volumes are separate fields
-- [ ] 1.2 Define the `daily_deliveries` model at the line-and-day grain with impressions, clicks, media cost, measurable and viewable impressions, banner size, screen and contrast `line_format`, and verify the tests from 1.1 pass
-- [ ] 1.3 Define `ingestion_batches` with route, source, timings, outcome and row count, and `ingestion_exceptions` with its type and external key, verified by constraint tests
-- [ ] 1.4 Add indexes on the DSP mapping, campaign period and delivery date, and verify with `EXPLAIN` that a period roll-up uses them rather than scanning
-- [ ] 1.5 Generate the Alembic migration with `--autogenerate`, review it by hand, and verify `upgrade head` then `downgrade base` runs clean
-- [ ] 1.6 Load a synthetic set of at least 1 M delivery rows and verify a period roll-up returns within an acceptable time, recording the measurement
+- [x] 1.1 Write failing tests for the delivery model asserting exact-decimal media cost and that delivered and contracted volumes are separate fields
+- [x] 1.2 Define the `daily_deliveries` model at the line-and-day grain with impressions, clicks, media cost, measurable and viewable impressions, banner size, screen and contrast `line_format`, and verify the tests from 1.1 pass
+- [x] 1.3 Define `ingestion_batches` with route, source, timings, outcome and row count, and `ingestion_exceptions` with its type and external key, verified by constraint tests
+- [x] 1.4 Add indexes on the DSP mapping, campaign period and delivery date, and verify with `EXPLAIN` that a period roll-up uses them rather than scanning **(partial: índice sin EXPLAIN)**
+- [x] 1.5 Generate the Alembic migration with `--autogenerate`, review it by hand, and verify `upgrade head` then `downgrade base` runs clean
+- [ ] 1.6 Load a synthetic set of at least 1 M delivery rows and verify a period roll-up returns within an acceptable time, recording the measurement **(deferred: carga sintética de 1 M de filas; rendimiento sin medir)**
+- [x] 1.7 Widen `daily_deliveries.media_cost` to `Numeric(18,6)` with a migration, and verify with a test that a six-decimal value is stored and read back unchanged
+- [x] 1.8 Add the ignored-row count to `ingestion_batches` with a migration, verified by a constraint test
 
 ## 2. Backend: Ingestion Contract (domain layer)
 
-- [ ] 2.1 Define the DSP delivery-client interface in `domain/` alongside the existing identifier-resolution method, and build an in-memory double in `tests/fixtures/`
-- [ ] 2.2 Write failing tests for the idempotency rule: running a range twice yields one set of rows, a restated figure supersedes, and rows outside the range are untouched
-- [ ] 2.3 Implement the delete-then-insert replace strategy for a line and date range inside one transaction, and verify the tests from 2.2 pass
-- [ ] 2.4 Write a failing test asserting a run that fails partway leaves no partially applied range, then implement the transactional boundary
-- [ ] 2.5 Write failing tests for the channel-authority rule: a differing `line_format` leaves the configured channel unchanged, is stored as contrast, and raises a mismatch flag
-- [ ] 2.6 Implement the channel-authority rule in the domain layer and verify the tests from 2.5 pass with no database involved
+- [x] 2.1 Define the DSP delivery-client interface in `domain/` alongside the existing identifier-resolution method, and build an in-memory double in `tests/fixtures/`
+- [x] 2.2 Write failing tests for the idempotency rule: running a range twice yields one set of rows, a restated figure supersedes, and rows outside the range are untouched
+- [x] 2.3 Implement the delete-then-insert replace strategy for a line and date range inside one transaction, and verify the tests from 2.2 pass
+- [x] 2.4 Write a failing test asserting a run that fails partway leaves no partially applied range, then implement the transactional boundary
+- [x] 2.5 Write failing tests for the channel-authority rule: a differing `line_format` leaves the configured channel unchanged, is stored as contrast, and raises a mismatch flag
+- [x] 2.6 Implement the channel-authority rule in the domain layer and verify the tests from 2.5 pass with no database involved
 
 ## 3. Backend: Pacing Calculation (domain layer)
 
-- [ ] 3.1 Write failing tests for pacing covering under-delivery beyond ten percent, over-delivery beyond ten percent, and delivery inside the threshold at the exact boundary
-- [ ] 3.2 Implement pacing as a pure function of contracted volume, period bounds, date and delivered volume, and verify the tests from 3.1 pass without a database
-- [ ] 3.3 Write failing tests for the missing-data rule: flagged when the latest delivery predates D-1, not flagged at D-1, cleared on the next ingestion
-- [ ] 3.4 Implement the missing-data rule and verify the tests from 3.3 pass
+- [x] 3.1 Write failing tests for pacing covering under-delivery beyond ten percent, over-delivery beyond ten percent, and delivery inside the threshold at the exact boundary
+- [x] 3.2 Implement pacing as a pure function of contracted volume, period bounds, date and delivered volume, and verify the tests from 3.1 pass without a database
+- [x] 3.3 Write failing tests for the missing-data rule: flagged when the latest delivery predates D-1, not flagged at D-1, cleared on the next ingestion
+- [x] 3.4 Implement the missing-data rule and verify the tests from 3.3 pass
+- [x] 3.5 Add a test documenting that the pacing function reports under-delivery for a period that has ended with nothing delivered, and keep the test for a period that has not started
 
 ## 4. Backend: Adform Connector and Ingestion Service
 
-- [ ] 4.1 Implement the Adform delivery client in `infrastructure/dsp/` behind the interface from 2.1, with authentication and pagination, verified against the sandbox
-- [ ] 4.2 Verify no credential reaches the logs or an error response, asserted by a test on the log output
-- [ ] 4.3 Implement the ingestion application service over the D-7 to D-1 window, writing through a bulk path rather than materialising entities, and verify memory stays bounded on a 1 M-row run
-- [ ] 4.4 Implement batch recording for success and failure and verify a failed run leaves a batch with a failed outcome and no partial range
-- [ ] 4.5 Implement skipping of unmapped active lines and verify the run completes for every mapped line while reporting the skipped ones
+- [x] 4.1 Implement the Adform delivery client in `infrastructure/dsp/` behind the interface from 2.1, with authentication and pagination, verified against the sandbox **(verificado contra la cuenta real de Adform, solo lectura, con adform_smoke el 2026-10-24: 142 filas, operación succeeded)** (verified against the real Adform account, read-only, 2026-10-25: mapping, nightly command and idempotent re-run; stored delivery matches the interface export for impressions, clicks, cost, measurable and viewable)
+- [x] 4.2 Verify no credential reaches the logs or an error response, asserted by a test on the log output
+- [x] 4.3 Implement the ingestion application service over the D-7 to D-1 window, writing through a bulk path rather than materialising entities, and verify memory stays bounded on a 1 M-row run **(partial: memoria verificada en el servicio con 1 M de filas y un destino contador; la escritura a PostgreSQL se verifica por trozos, no con 1 M de filas)**
+- [x] 4.4 Implement batch recording for success and failure and verify a failed run leaves a batch with a failed outcome and no partial range
+- [x] 4.5 Implement skipping of unmapped active lines and verify the run completes for every mapped line while reporting the skipped ones
+- [x] 4.6 Create the DSP mapping from a campaign line to a real Adform identifier, checking the pair with `resolve_identifiers` and distinguishing found, unknown and unreachable, creating the mapping in all three cases, setting `validated_at` only when found, exposing it to the `operations` role only (403 without it, 401 without a token), and documenting that the stats API cannot tell a line with no delivery in 30 days from an unknown one
+- [x] 4.7 Enforce one campaign line per external identifier pair and DSP with a unique constraint, and verify a second mapping to the same pair is rejected as a conflict
+- [x] 4.8 Compare external identifiers as text and combine several external line items mapped to one campaign line into one record per day, verified by tests
+- [x] 4.9 Ignore delivery rows without an attributed line item, counting them on the batch and not as exceptions, and fail the batch on a currency other than EUR, verified by tests
+- [x] 4.10 Write failing tests against PostgreSQL for the ingestion-target query: a campaign ended three days ago is ingested, one starting tomorrow is neither ingested nor skipped, an unvalidated mapping and a mapping of another DSP are skipped and counted, and a line with several external pairs is ingested through all of them
+- [x] 4.11 Implement the ingestion-target query with SQLAlchemy behind `IngestionTargetRepository` and verify the tests from 4.10 pass
+- [x] 4.12 Write failing tests against PostgreSQL for the watched-campaign query: only a campaign with status `active` whose dates include D-1 is returned
+- [x] 4.13 Implement the watched-campaign query behind `IngestionTargetRepository` and verify the tests from 4.12 pass
+- [x] 4.14 Write a test with simulated HTTP asserting that the Adform smoke script prints no value, name, identifier or amount from a synthetic response, and makes a single request
+- [x] 4.15 Implement `scripts/adform_smoke.py` (`python -m scripts.adform_smoke`), printing only the final operation status, row count, ignored rows, EUR rows, distinct pair count, the zero-impression rows with and without an attributed line item (line item above 0, EUR) and the type of each column, writing nothing to the database or disk; the PO runs it against the real account
+- [x] 4.16 Mark the 1 M-row memory test as `slow`, register the marker, exclude it by default with `-m "not slow"`, and note that it runs with `pytest -m slow` and that the full verification of section 10 must include it **(run it with `pytest -m slow`; the full verification of section 10, task 10.3, includes it)**
+- [x] 4.17 Make a batch's `row_count` the number of rows read from the DSP, keeping `ignored_row_count` for rows without an attributed line item and adding `zero_unmatched_row_count` for unmatched rows of zeros, verified by tests on the ingestion service
 
 ## 5. Backend: Manual Upload Route
 
-- [ ] 5.1 Implement the spreadsheet parser in `infrastructure/spreadsheets/` behind an interface, and verify pandas and openpyxl are imported nowhere else
-- [ ] 5.2 Write failing tests asserting structure is validated before content and that a malformed file fails naming file, sheet and row
-- [ ] 5.3 Implement the upload endpoint validating file type and size before parsing, storing the file in S3, and verify the tests from 5.2 pass
-- [ ] 5.4 Verify an uploaded file produces delivery records indistinguishable from the API route, asserted by a test comparing both paths
-- [ ] 5.5 Write a test asserting a user without `operations` receives 403 on the upload endpoint
+- [ ] 5.1 Implement the spreadsheet parser in `infrastructure/spreadsheets/` behind an interface, and verify pandas and openpyxl are imported nowhere else **(deferred: the API route is verified against the real account; the format of the Adform export is recorded in design.md)**
+- [ ] 5.2 Write failing tests asserting structure is validated before content and that a malformed file fails naming file, sheet and row **(deferred: the API route is verified against the real account; the format of the Adform export is recorded in design.md)**
+- [ ] 5.3 Implement the upload endpoint validating file type and size before parsing, storing the file in S3, and verify the tests from 5.2 pass **(partial: almacenamiento en disco detrás de una interfaz, en lugar de S3)** **(deferred: the API route is verified against the real account; the format of the Adform export is recorded in design.md)**
+- [ ] 5.4 Verify an uploaded file produces delivery records indistinguishable from the API route, asserted by a test comparing both paths **(deferred: the API route is verified against the real account; the format of the Adform export is recorded in design.md)**
+- [ ] 5.5 Write a test asserting a user without `operations` receives 403 on the upload endpoint **(deferred: the API route is verified against the real account; the format of the Adform export is recorded in design.md)**
 
 ## 6. Backend: Exceptions and Status API
 
-- [ ] 6.1 Write failing tests for unmatched delivery: an exception is recorded with its external key, figures are retained, and the run still stores matched rows
-- [ ] 6.2 Implement unmatched-delivery exception recording and verify the tests from 6.1 pass
-- [ ] 6.3 Write failing tests for absence: a line with no delivery in an ended period raises an exception, a running period does not
-- [ ] 6.4 Implement absence detection and exception resolution, and verify a resolved exception leaves the outstanding queue while remaining readable
-- [ ] 6.5 Implement the daily status endpoint returning contracted, delivered, ratio, pacing and both flags, aggregated in the database
-- [ ] 6.6 Implement the finance restriction so cost fields are absent from the response for a user without the role, and write a test asserting the field is missing rather than null
-- [ ] 6.7 Write tests asserting 403 for a user without `operations` on the exception queue, and 401 for a missing or invalid token on every endpoint of this change
+- [x] 6.1 Write failing tests for unmatched delivery: an `unmatched_delivery` exception is recorded with its DSP and external pair, figures are retained per date, running the same window twice neither duplicates the exception nor its days, a resolved pair that delivers again is not reopened but its new delivery is kept, unmatched rows of zeros are counted and not recorded, and the run still stores matched rows
+- [x] 6.2 Implement unmatched-delivery exception recording in the ingestion service, shared by the API and upload routes, and verify the tests from 6.1 pass
+- [x] 6.3 Write failing tests against PostgreSQL for absence by flight: a mapped line with no delivery row inside the window of a flight that ended inside the D-7 to D-1 window raises a `missing_delivery` exception identified by line and period, so does one whose rows inside the window sum to zero, delivery outside the flight's window does not count for it and is stored, a flight whose last day is after D-1 or before D-7 does not, a flight that ended before the mapping was validated does not, a line without a validated mapping does not, and evaluating twice does not duplicate it **(implementado por periodo en 8e96021; rehecho por flight en 6A.14)**
+- [x] 6.4 Implement absence detection as a service method not wired to a scheduler, and the endpoints `GET /ingestion-exceptions?status=open|resolved` and `POST /ingestion-exceptions/{id}/resolve` for the `operations` role as plain `def` routes, with 404 `exception_not_found` and 409 `exception_already_resolved`, with the queue showing first and last dates, number of days and impressions and clicks totals but no cost, and verify a resolved exception leaves the open queue while remaining readable
+- [x] 6.5 Implement `GET /api/campaign-status` for the `operations` and `business` roles as a plain `def` route: one row per flight whose window contains D-1, of a campaign with status `active`, with contracted, delivered inside the window up to D-1, ratio, and pacing (expected to date, deviation, days remaining) from the pure function of 3.2; the `pacing_flag` per flight and the `missing_data_flag` per campaign repeated on each of its rows (a row of zeros counts as data received); aggregated in the database in one query; no cost field in the response, asserted by a test walking every field name; ordered by rows with any flag first, then agency, campaign and line; verified by tests listing neither finished flights, nor flights not yet started, nor campaigns that have not started **(depende de 6A.15; el orden y los campos están en la spec `daily-status`)**
+- [ ] 6.6 Implement the finance restriction so cost fields are absent from the response for a user without the role, and write a test asserting the field is missing rather than null **(deferred: el endpoint de estado del corte no devuelve campos de coste)**
+- [x] 6.7 Write a parametrized test built from the routes registered in the application, not from a hand-written list, asserting 401 without a token and 403 without the required role for every route of this change (mappings, exceptions, status and flight preview), so that a new unprotected route fails the suite
+- [x] 6.8 Generate the exceptions migration with `--autogenerate`: the types `unmatched_delivery`, `missing_delivery` and `channel_mismatch`, uniqueness per type, DSP and external pair and per line and period, `first_date`, `last_date`, `resolved_at`, `resolved_by` and the note, the child table `ingestion_exception_deliveries` unique on exception and date, and `zero_unmatched_row_count` on the batches, reviewed by hand with `test_migration_schema_sync` green and `downgrade base` clean
+- [x] 6.9 Order the exception queue by `last_date` descending and then `id` descending, test first, and verify the queue spec scenario passes
+
+## 6A. Backend: Campaign Line and Flight Model
+
+- [x] 6A.1 Write failing tests and implement the proportional split of a line's volume across flight windows in `domain/`: 100 impressions over windows of 31, 30 and 31 days, a window clipped to half a month, a single window, the tie going to the earliest month, and the property that the parts always add up to the total
+- [x] 6A.2 Write failing tests and implement the generation of a line's flights from the line's dates and the campaign's periods, each window clipped to the intersection: a line starting mid-month, one ending before the campaign, one inside a single month and one of a single day
+- [x] 6A.3 Write failing tests and implement the validation that a line's dates fall inside the campaign's, with its domain error mapped to 422 `line_dates_outside_campaign` by the global handlers
+- [x] 6A.4 Write failing tests and implement the validation of explicit monthly volumes against the generated flights, with the errors `flight_volumes_incomplete`, `flight_volumes_mismatch` and `flight_volume_not_positive` mapped to 422 by the global handlers: matching months adding up to the total, a missing month, a repeated month, a month outside the line, a sum off by one, and a zero or negative volume
+- [x] 6A.5 Generate the additive migration with `--autogenerate`: `campaign_line_periods` unique per line and period with a check of `flight_start <= flight_end`, and the nullable `campaign_id`, `line_number`, `start_date` and `end_date` on `campaign_lines` with the partial unique index on `(campaign_id, line_number)`, reviewed by hand with `test_migration_schema_sync` green and `downgrade -1` clean
+- [x] 6A.6 Move the domain line to the new model: `CampaignLine` with campaign, number, dates and a list of `CampaignLineFlight` **(el `campaign_period_id` de la entidad queda como campo transitorio opcional hasta 6A.10, que lo elimina con el último código que lo lee)**
+- [x] 6A.7 Write failing tests and extend the registration request schema: per line optional `start_date`, `end_date` and `monthly_volumes` (year, month, volume), with inverted dates rejected as 422 `line_dates_invalid` through the global handlers and the existing `flight_volumes_*` and `line_dates_outside_campaign` errors reused
+- [x] 6A.8 Write failing tests and rewrite the registration service: one campaign line per line of the purchase order with its number, its dates (the campaign's by default) and its flights generated by the domain functions, the explicit split when `monthly_volumes` is given and the proportional one otherwise, rejecting with 422 `volume_too_small_for_flights` any split that leaves a flight at zero, validating every line before anything is written, and dropping the per-period copy loop and the placeholder period identifier
+- [x] 6A.9 Write failing tests and rewrite the campaign repository to save campaign, periods, lines and flights in one transaction, resolving periods by year and month, filling the transitional `campaign_period_id` of each line with its first flight's period, and dropping the first-period `break` **(el campo transitorio de la entidad sigue hasta 6A.10, que es lo último que lo lee)**
+- [x] 6A.10 Write failing tests and change the registration response and its schemas: each line with `line_number`, `start_date`, `end_date`, total volume and `flights`, without `campaign_period_id`, keeping the campaign's `periods`, and drop the line entity's transitional period field
+- [x] 6A.11 Write API tests for registration over several months: a line over three months, two lines over two months, a one-month line, lines starting mid-campaign and ending early, two formats in one month, valid and invalid explicit volumes, dates outside and inverted, a total too small, and a partial failure leaving nothing stored
+- [x] 6A.12 Write the final migration with `--autogenerate`: `campaign_id`, `line_number`, `start_date` and `end_date` mandatory and `campaign_lines.campaign_period_id`, its foreign key and its index dropped, failing with a message asking to recreate the development database when a line lacks `campaign_id`, with a downgrade that restores `campaign_period_id` from each line's earliest flight and fails clearly when a line has no flights; verified on a throwaway database holding a campaign with two flights, with `test_migration_schema_sync` green and the registration repository and the line entity no longer filling or holding the period
+- [x] 6A.13 Write failing tests against PostgreSQL and move the ingestion-target query onto the line's own dates, with no join through periods, covering a line that ended before its campaign, one that starts mid-campaign, one outside the window, one with an unvalidated mapping and one of another DSP; the watched-campaign query depends on the campaign alone
+- [x] 6A.14 Write failing tests against PostgreSQL and rework absence (task 6.3) by flight: a finished flight whose rows are zeros or missing is flagged, delivery outside its window does not count even inside another flight of the same line, a mapping validated after the flight ended and a flight still running are not evaluated, and two runs do not duplicate the exception, which stays identified by line and period
+- [x] 6A.15 Provide the flight-level aggregate the status endpoint (6.5) reads: contracted per flight and delivery summed inside its window, in one query
+- [x] 6A.16 Move the shared test fixtures to the new model: `insert_campaign_line` creates the campaign, a period, the line with `campaign_id`, number and dates, and its flight, and `campaign_id_of` reads it from the line, keeping their signatures
+
+## 6B. Backend: Flight Preview
+
+- [x] 6B.1 Write failing tests and define the request and response schemas of `POST /api/flights/preview`: campaign dates, optional line dates and a positive total in; effective line dates and flights (`period_year`, `period_month`, `flight_start`, `flight_end`, `contracted_impressions`) out
+- [x] 6B.2 Write failing tests and implement the endpoint for the `operations` role as a plain `def` route that reads and writes no database, moving the line-window planning and the strict split by days into domain functions that the registration service also uses, so the rule exists once
+- [x] 6B.3 Write API tests for the preview: a line inheriting three months, a line with its own dates, one month, one day, a total too small, dates outside and inverted, a zero or negative total, 401 without a token and 403 without `operations`, and that nothing is stored
+- [x] 6B.4 Write a consistency test asserting that for the same input the preview's flights are identical to those returned by the registration
 
 ## 7. Backend: Scheduled Run
 
-- [ ] 7.1 Implement the nightly ingestion as a container command invoked by the host scheduler, and verify a manual invocation uses the same code path
-- [ ] 7.2 Verify the status view reads the last successful batch so a stale page is visibly stale, asserted by a test with a failed most-recent run
+- [x] 7.1 Implement the nightly ingestion as `python -m scripts.run_ingestion [--date YYYY-MM-DD]`, a container command invoked by the host scheduler, using the same service as every other route, with an advisory lock and the exit codes 0 (succeeded), 1 (failed), 2 (another run holds the lock) and 3 (missing configuration), and tests for success, client failure, busy lock, missing configuration and a repeated window **(la línea de crontab de ejemplo está en el design)** (verified against the real Adform account, read-only, 2026-10-25: mapping, nightly command and idempotent re-run; stored delivery matches the interface export for impressions, clicks, cost, measurable and viewable)
+- [ ] 7.2 Verify the status view reads the last successful batch so a stale page is visibly stale, asserted by a test with a failed most-recent run **(deferred: indicador de página desactualizada)**
+- [x] 7.3 Calculate today and the ingestion window in the configured time zone (`Europe/Madrid` by default) in one function used by the command, the API's `get_today` and the Adform client, with tests for the change of day between 22:00 and 02:00 in Madrid and for the daylight saving changes
+- [x] 7.4 Write a test with synthetic data asserting that no value, identifier, name, amount, token or DSP error text appears in what the command prints
 
 ## 8. Frontend: Daily Status and Exception Queue
 
-- [ ] 8.1 Implement the typed API client for status and exceptions in `lib/api/` and verify no component calls `fetch` directly
-- [ ] 8.2 Write failing Vitest tests for the status table covering both flags, the contracted-versus-delivered columns and sorting by period and agency
-- [ ] 8.3 Implement the status table and verify the tests from 8.2 pass
-- [ ] 8.4 Verify a loaded-but-empty list renders distinctly from a pending one, asserted by a test
-- [ ] 8.5 Implement the exception queue with resolution, guarded by the `operations` role, and write a test asserting what a user without the role sees
-- [ ] 8.6 Verify no cost or margin column renders for a user without `finance`, asserted by a test
+- [x] 8.1 Implement the typed API client for status and exceptions in `lib/api/` (`getCampaignStatus`, `listIngestionExceptions(status)`, `resolveIngestionException(id, note)`), typed from the real OpenAPI schemas (`CampaignStatusResponse`, `IngestionExceptionResponse`, `ResolveExceptionRequest`) with `contracted_impressions` and `delivered_impressions` as distinct fields and no cost field, and verify no component calls `fetch` directly
+- [x] 8.2 Write failing Vitest tests for the status page at `/status` (operations and business), over the real API client with a simulated `fetch`, covering both flags shown as text («Sin datos recibidos», «Desviación de ritmo») and not only as colour, the contracted-versus-delivered columns, ratio and deviation shown as the API returns them with percentage format and never recomputed in the browser, the server order by default and client sorting by period and by agency, a 401 leading to the session-expired page and a 403 to the access-denied page
+- [x] 8.3 Implement the status table, one row per running flight (campaign, agency, line, period and window, contracted, delivered, ratio, expected, deviation, days remaining and the two flags), with accessible column headers and sort controls, and verify the tests from 8.2 pass
+- [x] 8.4 Verify the loading («Cargando…»), empty («No hay campañas en curso») and error states of the status page render distinctly from each other, asserted by a test for each
+- [x] 8.5 Implement the exception queue at `/exceptions` with the tabs «Abiertas» and «Resueltas», each row showing type, DSP, external pair, first and last date, days, impressions and clicks and never cost, and «Resolver» asking for an optional note and a confirmation so the row leaves «Abiertas» without reloading, with `exception_already_resolved` and `exception_not_found` shown in Spanish, an empty state distinct from loading, and write tests for success, 409, 404, 401 and what a user without the `operations` role sees (the access-denied page)
+- [x] 8.7 Implement the navigation of the authenticated layout (campaigns, status, exceptions, and the existing sign-out button, moved there from the campaigns page) without decoding roles in the browser: every link is shown until a page reports a 403 from the backend, which is the source of truth, and from then on the link to that page is hidden, with tests for both behaviours
+- [ ] 8.6 Verify no cost or margin column renders for a user without `finance`, asserted by a test **(deferred: el endpoint de estado del corte no devuelve campos de coste)**
+
+## 8A. Frontend: Line Dates and Flights in the New Campaign Form
+
+The form lets each line have its own dates and shows the monthly split (flights). The types of the preview and of the line come from the real OpenAPI schema (`/api/openapi.json`). Behaviour:
+
+- Each line has the box «Heredar las fechas de la campaña», checked by default. Checked, neither `start_date` nor `end_date` is sent. Unchecked, a start and an end appear, validated in the Zod schema: inside the campaign's dates, with the end not before the start.
+- Each line has a button «Calcular reparto», enabled only when the campaign's dates, the line's dates (own or inherited) and the total volume are valid. It calls the preview and shows a table with month, window and volume, editable, plus «Suma X de Y».
+- Editing any volume turns the line into «reparto manual», with a button «Restablecer reparto proporcional». Only then is `monthly_volumes` sent. Submitting is blocked if the sum differs from the total, a volume is not positive, or the months are not exactly those of the preview.
+- If, after calculating, the campaign's dates, the line's dates or the total volume change, that line's preview is invalidated and a recalculation is asked for: a stale split is never sent.
+- Before registering, the preview of every line that has none is calculated silently; its `line_dates_*` and `volume_too_small_for_flights` errors are shown on that line (exact, the request is per line), and the registration is sent only if all pass.
+- The registration's own 422 codes `line_dates_*`, `flight_volumes_*` and `volume_too_small_for_flights` carry no line number, so they are shown on the candidate lines (own dates for `line_dates_*`, manual split for `flight_volumes_*`, proportional split for `volume_too_small_for_flights`), saying «en alguna de estas líneas» when there are several, and at form level when there is none. Messages come from the Zod schema or a code-to-Spanish table, never from searching library text.
+
+- [x] 8A.1 Extend the Zod schema with the optional line dates, `monthly_volumes` and the manual split rules (coverage of the preview months, positive volumes, sum equal to the total), with the Spanish messages shared with the backend codes, tests first
+- [x] 8A.2 Add a typed `previewFlights` function in `lib/api/` over the real client, tests first with a simulated `fetch` (200, 422 with each code, 401 and 403), and verify no component calls `fetch`
+- [x] 8A.3 Add the line date control with the inherit box, tests first
+- [x] 8A.4 Add the flight editor: calculate, table, «Suma X de Y», manual mode, reset and invalidation when the inputs change, tests first
+- [x] 8A.5 Submit with the two rules (dates and `monthly_volumes` only when not inherited or manual) and the silent preview of lines that have none, tests first
+- [x] 8A.6 Map the backend codes to Spanish messages on the exact line (preview) or the candidate lines (registration), and at form level when there is no candidate, tests first
+
+## 8B. Frontend: Adform Catalogue, Linking and Unlinking
+
+The types come from the real OpenAPI schema (`DspCatalogPageResponse`, `UnmappedLineResponse`, `LinkExceptionRequest`/`LinkExceptionResponse`, `UnlinkLineResponse`, `DspMappingCreateRequest`/`DspMappingResponse`, `IngestionExceptionResponse`); no field is invented and no component calls `fetch`. The pages are for `operations`; the backend's 401 and 403 decide what is shown, as in 8.5. Behaviour:
+
+- **Link from the queue.** Every open `unmatched_delivery` exception has the button «Vincular a una línea», which opens a dialog listing the lines with no mapping (`GET /campaign-lines/unmapped`: campaign, line number, dates and DSP) with a text search (done in the browser, the endpoint has no filter). Choosing one and confirming calls `POST /ingestion-exceptions/{id}/link`; the row leaves «Abiertas» without reloading. The codes `exception_already_resolved`, `exception_not_found`, `exception_not_linkable`, `line_not_found`, `line_dsp_mismatch` and `mapping_pair_taken` are shown in Spanish inside the dialog. The dialog lists every unmapped line whatever its DSP, so `line_dsp_mismatch` stays reachable and the DSP is shown in the list.
+- **History warning.** When the response has `needs_history_load` true, a persistent notice is shown: «Esta línea empezó antes de la ventana de siete días. La entrega anterior no se carga sola: pide cargar el histórico con run_ingestion --from … --to …». The browser offers no action to load it.
+- **Catalogue.** A page «Catálogo Adform» (`/dsp-catalog`, linked in the navigation) with a paginated table: campaign, line, line dates, last date with impressions and whether it is linked. Filters: text (`q`), «vinculadas / sin vincular» (`mapped`) and «activas desde» (`active_since`, which the backend compares with `last_seen_date`: the last date with a row in Adform, not real activity). An unlinked row has «Vincular a una línea», with the same dialog, which calls `POST /campaign-lines/{id}/dsp-mappings` with the pair of that row; identifiers are never typed and never shown. The result shows the validation (`found`, `unknown`, `unreachable`) and, when `last_impressions_date` is null, the notice «No consta entrega reciente de esta pareja». Loading, empty and error are three distinct states.
+- **Unlink.** A linked row has «Desvincular», which asks for confirmation saying explicitly that the ingested delivery days of that line will be deleted; afterwards it shows how many days were removed (`removed_delivery_days`). `ambiguous_mapping`, `mapping_not_found` and `line_not_found` are shown in Spanish. The catalogue answers with the mapped line's id only, so the confirmation names the pair by its Adform campaign and line names (which the masking of 8B.7 also hides), and shows no identifier.
+- **Queue names.** Each exception shows `campaign_name` and `line_item_name`; when they are null, «Sin nombre en el catálogo».
+- **Name masking.** With `NEXT_PUBLIC_MASK_NAMES=true` (a build variable, declared in `.env.example`, `docs/deploy.md`, the Dockerfile and `docker-compose.yml`) every Adform campaign and line name is blurred, cannot be selected and does not reveal on hover. Without the variable names show normally.
+- **Accessibility and numbers.** Every new field, button and table has an accessible name (`htmlFor`, `aria-label` or table headers). Integers are grouped from four digits (`useGrouping: 'always'`).
+
+- [x] 8B.1 Add the typed client in `lib/api/` (`listDspCatalog`, `listUnmappedLines`, `linkException`, `createDspMapping`, `unlinkLine`, and the two name fields in `IngestionException`) over the real client, with `delete` added to it and the query string built in one place, tests first with a simulated `fetch` (parameters sent, 200, each error code, 401 and 403)
+- [x] 8B.2 Group integers from four digits in every integer formatter through one shared formatter (`useGrouping: 'always'`), tests first
+- [x] 8B.3 Add the line-picker dialog (unmapped lines, text search, accessible labels, Spanish messages for the six link codes inside the dialog), tests first
+- [x] 8B.4 Integrate linking in the exception queue («Vincular a una línea», the row leaves «Abiertas» without reloading, the history warning, `campaign_name` and `line_item_name` with «Sin nombre en el catálogo»), tests first
+- [x] 8B.5 Add the «Catálogo Adform» page with its filters, pagination, navigation link and linking from a row (no identifier on screen, validation result, the null `last_impressions_date` notice, distinct loading, empty and error states, 401 and 403), tests first
+- [x] 8B.6 Add unlinking with its explicit confirmation, the removed-days count and the three Spanish error messages, tests first
+- [x] 8B.7 Add `NEXT_PUBLIC_MASK_NAMES` (blurred, unselectable, no reveal on hover, with and without the variable), declared in `.env.example`, `docs/deploy.md`, the Dockerfile and `docker-compose.yml`, tests first
+
+## 8C. Frontend: Native Modal Dialogs
+
+Found in the real browser, and not by the tests: the application has no compiled Tailwind (no dependency, no configuration, no stylesheet) and no component uses `className`, so nothing positions anything by utility classes. The three dialogs (`ResolveDialog`, `LinePickerDialog`, `UnlinkDialog`) were plain `div role="dialog"` blocks with inline borders, so they were drawn in the page flow, below the list, and were not modal. Decision: every dialog is the native `<dialog>` opened with `showModal()`, which uses the browser's top layer with no CSS, dims the page natively, closes with Escape, and gets its focus back to the button that opened it. One shared component holds that logic and gives the dialog an accessible title through `aria-labelledby`; only a minimal inline style (maximum width and padding) keeps it readable. jsdom does not implement `showModal()`, so the test setup defines its minimum behaviour (sets `open`, moves focus into the dialog, closes on Escape through the `cancel` and `close` events) and documents it. Every behaviour the dialogs already had (lists, Spanish errors, confirmations) stays covered.
+
+- [x] 8C.1 Add the jsdom minimum for `showModal()` and `close()` to the test setup and the shared `Modal` component (open dialog, focus on opening, Escape and cancel close it, focus returns to the opener, no closing while submitting), tests first
+- [x] 8C.2 Move `ResolveDialog` to the shared modal, tests first
+- [x] 8C.3 Move `LinePickerDialog` to the shared modal, tests first
+- [x] 8C.4 Move `UnlinkDialog` to the shared modal, tests first
+
+## 8D. Frontend: Global Stylesheet
+
+One hand-written stylesheet, with no framework, no new dependency, no external font or resource, as decided in the design («Global stylesheet»). No text, role, label or element order changes, so the existing tests are untouched. Where jsdom cannot compute layout, the tests check what can be checked: the root layout imports the sheet, the sheet has no `@import url` or absolute URL, it defines `:focus-visible`, `dialog::backdrop` and `prefers-reduced-motion`, and every declared text and background pair reaches 4.5:1 (WCAG formula).
+
+- [x] 8D.1 Add `app/globals.css` with the colour variables, the reset and the typography, imported by the root layout (with the «Saltar al contenido» link), and remove the inline colours and fonts
+- [x] 8D.2 Structure and navigation: dark header bar, `aria-current` on the current page, centred content up to 1280 px with 24 px padding, sign-out button to the right
+- [x] 8D.3 Tables: border, header, hover, numeric columns on the right and a scrolling container, readable at 1024 px
+- [x] 8D.4 Forms and buttons: label over field, full-width fields, card fieldsets, compact flights table, field errors under the field, primary, secondary and danger buttons with a visible disabled state and a 36 px minimum height
+- [x] 8D.5 Tags and notices: status flags as coloured tags with text, error, warning, success and information notices, and loading, empty and error states
+- [x] 8D.6 Dialogs: centred native dialog with padding, rounded corners, soft shadow and dimmed `::backdrop`, without changing how it works as a modal
+- [x] 8D.7 Home, expired-session and access-denied screens as a centred card with the primary button
+- [x] 8D.8 Stylesheet tests: root layout import, no external URL, focus, backdrop and reduced motion, and AA contrast of every declared pair
+
+## 8E. Frontend: Exception Queue Filter
+
+A filter over the list of the active tab of `/exceptions`, in the style of the catalogue's. It is applied in the browser over what `GET /ingestion-exceptions` already returned: no request and no parameter are added. Behaviour:
+
+- A search box «Buscar excepciones» (label tied with `htmlFor`) and a selector «Tipo» with «Todas», «Entrega sin emparejar» (`unmatched_delivery`) and «Entrega ausente» (`missing_delivery`), the same labels as the table.
+- The search ignores case and accents (Unicode normalisation) and looks in `campaign_name`, `line_item_name`, the DSP, the external pair and the text of absence exceptions («Línea X, periodo Y»). An empty string shows everything; the terms separated by spaces must all match.
+- A counter «Mostrando X de Y», a button «Limpiar filtros» and the state «No hay excepciones que coincidan con la búsqueda», distinct from the empty queue and from loading.
+- The searched text lives only in the component state: not in the URL and not in the browser storage. The filter is kept when the tab changes. Resolving or linking an exception removes its row from the list and lowers the counter without losing the filter.
+- With `NEXT_PUBLIC_MASK_NAMES=true` the search by name still works and the names stay blurred.
+- It uses the classes of the global stylesheet; no new CSS unless needed.
+
+- [x] 8E.1 Add the pure filter (normalisation, searchable text, all terms, type), tests first
+- [x] 8E.2 Add the controls, the counter, «Limpiar filtros» and the no-match state to the exception queue, tests first
+- [x] 8E.3 Keep the filter across tabs and after resolving or linking, with no request, URL or storage involved, and under the name masking, tests first
 
 ## 9. Review and Update Existing Unit Tests (MANDATORY)
 
 - [ ] 9.1 Review every test touched by this change and update any asserting superseded behaviour
 - [ ] 9.2 Verify each role-guarded endpoint added here has its negative authorisation case covered
 
+## 9A. Backend: Adform Line Catalogue, Linking and Range Loads
+
+- [x] 9A.1 Request the eight dimensions and read the catalogue columns by name, with a synthetic response, tests first
+- [x] 9A.2 Create `dsp_catalog_lines` with its migration (`--autogenerate`, schema sync green)
+- [x] 9A.3 Update the catalogue in the batch's transaction (new, updated, zeros, unattributed, failed batch) and always make the request, even with no mapped lines
+- [x] 9A.4 Add `window_start` and `window_end` to the batches with their check, set by every new batch, in a separate migration
+- [x] 9A.5 `GET /api/dsp-catalog` with filters, paging, `mapped` and no cost
+- [x] 9A.6 `GET /api/campaign-lines/unmapped`
+- [x] 9A.7 `POST /api/ingestion-exceptions/{id}/link`, atomic, with its errors
+- [x] 9A.8 `DELETE /api/campaign-lines/{id}/dsp-mappings`
+- [x] 9A.9 `last_impressions_date` in the mapping response, and `campaign_name` and `line_item_name` in the exception queue
+- [x] 9A.10 `needs_history_load` in the mapping and link responses, at both edges
+- [x] 9A.11 `run_ingestion --from --to` with its rules, one request, no absences and an idempotent repetition
+- [x] 9A.12 The outputs of `run_ingestion` and the smoke script print no names
+
 ## 10. Run Unit Tests and Verify Database State (MANDATORY)
 
 - [ ] 10.1 Capture the pre-test database baseline for delivery, batches and exceptions
 - [ ] 10.2 Run targeted unit tests for the changed modules and record passed, failed and skipped counts
-- [ ] 10.3 Run the full backend and frontend suites and record totals and runtime
+- [ ] 10.3 Run the full backend and frontend suites and record totals and runtime, including the slow tests with `pytest -m slow`
 - [ ] 10.4 Verify post-test database state against the baseline and restore it if anything changed
 - [ ] 10.5 Create the report at `specs/daily-campaign-delivery-status/reports/YYYY-MM-DD-step-10-unit-test-and-db-verification.md`
 - [ ] 10.6 Mark this step complete only once the tests pass and that report exists
@@ -92,6 +228,24 @@
 - [ ] 11.6 Test error cases: malformed upload, unsupported file type, unreachable DSP
 - [ ] 11.7 Test authorisation: no token (401), token without `operations` on upload and exceptions (403), token without `finance` receiving no cost fields
 - [ ] 11.8 Verify the database matches its pre-test state and document every command and response in a report in the change folder
+
+## 11A. Production Images and Composition
+
+- [x] 11A.1 Write failing tests for `scripts/grant_roles.py` against PostgreSQL (creates the user and the requested role rows when missing, is idempotent, assigns several roles, rejects an unknown role and an empty email with exit code 2 without writing, prints no email or other value) and implement it
+- [x] 11A.2 Add `backend/Dockerfile.prod`: `uv sync --frozen --no-dev`, no `tests/`, no `scripts/seed_dev_data.py`, non-root user, `run_ingestion.py` and the migrations kept, migrations never run at start
+- [x] 11A.3 Add the production nginx template (80 redirects to HTTPS and leaves `/.well-known/acme-challenge/` open; 443 with certificates from a volume and `SERVER_NAME` as variable)
+- [x] 11A.4 Add `docker-compose.prod.yml`: only nginx publishes ports, restart policy, health checks, log rotation, `env_file: .env`, named PostgreSQL volume, the frontend build arguments with the public server URL
+- [x] 11A.5 Ignore certificates and keys in `.gitignore` and verify nothing of the kind is versioned
+- [x] 11A.6 Write `docs/deploy.md` with the steps that cannot be run here: instance, security group, DNS, Certbot, `.env` with `chmod 600`, Cognito callback and sign-out URLs over HTTPS, the explicit migration step and the first user
+- [x] 11A.7 Write `scripts/verify_prod_images.sh` and run it: builds the images, brings the production composition up with a temporary database and a self-signed certificate, and checks `/api/health` answers 200 over HTTPS, port 80 redirects, the backend image has no pytest, `tests/` or `seed_dev_data.py` but has `run_ingestion.py`, the container is not root, the database publishes no port, and `alembic upgrade head` applies as a separate step; ends with one `OK` or `FALLO` line
+
+## 11B. Master Data Loading and Operations Guide
+
+- [x] 11B.1 Write failing tests against PostgreSQL for `scripts/load_masters.py` loading (a full load on an empty database, a second run that changes nothing, an existing row left as it was, a failure half-way that stores nothing, and an output that carries no name from the file) and implement the load
+- [x] 11B.2 Write failing tests for the validation (a name repeated within a section, a missing name, an agency whose group is neither in the file nor stored, a missing `Adform` DSP, an unknown section or key, an unreadable or malformed file) and for `--check` writing nothing, with errors naming the section and position and no content, and implement them
+- [x] 11B.3 Add `deploy/masters.example.json` with fictitious data, ignore `deploy/masters.json`, verify nothing real is versioned, and test that the example loads
+- [x] 11B.4 Add the masters step to `docs/deploy.md`, after the migrations and before `grant_roles`
+- [x] 11B.5 Document in `docs/deploy.md` the nightly ingestion cron at 07:00 `Europe/Madrid` with its exit-code check, the nightly `pg_dump` backup with seven-day rotation and a restore test in a temporary database, and the post-deployment check with an authenticated `GET /api/campaign-status` and the `run_ingestion` output (documented, not executed)
 
 ## 12. E2E Testing with Playwright (MANDATORY - AGENT MUST EXECUTE)
 

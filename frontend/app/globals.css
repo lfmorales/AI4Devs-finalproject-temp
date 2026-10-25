@@ -1,0 +1,674 @@
+/* AdOps360 global stylesheet: hand-written, no framework, no external font or resource.
+   Every colour is a variable on :root; components never repeat a colour. */
+
+:root {
+  color-scheme: light;
+
+  --color-page: #F6F4EE;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #EFEBDF;
+  --color-border: #DDD8CB;
+  --color-text: #1B2433;
+  --color-muted: #5B6470;
+
+  --color-header: #0F1B2D;
+  --color-header-text: #F6F4EE;
+
+  --color-action: #0B6B74;
+  --color-action-hover: #08555C;
+  --color-action-text: #FFFFFF;
+  --color-danger: #B42318;
+  --color-danger-hover: #8A1C14;
+  --color-danger-text: #FFFFFF;
+
+  --color-warning-bg: #FFF4D6;
+  --color-warning-text: #7A4B00;
+  --color-warning-border: #F2B24B;
+  --color-error-bg: #FDECEA;
+  --color-error-text: #8A1C14;
+  --color-success-bg: #E4F4EE;
+  --color-success-text: #0B5D43;
+  --color-info-bg: #E8F1F8;
+  --color-info-text: #12456B;
+
+  --shadow: 0 8px 24px rgba(15, 27, 45, 0.18);
+  --backdrop: rgba(15, 27, 45, 0.55);
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --radius: 8px;
+  --space: 24px;
+  --control-height: 36px;
+}
+
+/* Reset */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-page);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3,
+p,
+ul,
+fieldset {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* Typography */
+
+h1 {
+  font-size: 1.75rem;
+  line-height: 1.25;
+  font-weight: 700;
+  margin-bottom: var(--space);
+}
+
+h2 {
+  font-size: 1.25rem;
+  line-height: 1.3;
+  font-weight: 650;
+}
+
+h3 {
+  font-size: 1.0625rem;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+a {
+  color: var(--color-action);
+}
+
+a:hover {
+  color: var(--color-action-hover);
+}
+
+/* Accessibility */
+
+:focus-visible {
+  outline: 3px solid var(--color-action);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Structure and navigation */
+
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -64px;
+  z-index: 10;
+  padding: 8px 16px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.skip-link:focus {
+  top: 8px;
+}
+
+main > nav[aria-label="Principal"] {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+  padding: 12px max(var(--space), calc((100% - 1280px) / 2 + var(--space)));
+  background: var(--color-header);
+  color: var(--color-header-text);
+}
+
+/* The header bar is full width; everything else is centred up to 1280 px. */
+main > :not(nav[aria-label="Principal"]) {
+  width: 100%;
+  max-width: 1280px;
+  margin-inline: auto;
+  padding: var(--space);
+}
+
+nav[aria-label="Principal"] a {
+  color: var(--color-header-text);
+  text-decoration: none;
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
+}
+
+nav[aria-label="Principal"] a:hover {
+  border-bottom-color: var(--color-header-text);
+}
+
+nav[aria-label="Principal"] a[aria-current="page"] {
+  font-weight: 700;
+  border-bottom-color: var(--color-header-text);
+}
+
+nav[aria-label="Principal"] > button {
+  margin-left: auto;
+  min-height: var(--control-height);
+  padding: 4px 16px;
+  background: transparent;
+  color: var(--color-header-text);
+  border: 1px solid var(--color-header-text);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+nav[aria-label="Principal"] :focus-visible {
+  outline-color: var(--color-header-text);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: var(--space);
+}
+
+.page-header h1 {
+  margin-bottom: 0;
+}
+
+/* Tables */
+
+.table-scroll {
+  overflow-x: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+th,
+td {
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border);
+}
+
+thead th {
+  background: var(--color-surface-alt);
+  font-weight: 650;
+  white-space: nowrap;
+  border-bottom: 2px solid var(--color-border);
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+tbody tr:hover {
+  background: var(--color-surface-alt);
+}
+
+th.num,
+td.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+th[aria-sort] button {
+  padding: 0;
+  min-height: 0;
+  background: none;
+  border: 0;
+  font-weight: inherit;
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+
+th[aria-sort="ascending"] button::after {
+  content: " ▲";
+}
+
+th[aria-sort="descending"] button::after {
+  content: " ▼";
+}
+
+/* Forms */
+
+label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+input[type="text"],
+input[type="search"],
+input[type="date"],
+input[type="number"],
+select,
+textarea {
+  width: 100%;
+  min-height: var(--control-height);
+  padding: 6px 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-muted);
+  border-radius: var(--radius);
+}
+
+textarea {
+  resize: vertical;
+}
+
+input:has(+ .field-error),
+select:has(+ .field-error) {
+  border: 2px solid var(--color-error-text);
+}
+
+.field-error {
+  margin-top: 4px;
+  color: var(--color-error-text);
+  font-size: 0.875rem;
+}
+
+fieldset {
+  margin-bottom: var(--space);
+  padding: 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+legend {
+  padding: 0 8px;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px var(--space);
+  margin-bottom: 20px;
+}
+
+.span-all {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.line-card {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: var(--color-page);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.line-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.check label {
+  margin: 0;
+}
+
+main > form.campaign-form {
+  max-width: 64rem;
+}
+
+.form-actions,
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.row-actions {
+  gap: 8px;
+}
+
+.inline-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.flight-preview {
+  margin-top: 12px;
+}
+
+.flight-preview p {
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+.compact th,
+.compact td {
+  padding: 4px 8px;
+}
+
+.compact input {
+  width: 10rem;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.filters input,
+.filters select {
+  width: auto;
+  min-width: 12rem;
+}
+
+.hint {
+  margin-top: 4px;
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+
+nav[aria-label="Paginación del catálogo"] {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+/* Buttons: the plain one is the secondary; primary and danger are classes. Links that look like buttons use .btn. */
+
+button,
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-height);
+  padding: 6px 16px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-muted);
+  border-radius: var(--radius);
+  font-weight: 600;
+  line-height: 1.25;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled),
+.btn:hover {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+.btn-primary,
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-action);
+  color: var(--color-action-text);
+  border-color: var(--color-action);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-action-hover);
+  border-color: var(--color-action-hover);
+}
+
+.btn-danger,
+.btn-danger:hover:not(:disabled) {
+  background: var(--color-danger);
+  color: var(--color-danger-text);
+  border-color: var(--color-danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--color-danger-hover);
+  border-color: var(--color-danger-hover);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+[role="tablist"] {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+[role="tab"] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+[role="tab"][aria-selected="true"] {
+  background: var(--color-action);
+  color: var(--color-action-text);
+  border-color: var(--color-action);
+}
+
+/* Notices, states and tags. The text says it; the colour only helps. */
+
+.notice {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.notice-info {
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
+  border-color: var(--color-info-text);
+}
+
+.notice-success {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+  border-color: var(--color-success-text);
+}
+
+.notice-warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border-color: var(--color-warning-border);
+}
+
+.notice-error {
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
+  border-color: var(--color-error-text);
+}
+
+.notice > p + p {
+  margin-top: 4px;
+}
+
+.empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  background: var(--color-surface-alt);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+}
+
+.empty-state p + p {
+  margin-top: 8px;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tag-warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border-color: var(--color-warning-border);
+}
+
+.tag-info {
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
+  border-color: var(--color-info-text);
+}
+
+/* Dialogs: the native modal <dialog> opened with showModal(); the browser provides the top layer and the focus. */
+
+dialog {
+  width: calc(100% - 32px);
+  max-width: 40rem;
+  padding: 24px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+dialog::backdrop {
+  background: var(--backdrop);
+}
+
+dialog h2 {
+  margin-bottom: 12px;
+}
+
+dialog p + p,
+dialog .notice {
+  margin-top: 12px;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+[role="radiogroup"] {
+  display: grid;
+  gap: 4px;
+  max-height: 16rem;
+  margin: 8px 0;
+  overflow-y: auto;
+}
+
+[role="radiogroup"] label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  font-weight: 400;
+}
+
+[role="radiogroup"] label:hover {
+  background: var(--color-surface-alt);
+}
+
+/* Home, expired-session and access-denied screens: one centred card with the primary button */
+
+.card-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 70vh;
+}
+
+.card {
+  width: 100%;
+  max-width: 28rem;
+  padding: 32px 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.card h1 {
+  font-size: 1.5rem;
+  margin-bottom: 12px;
+}
+
+.card p {
+  color: var(--color-muted);
+}
+
+.card p:last-of-type {
+  margin-bottom: 24px;
+}
+
+.card .btn-primary,
+.card .btn {
+  width: 100%;
+}

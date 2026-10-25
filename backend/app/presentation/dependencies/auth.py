@@ -32,4 +32,6 @@ def require_roles(*accepted_roles: RoleName) -> Callable[[User], User]:
         AuthenticationService.authorize(user, accepted_roles)
         return user
 
+    # Readable by tooling that audits which roles each route requires, e.g. the route protection test.
+    _require_accepted_role.accepted_roles = accepted_roles  # type: ignore[attr-defined]
     return _require_accepted_role

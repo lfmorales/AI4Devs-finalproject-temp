@@ -16,12 +16,20 @@ from app.infrastructure.persistence.models.campaign import (
     CampaignRecord,
     CampaignPeriodRecord,
     CampaignLineRecord,
+    CampaignLinePeriodRecord,
 )
 from app.infrastructure.persistence.models.purchase_order import (
     PurchaseOrderRecord,
     PurchaseOrderVersionRecord,
 )
 from app.infrastructure.persistence.models.dsp_mapping import DSPMappingRecord
+from app.infrastructure.persistence.models.dsp_catalog import DspCatalogLineRecord
+from app.infrastructure.persistence.models.delivery import (
+    IngestionBatchRecord,
+    DailyDeliveryRecord,
+    IngestionExceptionRecord,
+    IngestionExceptionDeliveryRecord,
+)
 
 __all__ = [
     "RoleRecord",
@@ -39,7 +47,13 @@ __all__ = [
     "CampaignRecord",
     "CampaignPeriodRecord",
     "CampaignLineRecord",
+    "CampaignLinePeriodRecord",
     "PurchaseOrderRecord",
     "PurchaseOrderVersionRecord",
     "DSPMappingRecord",
+    "DspCatalogLineRecord",
+    "IngestionBatchRecord",
+    "DailyDeliveryRecord",
+    "IngestionExceptionRecord",
+    "IngestionExceptionDeliveryRecord",
 ]

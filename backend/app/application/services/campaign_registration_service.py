@@ -2,7 +2,10 @@ from datetime import date
 from decimal import Decimal
 from typing import Optional
 
-from app.domain.entities.campaign import Campaign, CampaignPeriod, CampaignLine
+from app.domain.entities.campaign import Campaign, CampaignLine, CampaignLineFlight, CampaignPeriod
+from app.domain.services.explicit_volumes import validate_explicit_volumes
+from app.domain.services.flight_planning import resolve_line_windows, split_volume_by_days
+from app.domain.value_objects.flight import MonthlyVolume
 from app.domain.value_objects.contracted_volume import ContractedVolume
 from app.domain.services.period_expansion import PeriodExpansionService
 from app.domain.repositories.campaign_repository import CampaignRepository
@@ -77,18 +80,6 @@ class CampaignRegistrationService:
         if not sales_rep:
             raise ValueError(f"Unknown sales_rep_id: {sales_rep_id}")
 
-        # Create purchase order and version 1
-        purchase_order_id = await self.purchase_order_repo.create_order(
-            order_reference, order_received_on.isoformat()
-        )
-        version_1 = await self.purchase_order_repo.create_version(
-            purchase_order_id=purchase_order_id,
-            version_number=1,
-            issued_on=order_received_on.isoformat(),
-            revision_reason=None
-        )
-
-        # Create campaign
         campaign = Campaign(
             id=None,
             name=name,
@@ -98,7 +89,7 @@ class CampaignRegistrationService:
             campaign_type_id=campaign_type_id,
             sector_id=sector_id,
             sales_rep_id=sales_rep_id,
-            purchase_order_id=purchase_order_id,
+            purchase_order_id=None,
             start_date=start_date,
             end_date=end_date,
             status="active",
@@ -107,8 +98,6 @@ class CampaignRegistrationService:
         )
         campaign.validate()
 
-        # Expand periods
-        expanded_periods = self.period_service.expand(start_date, end_date)
         campaign.periods = [
             CampaignPeriod(
                 period_year=p.period_year,
@@ -117,52 +106,90 @@ class CampaignRegistrationService:
                 period_end=p.period_end,
                 status="open"
             )
-            for p in expanded_periods
+            for p in self.period_service.expand(start_date, end_date)
         ]
 
-        # Create lines
-        for line_data in lines_data:
-            dsp_id = line_data["dsp_id"]
-            channel_id = line_data["channel_id"]
-            format_id = line_data["format_id"]
+        # Every line is checked, dates and volumes included, before the first write, so a rejected
+        # registration leaves nothing behind, not even the purchase order.
+        for line_number, line_data in enumerate(lines_data, start=1):
+            await self._validate_line_references(line_data)
+            campaign.lines.append(self._build_line(line_number, line_data, campaign))
 
-            # Validate DSP
-            dsp = await self.master_repo.get_dsp(dsp_id)
-            if not dsp or not dsp.is_active:
-                raise ValueError(f"DSP {dsp_id} not found or inactive")
+        purchase_order_id = await self.purchase_order_repo.create_order(
+            order_reference, order_received_on.isoformat()
+        )
+        version_1 = await self.purchase_order_repo.create_version(
+            purchase_order_id=purchase_order_id,
+            version_number=1,
+            issued_on=order_received_on.isoformat(),
+            revision_reason=None
+        )
+        campaign.purchase_order_id = purchase_order_id
+        for line in campaign.lines:
+            line.purchase_order_version_id = version_1.id or 0
 
-            # Validate channel and format
-            channel = await self.master_repo.get_channel(channel_id)
-            if not channel:
-                raise ValueError(f"Unknown channel_id: {channel_id}")
-
-            format_obj = await self.master_repo.get_format(format_id)
-            if not format_obj:
-                raise ValueError(f"Unknown format_id: {format_id}")
-
-            # Create line for each period
-            for period in campaign.periods:
-                volume = ContractedVolume(
-                    contracted_impressions=line_data["contracted_impressions"],
-                    sale_cpm=Decimal(str(line_data["sale_cpm"]))
-                )
-
-                line = CampaignLine(
-                    id=None,
-                    campaign_period_id=period.id or 0,
-                    purchase_order_version_id=version_1.id or 0,
-                    dsp_id=dsp_id,
-                    channel_id=channel_id,
-                    format_id=format_id,
-                    scope=line_data["scope"],
-                    market_description=line_data["market_description"],
-                    volume=volume,
-                    currency="EUR"
-                )
-                campaign.lines.append(line)
-
-        # Save campaign with all periods and lines (atomic transaction)
-        # The repository updates campaign, periods, and lines with their assigned IDs
+        # Saved with all periods, lines and flights in one atomic transaction; the repository
+        # assigns their identifiers.
         await self.campaign_repo.save(campaign)
 
         return campaign
+
+    async def _validate_line_references(self, line_data: dict) -> None:
+        dsp_id = line_data["dsp_id"]
+        dsp = await self.master_repo.get_dsp(dsp_id)
+        if not dsp or not dsp.is_active:
+            raise ValueError(f"DSP {dsp_id} not found or inactive")
+
+        if not await self.master_repo.get_channel(line_data["channel_id"]):
+            raise ValueError(f"Unknown channel_id: {line_data['channel_id']}")
+
+        if not await self.master_repo.get_format(line_data["format_id"]):
+            raise ValueError(f"Unknown format_id: {line_data['format_id']}")
+
+    @staticmethod
+    def _build_line(line_number: int, line_data: dict, campaign: Campaign) -> CampaignLine:
+        """One campaign line with its dates and the flights its volume is split into."""
+        total = line_data["contracted_impressions"]
+        plan = resolve_line_windows(
+            line_data.get("start_date"), line_data.get("end_date"), campaign.start_date, campaign.end_date,
+            campaign.periods,
+        )
+        windows = plan.windows
+        monthly_volumes = line_data.get("monthly_volumes")
+        if monthly_volumes is None:
+            volumes = split_volume_by_days(total, windows)
+        else:
+            volumes = validate_explicit_volumes(
+                total,
+                windows,
+                [MonthlyVolume(v["year"], v["month"], v["volume"]) for v in monthly_volumes],
+            )
+
+        return CampaignLine(
+            id=None,
+            purchase_order_version_id=None,
+            dsp_id=line_data["dsp_id"],
+            channel_id=line_data["channel_id"],
+            format_id=line_data["format_id"],
+            scope=line_data["scope"],
+            market_description=line_data["market_description"],
+            volume=ContractedVolume(
+                contracted_impressions=total,
+                sale_cpm=Decimal(str(line_data["sale_cpm"])),
+            ),
+            currency="EUR",
+            campaign_id=None,
+            line_number=line_number,
+            start_date=plan.start_date,
+            end_date=plan.end_date,
+            flights=[
+                CampaignLineFlight(
+                    period_year=window.period_year,
+                    period_month=window.period_month,
+                    flight_start=window.flight_start,
+                    flight_end=window.flight_end,
+                    contracted_impressions=volume,
+                )
+                for window, volume in zip(windows, volumes)
+            ],
+        )

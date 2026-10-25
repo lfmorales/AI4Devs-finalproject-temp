@@ -12,7 +12,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const { session, signIn } = useAuth();
 
   if (session.status === "loading") {
-    return <p role="status">Checking your session…</p>;
+    return <p role="status" className="notice notice-info">Checking your session…</p>;
   }
 
   if (session.status === "unauthenticated") {

@@ -836,16 +836,11 @@ signIn("/")). Solo frontend/.
 Un bloque se da por terminado solo cuando pasan los tres: `npm run typecheck`, la suite de
 Vitest dos veces seguidas y `docker compose build frontend`. Pega el resultado real.
 
-**Prompt 8**
-**Herramienta** Claude Code
-**Prompt**
 
 
 ---
 
 ### Ajustes humanos de los bloques siguientes (pendientes de colocar bajo su prompt)
-
-> Estos ajustes corresponden a prompts posteriores al 7 que aún no constan arriba. Cada uno debe ir bajo el prompt de su bloque, junto al texto original y a la respuesta de Claude Code.
 
 **Formulario de alta: errores de validación en pantalla (Zod 4)**
 - **Ajuste humano:** Al enviar el formulario vacío salía el JSON en bruto de los issues de Zod 4, con los 52 tests en verde: solo lo vi en el navegador. El primer arreglo (`9be3c1b`) mapeó cada issue a su campo. El segundo (`0106edc`) traducía el error de `scope` buscando el texto «Invalid enum value» y su informe hablaba de `superRefine`. Ese texto es de Zod 3 y el proyecto usa Zod 4 (`^4.6.7`), donde el mensaje real es «Invalid option: expected one of...». Lo localicé con `grep` (`message.includes("Invalid enum value")`) contrastando con el error que veía en pantalla, y exigí que el mensaje saliera del propio esquema y no de un texto en inglés de la librería. Verifiqué en el navegador que `scope` muestra «Selecciona el ámbito».
@@ -872,3 +867,592 @@ Vitest dos veces seguidas y `docker compose build frontend`. Pega el resultado r
 - **Ajuste humano:** Para que no inventara cifras, ejecuté yo las pruebas dos veces y dejé los resultados en ficheros; el informe se escribió solo a partir de ellos. Aun así, la primera versión estaba en inglés, daba por buenos los nombres de las bases de datos sin que figuraran en los ficheros, llamaba «unitarios» a todos los tests de backend (que incluyen API contra PostgreSQL real y migraciones) y añadía «Playwright cubriendo los tres flujos de rol», que no habíamos decidido. En la corrección su resumen dijo haber eliminado «Performance y carga» y seguía en el fichero; lo detecté comparando el contenido con lo pedido y lo quité a mano.
 
 **Patrón común.** Los informes de Claude Code llegaron varias veces incompletos o recortados: daban por cerrado algo que no habían hecho (el stub de `GET /campaigns`, el arreglo del 409, el archivado con tareas abiertas) o citaban un solo test con `PASSED` en lugar de la suite. Lo detecté exigiendo la salida cruda de `pytest` dos veces, `git show --stat`, `typecheck` y `docker compose build`, y comprobando siempre en el navegador, donde aparecieron los fallos que los tests no veían (el botón de login, el JSON de Zod, el 403 mal pintado, `campaign_period_id: 0`).
+
+
+## Entrega 3 — Proyecto final
+### Change: daily-campaign-delivery-status 
+
+**Prompt 1**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame.
+
+La tarea 2.1 habla del método de resolución de identificadores «existente», pero no existe: las tareas 4.1–4.4 de la historia 1 se aplazaron. Créalo también en la interfaz del cliente DSP.
+Vamos a implementar el change daily-campaign-delivery-status, en esta rama (feature/daily-campaign-delivery-status, creada desde final-project-LFMC). Este prompt cubre solo los apartados 1, 2 y 3 de tasks.md.
+
+Antes de escribir código, lee openspec/changes/daily-campaign-delivery-status/ (proposal, specs, design y tasks), docs/base-standards.md, el readme (§3 y la historia B de §5) y el backend existente: repositorios, errors.py con los manejadores globales y require_roles.
+
+Orden: (1) esquema y migración de Alembic, con --autogenerate; test_migration_schema_sync debe seguir en verde. (2) Contrato de ingesta en el dominio: la interfaz del cliente DSP de entrega y un doble en memoria en tests/fixtures/, la regla de idempotencia en ventana (borrar y reinsertar en una transacción), el límite transaccional y la regla de autoridad del canal. (3) Ritmo (pacing) y regla de datos ausentes como funciones puras. Para cada tarea: test que falla primero, implementación mínima, tests en verde, marca en tasks.md y commit pequeño con git add de rutas concretas (nunca git add -A).
+
+Restricciones: el dominio no depende de SQLAlchemy; los errores de negocio devuelven {"code","message"} mediante manejadores globales, nunca con SQL en la respuesta; no toques los otros changes ni el frontend; no leas ni imprimas .env ni credenciales; no llames a servicios externos. Si algo del spec es ambiguo, pregunta antes de decidir. Una tarea se marca completada solo cuando su test pasa.
+
+Al terminar el bloque, ejecuta pytest dos veces seguidas con la imagen reconstruida (docker compose build backend y up -d --force-recreate backend), pega la salida cruda de ambas y git show --stat de cada commit, y dime qué tareas quedan sin marcar y por qué. Sin resumen tuyo en lugar de la salida real.
+
+**Respuesta**
+Los apartados 1, 2 y 3 están hechos salvo 1.6, que no he tocado, y 1.4 va con un matiz. La rama era la correcta. pytest pasa 144 de 144 las dos veces, con la imagen reconstruida y el backend recreado.
+
+Salida de las dos ejecuciones
+
+===== RUN 1 =====  … 144 passed, 5 warnings in 1.29s
+===== RUN 2 =====  … 144 passed, 5 warnings in 1.67s
+La salida completa de cada ejecución, con la lista de ficheros de test, está en el resultado de arriba.
+
+Commits (git show --stat completo arriba)
+
+┌──────────────────────────────────────────┬──────────┐
+│                  Commit                  │  Tareas  │
+├──────────────────────────────────────────┼──────────┤
+│ d99321b feat(db) esquema + migración     │ 1.1–1.5  │
+├──────────────────────────────────────────┼──────────┤
+│ 2390233 interfaz del cliente DSP + doble │ 2.1      │
+├──────────────────────────────────────────┼──────────┤
+│ 8f50628 reemplazo de rango               │ 2.2      │
+├──────────────────────────────────────────┼──────────┤
+│ 2604223 límite transaccional             │ 2.3, 2.4 │
+├──────────────────────────────────────────┼──────────┤
+│ e541e00 autoridad del canal              │ 2.5, 2.6 │
+├──────────────────────────────────────────┼──────────┤
+│ 6d470a2 pacing                           │ 3.1, 3.2 │
+├──────────────────────────────────────────┼──────────┤
+│ f17986e datos ausentes                   │ 3.3, 3.4 │
+└──────────────────────────────────────────┴──────────┘
+
+Tareas sin marcar en 0–3
+
+- 1.6 (carga de 1 M de filas): no la he hecho. Ya estaba aplazada en tasks.md.
+- 1.4 está marcada, pero solo comprueba que los índices existen. No he ejecutado EXPLAIN sobre un roll-up, así que no hay evidencia de que el planificador los use. Ya figuraba como parcial en tasks.md.
+- 0.1 y 0.2 siguen sin marcar. No eran de este bloque, pero la rama existe y está activa.
+
+Desviaciones y decisiones que debes revisar
+
+1. Un solo commit para el esquema. daily_deliveries tiene FK a ingestion_batches y el test de sincronización exige las tres tablas, así que partirlo no daba commits en verde. La migración se generó con --autogenerate y le añadí a mano el borrado de los enums en downgrade; upgrade → downgrade base → upgrade queda limpio y alembic check no detecta diferencias.
+2. 2.3 y 2.4 comparten commit. Primero implementé 2.3 sin transacción. Después escribí el test de 2.4, que falló, y añadí UnitOfWork. Por eso marqué 2.3 junto con 2.4.
+3. Resolución de identificadores. No existía, así que la creé en DspDeliveryClient como resolve_identifiers(campaña, line_item) -> ExternalLineKey | None. Esa firma es mía; revísala.
+4. Estados. En las excepciones usé open/resolved, no abierta/resuelta, por la norma de inglés. Para los lotes inventé running/succeeded/failed, porque el readme solo dice «status».
+5. Decisiones tuyas. La columna se llama impressions; el pacing es lineal e inclusivo, y el 10 % exacto no se marca; el desajuste de canal es igualdad de texto normalizada. Con la comparación de texto, Deal frente a Directo salta siempre como desajuste.
+6. Fixtures de test. No usé seed_master_data en los tests nuevos. Reinicia secuencias y choca con los roles que los tests de identidad confirman de verdad, así que mis builders crean sus propios maestros. Extraje rolled_back_session en tests/conftest.py.
+7. Puertos síncronos. Los repositorios existentes son async; los nuevos (DeliveryRepository, UnitOfWork) son síncronos porque la ingesta es un comando por lotes.
+
+Preguntas abiertas
+
+- Varias filas por línea y día. El grano es una fila por línea y día (restricción única). Si Adform devuelve varias filas por tamaño de banner o pantalla, hay que decidir si se agregan o se rechazan. Hoy la restricción lo rechazaría.
+- Qué es «activa» para el flag de datos ausentes. has_missing_data solo compara fechas y marca también la campaña que nunca entregó. Filtrar las campañas activas que ya deberían haber entregado queda para el endpoint de estado (6.5).
+- Cifras de las excepciones sin casar. El spec dice que se conservan, pero ingestion_exceptions no tiene columnas para ellas ni para la fecha de resolución. Harán falta cuando llegue la 6.2.
+- Mapeos de errores. No añadí nada a errors.py: no hay endpoint nuevo todavía. DeliveryOutsideRangeError y DeliveryForUnknownLineError caerían hoy en el manejador genérico (500 internal_error, sin detalle interno). Conviene mapearlos cuando llegue el endpoint de subida.
+
+No toqué otros changes ni el frontend, no leí .env, no llamé a servicios externos y usé git add con rutas concretas. La base temporal adops360_autogen que usé para generar la migración ya está borrada.
+
+
+**Ajuste humano**
+Antes de lanzarlo marqué en `tasks.md` lo aplazado (1.6, 6.6, 7.2, 8.6) y lo parcial (1.4, 4.1, 5.3), y la 0.1 con su desviación de rama: partí de `final-project-LFMC`, no de `main`. El primer intento de marcar esas tareas lo lancé por error en la carpeta principal y no en el worktree; al revisar la rama comprobé que solo había cambiado `tasks.md` y lo moví con `git stash`. La tarea 2.1 daba por existente un método de resolución de identificadores que no existía (las 4.1–4.4 de la historia 1 se aplazaron), y lo corregí en el propio prompt. Contrasté el resumen de Claude Code con la salida real de `pytest` y con el `git show --stat` de cada commit, y reconoció que la 1.4 solo comprueba que los índices existen, sin `EXPLAIN`, así que quedó como parcial.
+
+
+**Prompt 2**
+**Herramienta** Claude Code
+**Prompt**
+No cambies código. Lee openspec/changes/daily-campaign-delivery-status/specs/ y design.md y responde citando el texto exacto de cada uno: (1) cuál es el grano de daily_deliveries y si el tamaño de banner y la pantalla forman parte de la clave o son atributos; (2) qué valores puede tomar line_format y cómo se compara con el canal configurado; (3) qué debe conservar una excepción de entrega sin casar; (4) si el spec fija estados para los lotes. Si el spec no lo dice, escribe «no especificado» en lugar de deducirlo.
+
+**Respuesta**
+Cito de los ficheros tal como los leí antes en esta sesión, sin releerlos ni tocar código.
+
+(1) Grano de daily_deliveries
+
+- Spec (delivery-ingestion): «The system SHALL store delivery at the grain of one campaign line and one calendar day, holding impressions, clicks, media cost, measurable impressions and viewable impressions.»
+- Spec, escenario: «one delivery record exists for that line and date».
+- Design: «averaging ~4,600 rows a day at the line-item and day grain». El proposal.md dice «at the line-and-day grain».
+- Tamaño de banner y pantalla: no especificado. Ni los specs ni design.md los mencionan, así que no dicen si forman parte de la clave o son atributos.
+- Línea y line item: el spec habla de «campaign line» y el design de «line-item». No especifica si son lo mismo.
+- Que banner_size y screen sean columnas viene de tasks.md (1.2) y del readme, no de estos ficheros. La clave única (campaign_line_id, delivery_date) que implementé es una lectura mía del spec.
+
+(2) Valores de line_format y comparación con el canal
+
+- Valores posibles: no especificado.
+- Comparación: no especificado. El único texto es el del requisito y el escenario: «The system SHALL take the channel from the campaign line's configuration, SHALL store the DSP's reported line format only as contrast data, and SHALL flag a disagreement for review rather than reclassifying.» Y: «WHEN ingested delivery reports a line format that differs from the campaign line's configured channel». No define «differs».
+- Design: «The line_format from the DSP is stored but never read by a calculation.»
+- La igualdad de texto normalizada (mayúsculas y espacios) que implementé no sale del spec. Fue la opción que elegiste en la pregunta. El ejemplo Deal frente a Directo está en el readme, no en estos ficheros.
+
+(3) Qué conserva una excepción de entrega sin casar
+
+- Spec (ingestion-exceptions): «The system SHALL record delivery that resolves to no campaign line as an exception carrying the external key that failed to match, and SHALL NOT discard it.»
+- Escenario: «an exception is recorded naming that external key and the batch» y «the delivery figures are retained rather than dropped».
+- Resultado de la ejecución: «the run's outcome reports how many rows went unmatched».
+- Cómo se retienen las cifras (en la excepción, en otra tabla o en daily_deliveries): no especificado. Tampoco qué cifras ni qué fecha.
+
+(4) Estados de los lotes
+
+- No especificado: el spec no fija un conjunto de estados.
+- Lo que menciona: «its outcome» sin enumerarlo, y en un escenario «a batch record exists with a failed outcome». El design habla de «the last successful run». Eso implica los resultados «failed» y «successful» y nada más.
+- running y los nombres succeeded/failed que usé en el enum son míos, no del spec.
+- Lo mismo vale para open/resolved en las excepciones. El spec solo dice «resolves», «marked resolved» y «outstanding queue», sin valores de estado.
+
+**Ajuste humano**
+Claude Code contestó «no especificado» a casi todas las preguntas, citando fichero y requisito, en lugar de deducir. Eso me permitió decidir yo lo que el spec no fijaba (qué es una línea «activa», cuándo se marca «sin datos», los estados de lote, los tipos de excepción) y registrarlo en spec y design **antes** del código, separando lo que venía del spec de lo que era decisión mía. Listó además nueve tensiones entre spec, design y tareas (por ejemplo, «D-1» frente a «D-7 a D-1», o el solape entre «línea» y «line item»), que resolví una a una, y dos comportamientos de su código que no salían del spec: una campaña sin entregas marcaba «sin datos», y `row_count` contaba registros almacenados y no filas leídas.
+
+
+**Prompt 3**
+**Herramienta** Claude Code
+**Prompt**
+
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame.
+
+Objetivo: apartado 4 de tasks.md (4.1 a 4.6). No toques los apartados 5 a 8 ni el frontend.
+
+Contrato verificado de la API de Adform (lo he comprobado con llamadas reales; úsalo tal cual y no lo deduzcas de otras fuentes):
+
+Token: POST https://id.adform.com/sts/connect/token, flujo client credentials, autenticación Basic con ADFORM_CLIENT_ID y ADFORM_CLIENT_SECRET (variables de entorno), ámbitos https://api.adform.com/scope/buyer.stats y https://api.adform.com/scope/eapi.
+Datos: POST https://api.adform.com/v1/buyer/stats/data, cuerpo {"dimensions": ["date","campaignID","lineItemID","campaignCurrency"], "metrics": ["impressions","clicks","cost","measurableImpressions","viewImpressionsIAB"], "filter": {"date": {"from":"AAAA-MM-DD","to":"AAAA-MM-DD"}}, "paging": {"limit": 0}}. Responde 202 con la cabecera operation-location (ruta relativa).
+GET de esa ruta devuelve {"id","status","createdAt","lastActionAt","location"}. El estado pasa de running a succeeded; no conozco el nombre del estado de fallo, así que cualquier estado distinto de running y succeeded es un error. No leas location hasta que el estado sea succeeded.
+GET de location devuelve {"reportData": {"columnHeaders": [...], "columns": [...], "rows": [[...]]}}. Lee cada columna por el nombre de columnHeaders, nunca por posición.
+Tipos: date es texto AAAA-MM-DDT00:00:00 (usa solo la fecha); campaignID y lineItemID son enteros; los contadores son enteros; cost es entero o decimal con hasta 6 decimales, así que interpreta el JSON con parse_float=Decimal; la moneda es EUR o -.
+Las filas con lineItemID menor o igual que 0 y moneda - son entrega sin línea atribuida: ignóralas, cuéntalas en el lote como ignoradas y no las conviertas en excepciones. Cualquier otra moneda distinta de EUR es un error del lote, no una conversión.
+Cuota: 10 peticiones por minuto y 500 al día, compartidas con toda la agencia. Una ingesta hace una sola petición para todas las líneas mapeadas. Sondea el estado con un intervalo de al menos 3 segundos y un máximo de intentos configurable.
+
+Orden de trabajo, test primero, un commit por tarea y git add de rutas concretas:
+
+Comprueba la columna de coste de daily_deliveries. Si su escala es menor que 6, amplíala con una migración (Numeric(18,6)), con un test que guarde y lea un valor de 6 decimales sin perder ninguno.
+4.3, 4.4 y 4.5: el servicio de ingesta y el registro de lotes, primero con el doble en memoria. Cubre la normalización a cadena de los identificadores (un int de la API debe casar con el texto del mapeo), las filas ignoradas y las líneas sin mapeo.
+4.1: el cliente real de Adform en infrastructure/dsp/ tras la interfaz de la 2.1. Los tests usan HTTP simulado con respuestas sintéticas construidas con el formato de arriba, sin cifras ni nombres reales, y cubren: running repetido y luego succeeded, un estado inesperado, un 401, un tiempo de espera, cost con 6 decimales, y filas ignoradas.
+4.2: un test que asegure que ni el secreto ni el token aparecen en los registros ni en un mensaje de error, incluso cuando falla el token.
+4.6: crear el mapeo de una línea a una pareja (external_campaign_id, external_line_item_id), validándola contra el DSP con resolve_identifiers. El resultado tiene tres casos distinguibles: encontrada, desconocida e inalcanzable. Con la API de estadísticas, una pareja se da por encontrada si aparece en alguna fila de los últimos 30 días; una línea sin entrega en ese periodo es indistinguible de una inexistente, y debes dejar esa limitación documentada en el código. Solo se marca validated_at cuando se encuentra.
+
+Restricciones: no llames a ningún servicio externo ni leas .env; las credenciales llegan solo por variables de entorno; los errores de negocio devuelven {"code","message"} por manejadores globales en errors.py, sin detalles internos. No decidas si dos mapeos pueden apuntar a la misma pareja externa, ni cómo se combinan dos líneas de Adform mapeadas a una sola línea de AdOps360: el spec no lo dice, y quiero decidirlo yo. Pregúntame.
+
+Al terminar, reconstruye (docker compose build backend y up -d --force-recreate backend) y pega la salida cruda de pytest dos veces seguidas, el git show --stat de cada commit y qué tareas quedan sin marcar. Sin resumen tuyo en lugar de la salida real.
+
+
+**Ajuste humano**
+(1) Claude Code no pudo abrir la documentación oficial de Adform (502 y 403) y lo dijo, en lugar de inventarla. El contrato de este prompt salió de sondas de solo lectura que ejecuté yo contra mi cuenta: autenticación y ámbitos, metadatos de dimensiones y métricas, el flujo asíncrono de la petición y los tipos y formatos de la respuesta. Las sondas destaparon cosas que un resumen no traía: el coste llega con hasta 6 decimales (hay que leerlo como `Decimal`, nunca como `float`), 35 de 142 filas no tienen línea atribuida, las celdas son números y no texto, y la cuota de 500 peticiones diarias es de toda la agencia, así que la ingesta hace una sola petición. (2) No dejé que Claude Code llamara a Adform ni leyera `.env`: los tests usan HTTP simulado y la verificación real la hice yo con un script de humo que solo imprime estados y recuentos. (3) Claude Code editó `uv.lock` a mano porque `uv lock` no tenía red; lo validé con `uv lock --check` y con las reconstrucciones de la imagen. (4) Commiteó un test en rojo en la 1.8 porque filtró la salida con `tail -1` y no vio la línea de resultado; lo reconoció y lo corrigió, y desde entonces exijo la línea de resultado completa.
+
+
+**Prompt 4**
+**Herramienta** Claude Code
+**Prompt**
+
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame. Si git status --short no está vacío, para.
+
+Objetivo: registrar las decisiones de abajo en los artefactos y luego implementar la persistencia y el flujo de las excepciones (tareas 6.1 a 6.4). No toques el apartado 5, el endpoint de estado ni el frontend.
+
+Paso 0, sin código. Actualiza spec, design y tasks con estas decisiones y haz un commit docs(openspec): ... antes de escribir código:
+
+Tipos de excepción: unmatched_delivery, missing_delivery y channel_mismatch. Este último queda definido pero no se genera todavía, porque ni la API de estadísticas ni la subida traen line_format; anótalo en el design.
+Una excepción unmatched_delivery es única por (tipo, DSP, pareja externa), sea cual sea su estado, y guarda first_date y last_date. Sus cifras retenidas van en una tabla hija ingestion_exception_deliveries con (exception_id, fecha, impresiones, clics, coste Numeric(18,6), medibles, visibles) y restricción única (exception_id, fecha). Repetir la ventana reemplaza las filas de esas fechas, sin duplicar. Una entrega nueva de una pareja cuya excepción ya está resuelta se añade a ella y no la reabre. Una excepción missing_delivery es única por (línea, periodo). Todas tienen resolved_at, resolved_by (FK a users) y una nota opcional.
+Resolver es solo marcar. No reprocesa; la entrega retenida sigue legible y no pasa a daily_deliveries.
+La ventana D-7 a D-1 prevalece sobre «D-1» del proposal. El grano es la línea de campaña y día, y varios line items se suman por día.
+Una fila sin línea atribuida se ignora y no es excepción: añade ese matiz al spec de excepciones. Una línea con mapeo sin validar no se ingiere y se cuenta como omitida: añade el escenario.
+La API devuelve filas con cero impresiones para campañas activas (en una cuenta real, 152 de 279 en dos días). Por eso, una fila sin casar con impresiones y coste ambos iguales a cero no es excepción: se ignora y se cuenta en el lote (columna zero_unmatched_count). Solo la entrega sin casar con impresiones o coste distintos de cero genera una excepción unmatched_delivery.
+Ausencia: una línea activa cuya suma de impresiones en un periodo ya terminado es cero, o que no tiene ninguna fila en él, evaluada cuando el último día del periodo es anterior o igual a D-1.
+El aviso de datos ausentes sigue definido como «la última entrega es anterior a D-1»; una fila con cero impresiones cuenta como dato recibido. No se evalúa si D-1 es anterior al inicio de la campaña; si D-1 es igual o posterior y no hay ninguna entrega, se marca. La campaña parada la cubre el aviso de desviación de ritmo; documenta en el spec que los dos avisos son distintos.
+Estados de lote: running, succeeded, failed. row_count son las filas leídas; las ignoradas van en ignored_count.
+El plan de migración del design se actualiza con las migraciones reales y el rollback de la restricción de dsp_mappings.
+En tasks.md, la nota de la 4.1 pasa a «verificado contra la cuenta real de Adform, solo lectura, con adform_smoke el 2026-10-24: 142 filas, operación succeeded».
+
+Paso 1, migración (con --autogenerate, y test_migration_schema_sync en verde): las restricciones únicas y la tabla hija del punto 2, las columnas first_date, last_date, resolved_at, resolved_by y la nota, y zero_unmatched_count y ignored_count en los lotes si no existen. Pruebas: dos ejecuciones seguidas de la misma ventana no crean una segunda excepción ni duplican días; una pareja resuelta que vuelve a entregar no se reabre, pero su entrega nueva queda registrada.
+
+Paso 2, 6.1 y 6.2: el servicio de ingesta guarda las excepciones de entrega sin casar, por las dos rutas, con las cifras retenidas, y sigue almacenando las filas que sí casan. Cubre el caso de las filas sin casar con ceros.
+
+Paso 3, 6.3 y 6.4: detección de ausencia como método del servicio, probado y sin conectar a ningún planificador, con tests para los dos casos de ausencia (sin ninguna fila, y con filas de ceros). Dos endpoints bajo el rol operations: GET /api/ingestion-exceptions?status=open|resolved y POST /api/ingestion-exceptions/{id}/resolve con una nota opcional. Errores {"code","message"} mediante manejadores globales: 404 exception_not_found y 409 exception_already_resolved.
+
+Paso 4, ritmo: comprueba que hay un test de ritmo para una línea cuyo periodo todavía no ha empezado, o ya ha terminado, con cero impresiones: no debe marcar desviación. Si no existe, añádelo (3.1 y 3.2).
+
+Restricciones: test primero, un commit por tarea y git add de rutas concretas; los endpoints se declaran def normales, no async, porque el servicio es síncrono; no leas .env; no llames a servicios externos; si algo del spec es ambiguo, pregunta antes de decidir. Al terminar, reconstruye (docker compose build backend y up -d --force-recreate backend) y pega la salida cruda de pytest con la línea de resultado completa dos veces seguidas, el git show --stat de cada commit y qué tareas quedan sin marcar. Sin resumen tuyo en lugar de la salida real.
+
+**Respuesta**
+
+Las tareas 6.3 y 6.4 están hechas, y también el paso 4, que quedó como la 3.5 (ver abajo). El pytest por defecto da 399 pasados y 1 deselected en las dos ejecuciones, con la imagen reconstruida. La ejecución con -m slow pasa su único test en 23,66 s. La salida cruda está arriba, junto con el git show --stat de los cuatro commits de este tramo y el commit docs. Los cuatro commits de este tramo son f3dc224 (docs), 2fefdd6 (3.5), 8e96021 (6.3) y 5be3ae6 (6.4). El árbol de trabajo queda limpio.
+
+Sin marcar en los apartados 0 a 6
+
+- 0.1, 0.2 y 1.6: no eran de este bloque.
+- 5.1 a 5.5: apartado 5, no lo toqué.
+- 6.5: endpoint de estado. En el texto añadí que no lista periodos terminadosni campañas no iniciadas.
+- 6.6: restricción por rol de finance. El coste retenido se guarda y no seexpone hasta entonces. Está anotado en el design.
+- 6.7: los 401/403 de todos los endpoints del change. Los de los endpoints deexcepciones y mapeos ya están probados dentro de 6.4 y 4.6.
+
+Decisiones tuyas, registradas antes del código
+
+- Ausencia (6.3). Solo líneas con mapeo validado, con el periodo terminado entre D-7 y D-1 y el mapeo validado en una fecha igual o anterior a suúltimo día. La fecha se compara como día, no como hora.
+- GET de excepciones (6.4). Primera y última fecha, número de días, y totalesde impresiones y clics, sin coste.
+- Ritmo. La función se queda como estaba. La tarea 3.5 documenta con un testque un periodo terminado con cero entregado marca under_delivering. El test del periodo no iniciado ya existía.
+- Separación de responsabilidades. Función de ritmo, vista de estado y ausencia quedan escritas en spec y design.
+
+Qué decidí yo
+
+- Estado de la campaña. La regla de ausencia no filtra por estado de lacampaña. El spec decía «línea activa» sin definirla, y filtrar por active dejaría sin evaluar el último periodo de una campaña ya cerrada. Siprefieres exigir active, cambia una condición.
+- Dónde está la detección. detect_missing_delivery es un método del serviciode ingesta y recibe el id del lote. Sigue sin conectarse a ningún planificador, como pediste.
+- Orden del GET. Si no se pasa status, devuelve todas, ordenadas por id ascendente. El spec no fija orden por defecto.
+- Respuesta del POST. resolve responde 200 con la excepción completa. El cuerpo con la nota es opcional.
+- Concurrencia. La resolución es un UPDATE condicionado a que siga abierta. Si dos peticiones resuelven la misma a la vez, la segunda recibe el 409 y laprimera resolución no se pisa.
+
+Riesgos
+
+- Sin conexión. La ausencia y la ingesta con excepciones solo existen como servicio y no hay nada que las ejecute todavía. Eso es la 7.1.
+- Primera pasada de ausencia. Evalúa solo los periodos que terminaron en la ventana. Un periodo terminado hace un mes y sin entrega no se detecta desdeahora, aunque esté dentro de lo que el mapeo cubre. Es lo que fijaste; si quieres una pasada inicial sobre histórico, es trabajo aparte.
+- Auditoría del cambio de row_count. Cualquier consumidor externo que leyera row_count como «filas almacenadas» verá otra cosa. Por ahora no hay ningunoen el código.
+
+**Ajuste humano**
+Los datos reales cambiaron el diseño. (1) Con un script de comparación vi que la API devuelve filas con cero impresiones para campañas activas (152 de 279 en dos días, y 40 de las 107 con línea atribuida). Eso obligó a tres decisiones antes de escribir código: una fila sin casar con impresiones y coste a cero no es excepción, la ausencia se mide por la suma de impresiones del flight y no por «no hay filas», y el aviso «sin datos» sigue siendo un indicador de salud de la ingesta (la campaña parada la cubre el ritmo). (2) Con un día de datos calculé que identificar la excepción por (tipo, DSP, pareja externa, fecha) llenaría la cola: unas 450 la primera noche y unas 65 más cada una. La identifiqué por pareja y guardé las cifras por día en una tabla hija; la primera ingesta real lo confirmó: 457 parejas-día quedaron en 84 filas. (3) Claude Code se paró a preguntar cuatro cosas que no salían del spec (qué líneas evalúa la ausencia, si el GET de la cola devuelve coste, cómo trata el ritmo un periodo terminado y cómo nombrar una columna que ya existía). Las contesté yo y retiré una instrucción mía, el test de «no marca» sobre la función de ritmo, porque mezclaba el cálculo con qué filas muestra la vista de estado. (4) Comprobé en el esquema real que los índices únicos no llevan la fecha. Un `grep` mío ocultó una columna y creí que faltaba `purchase_order_version_id`; Claude Code tenía razón al retirar esa limitación.
+
+
+**Prompt 5**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame. Si git status --short no está vacío, para.
+
+Objetivo: tareas 6.5 y 6.7, más el orden de la cola de excepciones. No toques el apartado 5 ni el frontend.
+
+Paso 0, sin código. Antes de decidir nada, comprueba cómo se relaciona hoy campaign_lines.contracted_impressions con campaign_periods: ¿el volumen es el total de la línea para toda la campaña o hay un reparto por periodo? Si no está repartido, no inventes un reparto: dime qué has encontrado y qué opciones ves, y espera mi respuesta antes de seguir.
+
+Decisiones, a registrar en spec y design en un commit docs(openspec): ... antes de escribir código:
+
+GET /api/campaign-status, roles operations y business, declarado como def. Una fila por línea de campaña de una campaña active con D-1 dentro de sus fechas. Los periodos terminados y las campañas no iniciadas no aparecen.
+Cada fila lleva: contratado, entregado hasta D-1, ratio, y el ritmo (esperado a la fecha, desviación y días restantes) con la función pura de la 3.2. El pacing_flag es por línea. El missing_data_flag se calcula por campaña (la última entrega de cualquiera de sus líneas es anterior a D-1; sin ninguna entrega se marca si D-1 es posterior o igual al inicio) y se replica en cada fila de la campaña. Una fila con cero impresiones cuenta como dato recibido.
+La agregación se hace en la base de datos, en una consulta, sin traer filas de entrega a la aplicación.
+La respuesta no contiene ningún campo de coste (la 6.6 está aplazada), y un test lo afirma recorriendo los nombres de todos los campos.
+Orden por defecto: filas con algún aviso primero, luego agencia, campaña y línea.
+La cola de excepciones (6.4) pasa a ordenarse por last_date descendente y después por id descendente.
+
+Pruebas. Cubre: una campaña terminada y otra no iniciada no aparecen; una línea con cero impresiones en un periodo en curso marca ritmo; una campaña cuya última entrega es anterior a D-1 marca datos ausentes; una con una fila de ceros en D-1 no los marca; contratado y entregado son campos distintos. Y para la 6.7: una prueba parametrizada que recorra todas las rutas de los routers de este change (mapeos, excepciones y estado) y afirme 401 sin token y 403 sin el rol operations, para que una ruta nueva sin protección haga fallar la suite.
+
+Restricciones: test primero, un commit por tarea y git add de rutas concretas; errores {"code","message"} por manejadores globales; no leas .env; no llames a servicios externos; si algo del spec es ambiguo, pregunta antes de decidir. Al terminar, reconstruye y pega la salida cruda de pytest con la línea de resultado completa dos veces, el git show --stat de todos los commits del bloque (no solo los últimos), y qué tareas quedan sin marcar. Sin resumen tuyo.
+
+**Respuesta**
+Me detengo antes de tocar nada, por dos motivos.
+
+1. El árbol de trabajo no está limpio. Estoy en feature/daily-campaign-delivery-status, pero git status --short muestra  M prompts.md. Tu contrato dice que en ese caso pare. No sé si ese cambio es tuyo y quieres conservarlo, y no lo voy a incluir en ningún commit. Dime si lo commiteas, lo descartas o me autorizas a seguir con él ahí.
+
+2. El objetivo no cuadra con el estado de tasks.md.
+- 6.5 y 6.7 ya están marcadas [x]: GET /campaign-status y el test parametrizado de 401/403 sobre las rutas registradas.
+- El orden de la cola de excepciones es la 6.9, también [x]. Ya existen sus tests (test_the_queue_is_ordered_by_last_date_then_id_both_descending y el de las excepciones sin last_date).
+- 6.6 es lo único abierto del apartado 6, y está aplazada a propósito.
+
+Además, la primera frase del mensaje, «Búscame tu respuesta a», parece un fragmento pegado a medias, y no sé a qué respuesta mía se refiere.
+
+Dime cuál de estas cosas quieres:
+- a) Una verificación de que 6.5, 6.7 y 6.9 se cumplen de verdad, con la salida real de los tests y sin cambiar código.
+- b) Reabrir alguna de las tres porque falta un escenario o un campo. Dime cuál y qué falta.
+- c) Otra cosa que se perdió en el mensaje.
+
+Cuando lo aclares, no toco el apartado 5 ni el frontend.
+
+**Ajuste humano**
+(1) El paso 0 de este prompt, que pedía investigar cómo se reparte el volumen contratado entre periodos, hizo aflorar un fallo del registro que llevaba días en los datos: una línea de un pedido de varios meses se guardaba una vez por periodo, con el volumen completo, y todas colgaban del primero (un `break` en el repositorio). La pista era la campaña de desarrollo con dos periodos y las dos líneas en el primero, que la primera semana di por «coherente». (2) Al explicar el hallazgo señalé, desde el negocio, que el modelo estaba al revés: una línea puede abarcar varios meses y los periodos (flights) cuelgan de la línea, no al contrario. El primer arreglo que se propuso, copiar la línea por mes y buscar la «hermana» al ingerir, era un parche sobre ese error y lo retiré. (3) La prueba de acceso la pedí construida a partir de las rutas registradas en la aplicación, no de una lista; Claude Code comprobó que muerde (quitó la protección de una ruta y fallaron sus tres tests) y detectó que esta versión de FastAPI envuelve los routers incluidos, así que añadió un test que cruza las rutas con el OpenAPI.
+
+
+
+**Prompt 6**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame. Si git status --short no está vacío, para. Solo frontend. No toques el backend.
+
+Objetivo: tareas 8.1 a 8.5 de tasks.md (la 8.6 sigue aplazada). Obtén los esquemas de GET /api/campaign-status, GET /api/ingestion-exceptions y POST /api/ingestion-exceptions/{id}/resolve del OpenAPI real y úsalos como fuente de verdad; no inventes campos.
+
+Comportamiento, a registrar en tasks.md antes del código:
+
+Dos páginas dentro del layout autenticado, con enlaces en una navegación (campañas, estado, excepciones) y el botón de cerrar sesión existente. El estado lo ven operations y business; las excepciones, operations. Un 403 del backend lleva a la pantalla de acceso denegado y un 401 a la de sesión caducada, con los componentes y el cliente que ya existen. La navegación no muestra enlaces a páginas que el usuario no puede ver, pero no decodifiques roles en el navegador: el 403 es la fuente de verdad.
+Estado de campañas. Una fila por flight en curso: campaña, agencia, línea, periodo y ventana, contratado, entregado, ratio, ritmo (esperado, desviación y días restantes) y los dos avisos. Los avisos se muestran con texto («Sin datos recibidos», «Desviación de ritmo»), no solo con color. Orden por defecto el del servidor, con ordenación en cliente por periodo y por agencia. Los estados de carga, vacío («No hay campañas en curso») y error son distintos entre sí. El ratio y la desviación se muestran como los entrega la API, con formato de porcentaje, sin recalcular nada en el navegador.
+Cola de excepciones. Pestañas «Abiertas» y «Resueltas». Cada fila muestra tipo, DSP, pareja externa, primera y última fecha, días, impresiones y clics, y nunca coste. «Resolver» pide una nota opcional y confirma; la fila sale de «Abiertas» sin recargar. exception_already_resolved y exception_not_found se muestran en español. Un estado vacío distinto del de carga.
+Todos los campos de formulario, botones y tablas nuevos llevan etiqueta accesible (htmlFor, aria-label o encabezados de tabla), para que Playwright los localice por rol y etiqueta.
+
+Código, tests primero, un commit por tarea: el cliente tipado de estado y excepciones en lib/api (ningún componente llama a fetch); la tabla de estado; el estado vacío frente al de carga; la cola con su resolución; la navegación y las guardas de rol. Los tests usan el cliente HTTP real con fetch simulado, no un ApiError de mentira, y cubren: ambos avisos, contratado y entregado como campos distintos, la ordenación, vacío frente a carga y error, el 401, el 403 para un usuario sin rol en cada página, y el flujo de resolver (éxito, 409 y 404).
+
+Restricciones: sin credenciales; sin console.log; commits pequeños con git add de rutas concretas; si algo es ambiguo, pregunta. Un bloque se da por terminado solo cuando pasan npm run typecheck, vitest dos veces seguidas con la línea de resultado completa y docker compose build frontend. Pega la salida real, el git show --stat de todos los commits y qué comprobar a mano.
+
+**Respuesta**
+Las páginas de estado y de excepciones, el cliente tipado y la navegación están hechos. Las tareas 8.1 a 8.5 quedan marcadas, y añadí la 8.7 para la navegación. Por el camino cometí un error en tasks.md y lo corregí con un commit propio.
+
+El error de tasks.md
+
+- Qué pasó: para marcar tareas usé un script que vacía el archivo antes de leerlo. Desde bae54d4 el archivo quedó en 0 bytes. No lo vi hasta el git show --stat final.
+- Corrección: restauré la última versión íntegra (ca85391, 174 líneas) y marqué 8.4, 8.5 y 8.7 en d30d9f3. El diff frente a ca85391 son solo esas tres marcas. No reescribí historia, así que bae54d4, 17d3752 y 204674c conservan ese estado intermedio en sus diffs.
+- Un commit ajeno: ef255e1 (prompts.md) apareció entre los míos. No es mío y no lo toqué.
+
+Verificación
+
+> tsc --noEmit            (sin errores)
+
+Test Files  27 passed (27)
+     Tests  189 passed (189)
+
+Test Files  27 passed (27)
+     Tests  189 passed (189)
+
+Image adops360-daily-status-frontend Built
+- Alcance: los 189 tests incluyen los 138 de antes. No modifiqué ninguno de ellos. No hay console. en app, features ni lib. El backend no se tocó.
+- Tipos: los saqué del OpenAPI real (create_app().openapi() en el contenedor) y no hay campo de coste.
+
+git show --stat
+
+08c5301 docs(openspec): specify the status page, the exception queue and the navigation
+  tasks.md | 11 ++++++-----
+df6d13a feat(frontend): add typed API calls for the daily status and the exception queue
+  lib/api/exceptions.ts 40; lib/api/status.ts 48; status-and-exceptions.test.ts 164; tasks.md 2   (4 files, 253+/1-)
+ca85391 feat(frontend): add the daily status page with flags, percentages and client sorting
+  status/page.tsx 24; StatusTable.tsx 78; format.ts 17; sorting.ts 29; useApiCall.ts 57
+  tests/helpers/api-pages.tsx 67; status-page.test.tsx 196; tasks.md 4   (8 files, 470+/2-)
+bae54d4 feat(frontend): tell the loading, empty and error states of the status page apart
+  status/page.tsx 12; status-states.test.tsx 73; tasks.md 174 --- (vaciado por error)   (3 files, 84+/175-)
+17d3752 feat(frontend): add the exception queue with its resolution flow
+  exceptions/page.tsx 45; ExceptionList.tsx 122; ResolveDialog.tsx 30; labels.ts 32; exceptions-page.test.tsx 271   (5 files, 500+)
+204674c feat(frontend): add the navigation, hiding the links the backend refused with a 403
+  campaigns/page.tsx 10; exceptions/page.tsx 2; layout.tsx 37; status/page.tsx 2
+  lib/auth/ForbiddenPages.tsx 33; navigation.test.tsx 124   (6 files, 199+/9-)
+d30d9f3 docs(openspec): restore tasks.md emptied by mistake and mark 8.4, 8.5 and 8.7
+  tasks.md | 174 +   (1 file)
+
+Decisiones que conviene que revises
+
+- Navegación sin decodificar roles: como pides que el 403 sea la fuente de verdad, muestra los tres enlaces hasta que una página recibe un 403 y entonces oculta solo el suyo. Un 401 no oculta nada. Se olvida al recargar, y un usuario sin rol ve el enlace hasta que entra una vez. Lo dejé así por ambigüedad en tu enunciado; si prefieres otra cosa, dímelo.
+- Botón de cerrar sesión: lo moví de la página de campañas al layout con el mismo comportamiento que tenía (removeUser). Eso deja la sesión como «caducada» en vez de «cerrada». Puede ser un fallo previo: el signOut del contexto sí hace el cierre explícito.
+- DSP: la API solo da dsp_id, así que se muestra «DSP 1». Para el nombre haría falta cargar /masters/dsps. En missing_delivery la pareja externa no existe, y muestro «Línea X, periodo Y».
+- Resolver: si el servidor responde 409 o 404, la fila sale de «Abiertas» y se muestra el mensaje en español. Con otro error, la fila se queda y sale un mensaje genérico.
+- Pestañas: al cambiar de pestaña se recarga esa lista.
+- Número de cuatro cifras: es-ES no agrupa los miles, así que 3100 se ve «3100» y 31000 «31.000».
+- Tests y 8.2/8.3: esos dos van en un solo commit, con los tests escritos antes y en rojo. En 8.4 vi en rojo solo vacío y error; «cargando» ya pasaba.
+
+A mano en el navegador
+
+1. La barra tiene Campañas, Estado, Excepciones y «Cerrar sesión», una sola vez en todas las páginas.
+2. /status con un usuario operations o business:
+   - Hay una fila por flight, y contratado y entregado salen en columnas distintas.
+   - Ratio y desviación salen en porcentaje, con «—» si vienen nulos.
+   - «Sin datos recibidos» y «Desviación de ritmo» salen como texto.
+   - Los botones «Periodo» y «Agencia» ordenan ascendente, descendente y vuelven al orden del servidor.
+3. /status sin campañas en curso muestra «No hay campañas en curso». Con el backend parado muestra el error, y durante la carga «Cargando estado…».
+4. /exceptions con operations:
+   - Las pestañas «Abiertas» y «Resueltas» cambian de lista, y la resuelta muestra su nota.
+   - «Resolver» pide la nota y un botón de confirmar. Al confirmar, la fila sale sin recargar.
+   - Resolver la misma excepción desde dos pestañas del navegador debe dar «ya estaba resuelta».
+5. Con un usuario business sin operations, entrar en /exceptions lleva a «Acceso denegado» y el enlace desaparece. /status sigue funcionando.
+6. Con la sesión caducada, cualquiera de las páginas lleva a «Sesión caducada».
+7. En la pestaña de red, los endpoints son GET /api/campaign-status, GET /api/ingestion-exceptions?status=… y POST /api/ingestion-exceptions/{id}/resolve. Ninguna respuesta lleva campo de coste.
+
+Siguen abiertas la 8.6 (aplazada) y todo lo posterior a la sección 8.
+
+**Ajuste humano**
+El botón de Cerrar Sesión llevaba a la pantalla de sesión caducada. Claude lo marcaba como posible regresión y hubo que corregirlo, pues fallaba antes.
+
+
+
+
+----
+**Prompt 7**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame. Si git status --short no está vacío, para.
+
+Objetivo: imágenes y composición de producción, verificables en local. No toques la lógica de la aplicación.
+
+Decisiones, a registrar en design.md y tasks.md antes del código:
+
+Backend: imagen sin dependencias de desarrollo (uv sync --frozen --no-dev), sin tests/ y sin scripts/seed_dev_data.py, con usuario no root. Debe conservar scripts/run_ingestion.py y las migraciones. Las migraciones se aplican con un paso explícito (alembic upgrade head), nunca al arrancar el contenedor.
+Primer usuario sin datos de prueba: un script scripts/grant_roles.py, que recibe el email y los roles por argumentos, crea el usuario si no existe y le asigna los roles, sin leer ni imprimir nada más. El seed de desarrollo no se incluye en la imagen de producción.
+Frontend: imagen de producción con las variables NEXT_PUBLIC_* y COGNITO_DOMAIN pasadas como argumentos de construcción, con la URL pública del servidor.
+docker-compose.prod.yml: sin puertos expuestos salvo los de nginx, política de reinicio, comprobaciones de salud, rotación de logs, env_file: .env y el volumen nombrado de PostgreSQL.
+nginx de producción: el bloque 80 redirige a HTTPS y deja libre /.well-known/acme-challenge/ para Certbot; el bloque 443 usa certificados montados desde un volumen, con server_name como variable. Ningún certificado ni clave se versiona.
+Guía docs/deploy.md con los pasos que no se pueden ejecutar aquí: instancia, grupo de seguridad, DNS, Certbot, .env con chmod 600, y los URL de callback y de cierre de sesión de Cognito en HTTPS.
+
+Verificación en local, test primero cuando sea posible: un script scripts/verify_prod_images.sh que construya las imágenes, levante la composición de producción con una base temporal y un certificado autofirmado generado en el momento, y compruebe: /api/health responde 200 por HTTPS; la imagen de backend no contiene pytest, tests/ ni seed_dev_data.py pero sí run_ingestion.py; el contenedor no corre como root; la base de datos no es accesible desde fuera; y alembic upgrade head se aplica como paso aparte. Debe terminar con una línea OK o FALLO y el motivo.
+
+Restricciones: sin credenciales, claves ni certificados en el repositorio (añade lo que haga falta a .gitignore y comprueba que no queda nada versionado); no leas .env; commits pequeños con git add de rutas concretas; si algo es ambiguo, pregunta. Al terminar, ejecuta el script de verificación y pega su salida cruda, la de pytest y vitest (dos veces, con la línea de resultado completa) y el git show --stat de todos los commits.
+
+
+
+----
+**Prompt 8**
+**Herramienta** Claude Code
+**Prompt**
+
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame. Si git status --short no está vacío, para. No toques el frontend.
+
+Objetivo: la base de la 1a en el backend: un catálogo de líneas de Adform que rellena la ingesta, y vincular y desvincular. Antes de escribir nada, lee el cliente de Adform, delivery_ingestion_service, dsp_mapping_service, ingestion_exception_service, los esquemas de mapeos y excepciones y adform_smoke.py, y dime: dónde se construye la petición a Adform y qué columnas lee el servicio, y si ya existe algún endpoint que liste líneas de campaña sin mapeo. Si algo no está claro, pregunta.
+
+Decisiones, a registrar en spec, design y tasks (apartado nuevo 9A) en un commit docs(openspec): ... antes del código:
+
+La petición nocturna pide 8 dimensiones, el tope de la API: date, campaignID, campaign, lineItemID, lineItem, lineItemStartDate, lineItemEndDate y campaignCurrency, con las mismas cinco métricas. El cliente lee por nombre de cabecera, las columnas nuevas no cambian el grano (una fila por fecha, campaña y línea) y las fechas llegan como AAAA-MM-DDTHH:MM:SS: se toma solo la fecha. Sigue siendo una sola petición.
+Tabla dsp_catalog_lines (migración con --autogenerate, test_migration_schema_sync en verde): dsp_id, external_campaign_id y external_line_item_id (texto), campaign_name, line_item_name, line_start_date, line_end_date, first_seen_date, last_seen_date y last_impressions_date (nulable: la última fecha vista con impresiones mayores que cero). Única por (DSP, pareja). La ingesta la actualiza con todas las filas atribuidas (lineItemID mayor que 0 y moneda EUR) de la ventana, estén mapeadas o no y sean de ceros o no, en la misma transacción que el lote: si el lote falla, el catálogo no cambia. Las filas sin línea atribuida no entran.
+GET /api/dsp-catalog, rol operations, def: filtros dsp_id, q (texto en los nombres, sin distinguir mayúsculas), mapped (verdadero, falso o ausente) y active_since (fecha); paginado (50 por defecto, 200 como máximo). Cada elemento lleva nombres, pareja, fechas, last_impressions_date y mapped_line_id si existe mapeo. Sin coste.
+GET /api/campaign-lines/unmapped, rol operations: líneas de AdOps360 sin mapeo, con id, nombre de campaña, número de línea, fechas y DSP.
+POST /api/ingestion-exceptions/{id}/link con {"campaign_line_id": N}: en una sola transacción, crea el mapeo con la pareja de esa excepción y la resuelve con la nota automática «linked to line N». El mapeo queda validado porque la pareja está en el catálogo (no se pregunta a Adform). Errores {"code","message"} por manejadores globales: 404 exception_not_found y line_not_found; 409 exception_already_resolved, mapping_pair_taken y exception_not_linkable (solo vale para unmatched_delivery). La entrega retenida no pasa a daily_deliveries: la ventana de siete días la traerá.
+DELETE /api/campaign-lines/{id}/dsp-mappings: si la línea tiene exactamente un mapeo, lo borra junto con la entrega ingerida de esa línea (solo puede venir de él), en una transacción, y devuelve cuántos días de entrega retira; con varios, 409 ambiguous_mapping; sin ninguno, 404. Documenta en el design que reabrir la excepción queda fuera: la entrega reaparecerá como «sin casar» en la siguiente ingesta.
+La respuesta del POST de mapeos incluye, si la pareja está en el catálogo, last_impressions_date (campo nuevo opcional, sin romper el contrato actual), para detectar parejas que existen pero no entregan.
+Las respuestas de la cola de excepciones incluyen campaign_name y line_item_name, nulables, tomados del catálogo. Sin coste.
+Todo bajo operations, y las rutas nuevas quedan cubiertas por el test de protección de rutas, que se construye a partir de las registradas.
+
+Pruebas, test primero, un commit por tarea: actualización del catálogo (nueva, actualizada, de ceros, sin atribuir, y lote fallido que no la toca); el cliente con las 8 dimensiones y una respuesta sintética; el endpoint del catálogo (filtros, paginación, mapped, sin coste); link (éxito, ya resuelta, pareja ocupada, no vinculable, línea inexistente y atomicidad); unlink (una pareja, varias, ninguna, y que borra la entrega); los campos nuevos de las respuestas; y que la salida de run_ingestion y del script de humo no imprime nombres.
+
+Restricciones: no edites uv.lock; no leas .env; no llames a servicios externos; commits pequeños con git add de rutas concretas; si algo es ambiguo, pregunta. Al terminar, reconstruye y pega la salida cruda de pytest con la línea de resultado completa dos veces, el git show --stat de todos los commits y qué tareas quedan sin marcar. Sin resumen tuyo.
+
+**Respuesta**
+Decisiones y cosas que debes saber
+
+- Errores sin nombres: pedías que los errores nombraran el elemento y que la salida nunca llevara nombres. Los identifico por sección y posición, por ejemplo agencies[2]: the holding group is neither in the file nor stored. La excepción es dsps: a DSP named Adform is required..., porque Adform es una constante del programa y no un dato del fichero.
+- Todos los errores a la vez: los problemas se informan juntos, y todos salen con código 2 sin escribir nada.
+- Claves desconocidas: se rechazan, para que un error de escritura no pase en silencio.
+- --check y la base de datos: lee la base para saber qué existe y qué crearía, pero no escribe. Imprime «would create N, existing M».
+- Comprobaciones antes de escribir: nombres obligatorios y sin repetir (comparando sin espacios y sin distinguir mayúsculas de minúsculas no; la base distingue mayúsculas, y yo también), grupo de cada agencia en el fichero o ya guardado, y Adform en el fichero o ya guardado.
+- Roles: grant_roles ya crea las filas que faltan, solo las que se le piden. Por eso el cargador no toca roles y no hay test de roles en este bloque.
+- Lo ya guardado no se modifica: una agencia guardada con otro grupo, o un DSP guardado con otro is_active, se queda como está y cuenta como «existente». Hay un test que lo comprueba.
+- Ficheros: deploy/masters.example.json (datos ficticios, DSP Displayce inactivo como en el seed de desarrollo) está versionado. deploy/masters.json está en .gitignore: lo comprobé con git check-ignore y con git ls-files.
+
+Cambios que afectan a lo que ya tenías
+
+- Numeración de docs/deploy.md: pasa de 13 a 15 secciones porque insertas el paso de maestros (10) y añadí «Copias de seguridad» (13). Los pasos son: maestros (10), primer usuario (11), ingesta (12), copias (13), comprobación (14), logs (15). Si algún otro documento remite a un número de sección, hay que actualizarlo.
+- Pendiente anterior cerrado: quité la nota «Pending, outside this change» sobre los maestros, que este bloque resuelve.
+- Backend recreado: al recrearlo, /api/health por nginx siguió dando 200, así que no fue necesario reiniciar nginx.
+
+Lo que no puedo garantizar desde aquí
+
+- Documentación sin ejecutar: el cron con CRON_TZ (la línea completa con la comprobación exit=), el script de pg_dump con rotación de siete días y la prueba de restauración en una base temporal están documentados pero no probados. Comprueba en la instancia que su cron admite CRON_TZ (man 5 crontab).
+- Comprobación autenticada: el GET /api/campaign-status autenticado necesita un token real de Cognito. Lo documenté copiándolo de las herramientas del navegador y leyéndolo con read -rs, para que no quede en el historial.
+- Frase que retiré: en la guía había escrito que, sin líneas mapeadas, la ingesta termina con cero filas leídas. No lo he comprobado, así que lo quité.
+
+**Prompt 9**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame. Si git status --short no está vacío, para. No toques el frontend.
+
+Objetivo: la base de la 1a en el backend: un catálogo de líneas de Adform que rellena la ingesta, vincular y desvincular, y la carga de un rango histórico. Antes de escribir nada, lee el cliente de Adform, delivery_ingestion_service, dsp_mapping_service, ingestion_exception_service, los esquemas de mapeos y excepciones, run_ingestion.py y adform_smoke.py, y dime: dónde se construye la petición a Adform y qué columnas lee el servicio, si el servicio de ingesta ya recibe una ventana como parámetro, y si existe algún endpoint que liste líneas de campaña sin mapeo. Si algo no está claro, pregunta.
+
+Decisiones, a registrar en spec, design y tasks (apartado nuevo 9A) en un commit docs(openspec): ... antes del código:
+
+La petición nocturna pide 8 dimensiones, el tope de la API: date, campaignID, campaign, lineItemID, lineItem, lineItemStartDate, lineItemEndDate y campaignCurrency, con las mismas cinco métricas. El cliente lee por nombre de cabecera, las columnas nuevas no cambian el grano (una fila por fecha, campaña y línea) y las fechas llegan como AAAA-MM-DDTHH:MM:SS: se toma solo la fecha. Sigue siendo una sola petición.
+Tabla dsp_catalog_lines (migración con --autogenerate, test_migration_schema_sync en verde): dsp_id, external_campaign_id y external_line_item_id (texto), campaign_name, line_item_name, line_start_date, line_end_date, first_seen_date, last_seen_date y last_impressions_date (nulable: la última fecha vista con impresiones mayores que cero). Única por (DSP, pareja). La ingesta la actualiza con todas las filas atribuidas (lineItemID mayor que 0 y moneda EUR) de la ventana, estén mapeadas o no y sean de ceros o no, en la misma transacción que el lote: si el lote falla, el catálogo no cambia. Las filas sin línea atribuida no entran.
+GET /api/dsp-catalog, rol operations, def: filtros dsp_id, q (texto en los nombres, sin distinguir mayúsculas), mapped (verdadero, falso o ausente) y active_since (fecha); paginado (50 por defecto, 200 como máximo). Cada elemento lleva nombres, pareja, fechas, last_impressions_date y mapped_line_id si existe mapeo. Sin coste.
+GET /api/campaign-lines/unmapped, rol operations: líneas de AdOps360 sin mapeo, con id, nombre de campaña, número de línea, fechas y DSP.
+POST /api/ingestion-exceptions/{id}/link con {"campaign_line_id": N}: en una sola transacción, crea el mapeo con la pareja de esa excepción y la resuelve con la nota automática «linked to line N». El mapeo queda validado porque la pareja está en el catálogo (no se pregunta a Adform). Errores {"code","message"} por manejadores globales: 404 exception_not_found y line_not_found; 409 exception_already_resolved, mapping_pair_taken y exception_not_linkable (solo vale para unmatched_delivery). La entrega retenida no pasa a daily_deliveries: la ventana de siete días la traerá.
+DELETE /api/campaign-lines/{id}/dsp-mappings: si la línea tiene exactamente un mapeo, lo borra junto con la entrega ingerida de esa línea (solo puede venir de él), en una transacción, y devuelve cuántos días de entrega retira; con varios, 409 ambiguous_mapping; sin ninguno, 404. Documenta en el design que reabrir la excepción queda fuera: la entrega reaparecerá como «sin casar» en la siguiente ingesta.
+La respuesta del POST de mapeos incluye, si la pareja está en el catálogo, last_impressions_date (campo nuevo opcional, sin romper el contrato actual), para detectar parejas que existen pero no entregan.
+Las respuestas de la cola de excepciones incluyen campaign_name y line_item_name, nulables, tomados del catálogo. Sin coste.
+Todo bajo operations, y las rutas nuevas quedan cubiertas por el test de protección de rutas, que se construye a partir de las registradas.
+Carga de un rango. run_ingestion acepta --from AAAA-MM-DD y --to AAAA-MM-DD: los dos juntos, incompatibles con --date, con un máximo de 31 días y con --to no posterior a D-1 en la zona de Madrid. Hace una sola petición para todo el rango, selecciona las líneas cuyas fechas se solapan con ese rango, y usa el mismo servicio con el mismo reemplazo idempotente. El lote registra el rango. La detección de ausencia no se ejecuta con un rango personalizado y la salida lo dice («absences: skipped, custom range»). Argumentos inválidos salen con el código 3, como hasta ahora, y la salida sigue imprimiendo solo recuentos.
+Aviso de histórico. La respuesta del POST de mapeos y la de link incluyen needs_history_load (booleano): verdadero si la línea mapeada empezó antes del inicio de la ventana normal (hoy menos 7 días, en la zona de Madrid). El frontend lo usará para avisar de que la entrega anterior no se carga sola.
+
+Pruebas, test primero, un commit por tarea: actualización del catálogo (nueva, actualizada, de ceros, sin atribuir, y lote fallido que no la toca); el cliente con las 8 dimensiones y una respuesta sintética; el endpoint del catálogo (filtros, paginación, mapped, sin coste); link (éxito, ya resuelta, pareja ocupada, no vinculable, línea inexistente y atomicidad); unlink (una pareja, varias, ninguna, y que borra la entrega); los campos nuevos de las respuestas; el rango (una sola petición, 31 días como máximo, --to posterior a D-1 rechazado, incompatibilidad con --date, sin ausencias y repetición idempotente); needs_history_load en sus dos bordes; y que la salida de run_ingestion y del script de humo no imprime nombres.
+
+Restricciones: no edites uv.lock; no leas .env; no llames a servicios externos; commits pequeños con git add de rutas concretas; si algo es ambiguo, pregunta. Al terminar, reconstruye (docker compose build backend y up -d --force-recreate backend) y pega la salida cruda de pytest con la línea de resultado completa dos veces seguidas, el git show --stat de todos los commits y qué tareas quedan sin marcar. Sin resumen tuyo en lugar de la salida real.
+
+**Prompt 10**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame. Si git status --short no está vacío, para. Solo frontend. No toques el backend.
+
+Objetivo: una hoja de estilos global y mínima, sin Tailwind, sin ningún framework de CSS, sin dependencias nuevas (no edites package.json ni package-lock.json), sin fuentes ni recursos externos (nada de @import url, CDN ni Google Fonts: tipografía del sistema). No cambies ningún texto, role, etiqueta ni orden de elementos, para no tocar los 321 tests. No modifiques ningún test existente.
+
+Antes de escribir nada, haz un inventario del marcado real de cada pantalla (home sin sesión, /campaigns, /campaigns/new, /status, /exceptions, /dsp-catalog, las pantallas de sesión caducada y de acceso denegado, y los cuatro diálogos): qué elementos y atributos ARIA usan para tablas, avisos, errores de campo, estados de carga y vacío, navegación y botones. Dime dónde un selector de elemento o de ARIA no alcanza y haría falta una clase o un atributo data-*. Solo se añaden clases o atributos donde haga falta, y nunca se cambia ningún texto.
+
+Decisiones, a registrar en tasks.md (apartado 8D) y design.md antes del código:
+
+Un fichero app/globals.css importado en el layout raíz. Todo se define con variables CSS en :root y los componentes no repiten colores.
+Tema claro único, con color-scheme: light. Variables de color: fondo de página 
+#F6F4EE, superficie 
+#FFFFFF, borde 
+#DDD8CB, texto 
+#1B2433, texto atenuado 
+#5B6470, cabecera de la aplicación 
+#0F1B2D con texto 
+#F6F4EE, acción 
+#0B6B74 (hover 
+#08555C) con texto blanco, peligro 
+#B42318 con texto blanco, y avisos: advertencia (fondo 
+#FFF4D6, texto 
+#7A4B00, borde 
+#F2B24B), error (fondo 
+#FDECEA, texto 
+#8A1C14), éxito (fondo 
+#E4F4EE, texto 
+#0B5D43) e información (fondo 
+#E8F1F8, texto 
+#12456B). Todos los pares de texto y fondo deben cumplir contraste AA (4,5:1).
+Tipografía: pila del sistema (system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif), 16 px de base, interlineado 1,5, títulos con jerarquía clara y font-variant-numeric: tabular-nums en las tablas.
+Estructura: la navegación como barra superior sobre la cabecera oscura, con el enlace de la página actual marcado con aria-current; contenido centrado, con un ancho máximo de 1280 px y relleno de 24 px; el botón de cerrar sesión alineado a la derecha.
+Tablas: borde fino, cabecera con fondo propio, filas con hover, relleno cómodo, columnas numéricas alineadas a la derecha, y un contenedor con desplazamiento horizontal para que una tabla ancha no rompa la página. Las tres tablas (estado, excepciones, catálogo) deben leerse bien con 1024 px de ancho.
+Avisos del estado («Sin datos recibidos», «Desviación de ritmo») como etiquetas con color y texto, y el texto sigue siendo lo que comunica, no solo el color. Mensajes de error de campo y de formulario, avisos de histórico y estados de carga, vacío y error con sus colores de aviso.
+Formularios: etiqueta sobre el campo, campos a ancho completo con borde y relleno, fieldset y legend con aspecto de tarjeta para cada línea de la campaña, la tabla de flights compacta, y el error de cada campo justo debajo.
+Botones: principal, secundario y de peligro («Desvincular»), con estado deshabilitado visible y el mismo tamaño táctil mínimo (altura de 36 px).
+Diálogos: dialog centrado con relleno, esquinas redondeadas, sombra suave y ::backdrop atenuado; sin romper el funcionamiento modal nativo.
+Pantallas de inicio, sesión caducada y acceso denegado: una tarjeta centrada con el botón principal.
+Accesibilidad: :focus-visible con un contorno de 3 px bien visible en todos los controles (claro sobre la cabecera oscura), @media (prefers-reduced-motion: reduce) sin transiciones, y un enlace «Saltar al contenido» solo si se puede añadir sin cambiar los tests.
+El difuminado de nombres (NEXT_PUBLIC_MASK_NAMES) debe seguir funcionando: no sobrescribas sus estilos en línea.
+
+Pruebas, test primero cuando sea posible: como jsdom no calcula diseño, añade tests que comprueben lo comprobable: que el layout raíz importa globals.css; que la hoja no contiene @import url, http:// ni https://; que define :focus-visible, dialog::backdrop y prefers-reduced-motion; y un test que lee las variables de color de la hoja y calcula la razón de contraste (fórmula WCAG) de cada par de texto y fondo declarado, exigiendo 4,5 o más. Después, que typecheck, vitest y docker compose build frontend sigan pasando.
+
+Commits pequeños con git add de rutas concretas: (1) variables, reinicio y tipografía; (2) estructura y navegación; (3) tablas; (4) formularios y botones; (5) etiquetas y avisos; (6) diálogos; (7) pantallas de inicio y de acceso; (8) los tests de la hoja. Un bloque se da por terminado solo cuando pasan npm run typecheck, vitest dos veces seguidas con la línea de resultado completa y docker compose build frontend. Pega la salida real, el git show --stat de todos los commits, la lista de componentes a los que hayas añadido una clase o un atributo y por qué, y una lista de qué comprobar a mano en el navegador.
+
+**Prompt 11**
+**Herramienta** Claude Code
+**Prompt**
+
+
+### Ajustes humanos de los bloques siguientes (pendientes de colocar bajo su prompt)
+
+**Cambio de modelo: líneas, flights y reparto del volumen (bloques A, B y C)**
+**Ajuste humano**
+Con el modelo corregido (campaña → líneas con fechas propias → flights mensuales) lo hice en tres bloques que no dejaron la suite en rojo: cimientos aditivos con las columnas nuevas nulables, registro con el modelo nuevo, y una migración final que mueve la ingesta y la ausencia a los flights y elimina `campaign_lines.campaign_period_id`. Decidí que el volumen mensual explícito es necesario, porque los budget flights suelen ser proporcionales pero no tienen por qué serlo: el pedido admite `monthly_volumes`, que debe cubrir exactamente los meses de la línea y sumar el total. Rechacé una decisión de Claude Code, aceptar un flight con cero impresiones, por incoherente con esa regla. Descarté migrar o fusionar las líneas duplicadas por el fallo (eran datos de desarrollo), y la migración falla con un mensaje claro si encuentra líneas sin `campaign_id`, probada con una base temporal con datos.
+
+**Verificar el reparto con una regla independiente**
+**Ajuste humano**
+Dos veces comprobé un reparto con un script aparte. La primera ejecuté su ejemplo por defecto y no los valores del test, así que no verificó nada; repetido con las fechas del test confirmó 808 y 192. La segunda, en el stack real: para un millón de impresiones en tres meses la base dio 326.087, 336.957 y 336.956, y la previsión que había recibido (336.957 en los dos últimos) estaba mal, porque sumaba 1.000.001. La regla de mayor resto con desempate al mes más temprano daba el resultado del sistema.
+
+**Zona horaria y comando nocturno (7.1)**
+**Ajuste humano**
+Al revisar el informe del endpoint de estado vi que el proveedor de «hoy» usaba UTC: entre medianoche y las 02:00 de Madrid, D-1 se desplazaba un día para el operador. Lo moví a una función única con zona `Europe/Madrid` configurable, con tests para el cambio de día y el de hora de verano. El comando nocturno lleva un candado de PostgreSQL, códigos de salida distintos (el 2 de `argparse` chocaba con «ya hay otra ejecución», así que los argumentos inválidos salen con 3) y una salida que solo imprime recuentos, con un test que comprueba que ningún valor de los datos llega a lo impreso. Claude Code nunca ejecutó el comando contra Adform: lo ejecuté yo.
+
+**La primera ingesta real y el mapeo de las líneas**
+**Ajuste humano**
+La primera ingesta real devolvió cero filas: la campaña de prueba empezaba el 1 de noviembre y la ventana de siete días no se solapaba con ninguna línea. Como no hay edición, recreé la base y la campaña con las fechas reales. La segunda, ya con fechas correctas, trajo tres filas con impresiones cero y clics positivos. Un diagnóstico por días (API frente a lo guardado, sin imprimir valores) demostró que el servicio guardaba exactamente lo que devolvía la API, y que había mapeado la pareja de una campaña anterior del mismo cliente. Que la validación diga `found` no prueba que la línea entregue ni que sea la correcta; lo anoté como limitación y como motivo de la 1a (elegir la línea por nombre). Tras rehacer el mapeo, las cinco métricas de los dos días completos coincidieron con el informe de la interfaz de Adform. Para no teclear identificadores creé una función que los pide con `read`, sin dejarlos en el historial, y que muestra a qué campaña y línea va a asociarlos. Tuve tres tropiezos que documento: un `delete` con una variable vacía que la transacción impidió, un token caducado que se mostró como `unauthenticated`, y un `read -p` que no existe en zsh.
+
+**Los informes de Excel y el informe único**
+**Ajuste humano**
+Tenía tres informes de Excel y ninguno servía para la subida: sin identificadores, con desglose por tamaño, país y región (13.543 filas para 141 ternas) y con el coste a nivel de campaña. Una coincidencia que se me presentó (142 ternas iguales a las 142 filas de la API) incluía en realidad la fila de total, y no la usé como prueba. Definí un único informe con identificadores y las cinco métricas, y comprobé contra la API que *Tracked Ads* es el `impressions`. La fila de total cambia de forma entre informes (fecha vacía o el texto `TOTAL`), así que el analizador debe reconocerla por la falta de identificadores. Como la ruta por API quedó verificada, aplacé la subida manual (5.x) y dejé documentado el formato.
+
+**Formulario: errores de línea que el backend no identifica**
+**Ajuste humano**
+El backend responde `{code, message}` sin decir qué línea falló. Elegí aprovechar que la vista previa es por línea: antes de enviar, el formulario calcula en silencio la de cada línea sin calcular, de modo que `line_dates_*` y `volume_too_small_for_flights` salen en la línea exacta y no hay `POST` de registro si alguna falla; el reparto manual se valida en el cliente; y los 422 que aun así lleguen se pintan en las líneas candidatas. Descarté añadir `line_number` al backend (queda como mejora aplazada). Claude Code corrigió sin que se lo pidiera que el botón se quedaba en «Registrando…» tras un error, y dejó una deuda de accesibilidad (los campos antiguos de línea sin `htmlFor`) que anoto para Playwright.
+
+**Confidencialidad de los datos de un cliente real**
+**Ajuste humano**
+La primera campaña con entrega real era de un cliente. Ni su nombre ni sus identificadores están en el repositorio ni en este fichero (lo comprobé con `git grep` y `git log -S`). En AdOps360 la campaña tiene un nombre neutro, y la entrega que se muestra es real frente a un contratado ficticio, lo que anotaré en la evidencia. La cola de excepciones guarda cifras de líneas de otros clientes, identificadas solo por números; para las capturas se prevé un difuminado de nombres en el catálogo de la 1a.
+
+**Errores del asistente que detecté y corregí**
+**Ajuste humano**
+Durante estas pruebas el asistente me dio instrucciones incorrectas que detecté al ejecutarlas: una ruta de mapeo que no existía (`/dsp-mappings`, cuando el esquema real es `/campaign-lines/{id}/dsp-mappings`) y un `read -p` de bash en zsh. También un `grep` que filtraba por `not null` ocultó una columna opcional y me llevó a creer que faltaba un dato que sí se guardaba. Los contrasté siempre con el esquema OpenAPI, con la salida real y con el código.
+
+**Patrón común (entrega final).** Los resúmenes de Claude Code volvieron a ser el punto débil: cortaban la línea de resultado de `pytest`, dieron por correctas expectativas que habían reescrito ellos mismos y, en alguna ocasión, un test escrito junto a su implementación no llegó a verse en rojo. Lo compensé pidiendo siempre la salida cruda y el `git show --stat` de cada commit y, sobre todo, verificando por una vía independiente: scripts de solo lectura contra la API, comparaciones con el informe de la interfaz, el stack real y consultas por recuentos. Lo que más cambió el diseño no salió de ningún test sino de los datos reales y del conocimiento del negocio: los ceros, el volumen de la cola y la jerarquía de líneas y periodos.
+
+**Frontend de estado y excepciones: un `tasks.md` vaciado y un cierre de sesión que parecía caducado**
+**Ajuste humano**
+Claude Code vació `tasks.md` por error: usó un script que borra el fichero antes de leerlo y no lo vio hasta el `git show --stat` final (0 bytes durante tres commits). Restauró la última versión íntegra en un commit propio, sin reescribir historia, y lo declaró. En el mismo bloque movió el botón de cerrar sesión al layout con `removeUser` y avisó, sin resolverlo, de que eso podía dejar la sesión como «caducada» en vez de «cerrada», que era justo el fallo que había verificado a mano en la entrega 2. Lo comprobé, pedí el arreglo con un test que debía fallar antes (falló, mostrando «Sesión caducada») y pasó a usar `signOut` del contexto. Su corrección a mi enunciado fue acertada: «Sesión caducada» también tiene botón de iniciar sesión, así que los dos casos se distinguen por el título y no por el botón.
+
+**Imágenes de producción: una verificación que daba el visto bueno a un fallo**
+**Ajuste humano**
+Para el script que verifica las imágenes de producción en local, Claude Code lo mutiló a propósito (copiar `tests/` a la imagen, publicar el puerto de la base de datos, aplicar las migraciones al arrancar) para comprobar que falla. Una de las mutaciones pasó como `OK`: un código de salida se perdía dentro de un bucle, y el control de «la base de datos no está publicada» no detectaba nada. Lo rehízo para que salga de inmediato. No pudo probar que, al interrumpirlo con Ctrl-C, imprime el fallo y limpia; lo probé yo (imprime `FALLO: interrupted` y no deja contenedores ni volúmenes).
+
+**Datos maestros, cron y copias de seguridad de producción**
+**Ajuste humano**
+Claude Code detectó por sí mismo un bloqueo que ningún test cubría: una base de producción recién migrada no tiene agencias, DSP, canales ni formatos, el formulario de nueva campaña sale vacío y la ingesta termina con código 3 si no existe el DSP Adform. El seed de desarrollo se había excluido a propósito de la imagen, así que se escribió un cargador idempotente y atómico, que valida antes de escribir, rechaza claves desconocidas y solo imprime recuentos: sus errores identifican el elemento por sección y posición, y no por nombre, para que una salida pegada nunca filtre información comercial. Corregí el ejemplo de cron de la guía: la ingesta a las 03:30 caía a las 04:30–05:30 de Madrid con el servidor en UTC y Adform reexpresa cifras durante la madrugada, así que pasó a las 07:00 con `CRON_TZ=Europe/Madrid`. Anoté que `CRON_TZ` puede no estar soportado por el cron del servidor (se comprueba con `man 5 crontab`; la alternativa es un temporizador de `systemd` con zona). Las copias con `pg_dump` y la restauración están documentadas pero no probadas en un servidor.
+
+**Un histórico que no se cargaba solo, y el catálogo de la 1a**
+**Ajuste humano**
+La página de estado de una campaña con datos desde hacía semanas no cuadraba, y lo atribuí a que la ingesta solo trae siete días: el entregado de un flight se suma de lo guardado, así que una línea mapeada a mitad de campaña parte con el histórico incompleto. Lo confirmé por fechas (sin cifras) y cargué el histórico a mano con `--date`, tres ejecuciones. De ahí salió la carga de un rango (`--from` y `--to`, una sola petición, sin detección de ausencia) y el aviso `needs_history_load` al mapear. Antes de escribir el catálogo de líneas de Adform, Claude Code se paró a confirmar tres puntos de diseño que no salían del spec: pedir siempre a Adform aunque no haya mapeos (si no, sin mapeos no hay catálogo y sin catálogo no se puede vincular), registrar la ventana en cada lote y definir `first_seen` y `last_seen` como fechas de entrega y no de ejecución. Las aprobé y añadí tres precisiones: vincular no depende del catálogo (una excepción antigua prueba que la pareja existe), `active_since` filtra por `last_seen` y una ejecución sin mapeos registra su lote. Claude Code aportó un error que no figuraba en mi lista (`line_dsp_mismatch`). Probé el ciclo completo con mis propias líneas: desvincular, ver reaparecer la pareja como excepción en la siguiente ingesta, vincularla y cargar el histórico.
+
+**Un `downgrade` relativo a la revisión actual**
+**Ajuste humano**
+Ejecuté `alembic downgrade -2` pensando en las dos migraciones nuevas de la 1a, pero la base seguía en la revisión anterior (recrear el contenedor no aplica migraciones) y el `-2` retrocedió dos pasos del modelo de líneas, eliminando `campaign_id` y los flights. Al volver a subir, la migración se negó a continuar con tres líneas sin `campaign_id` y un mensaje accionable, sin dejar nada a medias: la salvaguarda diseñada para ese caso funcionó. Recreé la base, lo que de paso probó las migraciones desde cero. Desde entonces miro `alembic current` antes de cualquier `downgrade`.
+
+**Un diálogo que no era modal, con 300 tests en verde**
+**Ajuste humano**
+Probando con datos reales, el botón «Vincular a una línea» no hacía nada visible. Los tres diálogos eran un `div role="dialog"` con estilos en línea, es decir, bloques del flujo de la página: se pintaban al final, debajo de unas 80 excepciones. Los 300 tests pasaban porque `jsdom` comprueba que el diálogo está en el DOM, no que se vea. Se resolvió con el elemento nativo `<dialog>` y `showModal()`, un componente compartido y tests que comprueban que es un `dialog` abierto, que se enfoca, que Escape lo cierra y que el foco vuelve al botón. Claude Code declaró que no lo había visto en un navegador, y es la parte que verifiqué yo. Es el argumento más concreto a favor de Playwright: una cifra de tests no prueba que una pantalla funcione.
+
+**Una aplicación sin hoja de estilos**
+**Ajuste humano**
+La aplicación se veía «como si estuviera hecha en 1996»: sin Tailwind, sin CSS global y sin una sola clase en los componentes. Pedí una hoja mínima, sin dependencias ni recursos externos, y fijé yo la paleta, con contraste AA comprobado por un test que calcula la razón WCAG de 20 pares de color. Claude Code señaló que había que quitar los 249 estilos en línea, porque un `style=` gana a cualquier hoja global, y solo añadió clases donde un selector de elemento o de ARIA no alcanzaba (listadas una a una). Mantuvo los 321 tests anteriores intactos, añadió 34 y decidió dos variables de color que no figuraban en mi lista, que acepté. El aspecto lo validé a mano en el navegador.
+
+**Un filtro que pedí al probar con datos reales**
+**Ajuste humano**
+Al recorrer la cola de excepciones con datos reales vi que, con unas 80 filas y los nombres de Adform ya visibles, no se podía encontrar una excepción para vincularla. Pedí una caja de búsqueda como la del catálogo. Se hizo en el navegador, sin tocar el backend, sin parámetros nuevos y sin guardar el texto en la URL ni en el almacenamiento, ignorando mayúsculas y acentos, y con 32 tests, 19 de ellos vistos fallar antes de implementar. Las etiquetas del selector de tipo no coincidían con las de la tabla (un descuido mío al escribir el prompt) y las unifiqué después.
+
+**Un recuento de tests que no cuadraba**
+**Ajuste humano**
+El informe de Claude Code daba 211 tests antes de un bloque de frontend, pero mi última cifra era 192 y no había habido trabajo de frontend entre medias. Un `git log` vacío de ese tramo confirmó que el 211 era un error de su informe, y los tests nuevos eran 108 y no 89. Desde entonces comparo cada cifra con la anterior.
+
+**Patrón común (ampliación).** En tres ocasiones el frontend dio un bloque por terminado con los tests en verde y un fallo visible en el navegador: el botón de acceso perdido, el diálogo que no era modal y la aplicación sin estilos. En los tres casos lo detecté yo probando con datos reales. Conclusión de diseño: los tests con `fetch` simulado y `jsdom` verifican la lógica, no el diseño ni el comportamiento del navegador.
