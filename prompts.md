@@ -943,6 +943,10 @@ Preguntas abiertas
 No toqué otros changes ni el frontend, no leí .env, no llamé a servicios externos y usé git add con rutas concretas. La base temporal adops360_autogen que usé para generar la migración ya está borrada.
 
 
+**Ajuste humano**
+Antes de lanzarlo marqué en `tasks.md` lo aplazado (1.6, 6.6, 7.2, 8.6) y lo parcial (1.4, 4.1, 5.3), y la 0.1 con su desviación de rama: partí de `final-project-LFMC`, no de `main`. El primer intento de marcar esas tareas lo lancé por error en la carpeta principal y no en el worktree; al revisar la rama comprobé que solo había cambiado `tasks.md` y lo moví con `git stash`. La tarea 2.1 daba por existente un método de resolución de identificadores que no existía (las 4.1–4.4 de la historia 1 se aplazaron), y lo corregí en el propio prompt. Contrasté el resumen de Claude Code con la salida real de `pytest` y con el `git show --stat` de cada commit, y reconoció que la 1.4 solo comprueba que los índices existen, sin `EXPLAIN`, así que quedó como parcial.
+
+
 **Prompt 2**
 **Herramienta** Claude Code
 **Prompt**
@@ -981,6 +985,10 @@ Cito de los ficheros tal como los leí antes en esta sesión, sin releerlos ni t
 - running y los nombres succeeded/failed que usé en el enum son míos, no del spec.
 - Lo mismo vale para open/resolved en las excepciones. El spec solo dice «resolves», «marked resolved» y «outstanding queue», sin valores de estado.
 
+**Ajuste humano**
+Claude Code contestó «no especificado» a casi todas las preguntas, citando fichero y requisito, en lugar de deducir. Eso me permitió decidir yo lo que el spec no fijaba (qué es una línea «activa», cuándo se marca «sin datos», los estados de lote, los tipos de excepción) y registrarlo en spec y design **antes** del código, separando lo que venía del spec de lo que era decisión mía. Listó además nueve tensiones entre spec, design y tareas (por ejemplo, «D-1» frente a «D-7 a D-1», o el solape entre «línea» y «line item»), que resolví una a una, y dos comportamientos de su código que no salían del spec: una campaña sin entregas marcaba «sin datos», y `row_count` contaba registros almacenados y no filas leídas.
+
+
 **Prompt 3**
 **Herramienta** Claude Code
 **Prompt**
@@ -1010,3 +1018,161 @@ Comprueba la columna de coste de daily_deliveries. Si su escala es menor que 6, 
 Restricciones: no llames a ningún servicio externo ni leas .env; las credenciales llegan solo por variables de entorno; los errores de negocio devuelven {"code","message"} por manejadores globales en errors.py, sin detalles internos. No decidas si dos mapeos pueden apuntar a la misma pareja externa, ni cómo se combinan dos líneas de Adform mapeadas a una sola línea de AdOps360: el spec no lo dice, y quiero decidirlo yo. Pregúntame.
 
 Al terminar, reconstruye (docker compose build backend y up -d --force-recreate backend) y pega la salida cruda de pytest dos veces seguidas, el git show --stat de cada commit y qué tareas quedan sin marcar. Sin resumen tuyo en lugar de la salida real.
+
+
+**Ajuste humano**
+(1) Claude Code no pudo abrir la documentación oficial de Adform (502 y 403) y lo dijo, en lugar de inventarla. El contrato de este prompt salió de sondas de solo lectura que ejecuté yo contra mi cuenta: autenticación y ámbitos, metadatos de dimensiones y métricas, el flujo asíncrono de la petición y los tipos y formatos de la respuesta. Las sondas destaparon cosas que un resumen no traía: el coste llega con hasta 6 decimales (hay que leerlo como `Decimal`, nunca como `float`), 35 de 142 filas no tienen línea atribuida, las celdas son números y no texto, y la cuota de 500 peticiones diarias es de toda la agencia, así que la ingesta hace una sola petición. (2) No dejé que Claude Code llamara a Adform ni leyera `.env`: los tests usan HTTP simulado y la verificación real la hice yo con un script de humo que solo imprime estados y recuentos. (3) Claude Code editó `uv.lock` a mano porque `uv lock` no tenía red; lo validé con `uv lock --check` y con las reconstrucciones de la imagen. (4) Commiteó un test en rojo en la 1.8 porque filtró la salida con `tail -1` y no vio la línea de resultado; lo reconoció y lo corrigió, y desde entonces exijo la línea de resultado completa.
+
+
+**Prompt 4**
+**Herramienta** Claude Code
+**Prompt**
+
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame. Si git status --short no está vacío, para.
+
+Objetivo: registrar las decisiones de abajo en los artefactos y luego implementar la persistencia y el flujo de las excepciones (tareas 6.1 a 6.4). No toques el apartado 5, el endpoint de estado ni el frontend.
+
+Paso 0, sin código. Actualiza spec, design y tasks con estas decisiones y haz un commit docs(openspec): ... antes de escribir código:
+
+Tipos de excepción: unmatched_delivery, missing_delivery y channel_mismatch. Este último queda definido pero no se genera todavía, porque ni la API de estadísticas ni la subida traen line_format; anótalo en el design.
+Una excepción unmatched_delivery es única por (tipo, DSP, pareja externa), sea cual sea su estado, y guarda first_date y last_date. Sus cifras retenidas van en una tabla hija ingestion_exception_deliveries con (exception_id, fecha, impresiones, clics, coste Numeric(18,6), medibles, visibles) y restricción única (exception_id, fecha). Repetir la ventana reemplaza las filas de esas fechas, sin duplicar. Una entrega nueva de una pareja cuya excepción ya está resuelta se añade a ella y no la reabre. Una excepción missing_delivery es única por (línea, periodo). Todas tienen resolved_at, resolved_by (FK a users) y una nota opcional.
+Resolver es solo marcar. No reprocesa; la entrega retenida sigue legible y no pasa a daily_deliveries.
+La ventana D-7 a D-1 prevalece sobre «D-1» del proposal. El grano es la línea de campaña y día, y varios line items se suman por día.
+Una fila sin línea atribuida se ignora y no es excepción: añade ese matiz al spec de excepciones. Una línea con mapeo sin validar no se ingiere y se cuenta como omitida: añade el escenario.
+La API devuelve filas con cero impresiones para campañas activas (en una cuenta real, 152 de 279 en dos días). Por eso, una fila sin casar con impresiones y coste ambos iguales a cero no es excepción: se ignora y se cuenta en el lote (columna zero_unmatched_count). Solo la entrega sin casar con impresiones o coste distintos de cero genera una excepción unmatched_delivery.
+Ausencia: una línea activa cuya suma de impresiones en un periodo ya terminado es cero, o que no tiene ninguna fila en él, evaluada cuando el último día del periodo es anterior o igual a D-1.
+El aviso de datos ausentes sigue definido como «la última entrega es anterior a D-1»; una fila con cero impresiones cuenta como dato recibido. No se evalúa si D-1 es anterior al inicio de la campaña; si D-1 es igual o posterior y no hay ninguna entrega, se marca. La campaña parada la cubre el aviso de desviación de ritmo; documenta en el spec que los dos avisos son distintos.
+Estados de lote: running, succeeded, failed. row_count son las filas leídas; las ignoradas van en ignored_count.
+El plan de migración del design se actualiza con las migraciones reales y el rollback de la restricción de dsp_mappings.
+En tasks.md, la nota de la 4.1 pasa a «verificado contra la cuenta real de Adform, solo lectura, con adform_smoke el 2026-10-24: 142 filas, operación succeeded».
+
+Paso 1, migración (con --autogenerate, y test_migration_schema_sync en verde): las restricciones únicas y la tabla hija del punto 2, las columnas first_date, last_date, resolved_at, resolved_by y la nota, y zero_unmatched_count y ignored_count en los lotes si no existen. Pruebas: dos ejecuciones seguidas de la misma ventana no crean una segunda excepción ni duplican días; una pareja resuelta que vuelve a entregar no se reabre, pero su entrega nueva queda registrada.
+
+Paso 2, 6.1 y 6.2: el servicio de ingesta guarda las excepciones de entrega sin casar, por las dos rutas, con las cifras retenidas, y sigue almacenando las filas que sí casan. Cubre el caso de las filas sin casar con ceros.
+
+Paso 3, 6.3 y 6.4: detección de ausencia como método del servicio, probado y sin conectar a ningún planificador, con tests para los dos casos de ausencia (sin ninguna fila, y con filas de ceros). Dos endpoints bajo el rol operations: GET /api/ingestion-exceptions?status=open|resolved y POST /api/ingestion-exceptions/{id}/resolve con una nota opcional. Errores {"code","message"} mediante manejadores globales: 404 exception_not_found y 409 exception_already_resolved.
+
+Paso 4, ritmo: comprueba que hay un test de ritmo para una línea cuyo periodo todavía no ha empezado, o ya ha terminado, con cero impresiones: no debe marcar desviación. Si no existe, añádelo (3.1 y 3.2).
+
+Restricciones: test primero, un commit por tarea y git add de rutas concretas; los endpoints se declaran def normales, no async, porque el servicio es síncrono; no leas .env; no llames a servicios externos; si algo del spec es ambiguo, pregunta antes de decidir. Al terminar, reconstruye (docker compose build backend y up -d --force-recreate backend) y pega la salida cruda de pytest con la línea de resultado completa dos veces seguidas, el git show --stat de cada commit y qué tareas quedan sin marcar. Sin resumen tuyo en lugar de la salida real.
+
+**Respuesta**
+
+Las tareas 6.3 y 6.4 están hechas, y también el paso 4, que quedó como la 3.5 (ver abajo). El pytest por defecto da 399 pasados y 1 deselected en las dos ejecuciones, con la imagen reconstruida. La ejecución con -m slow pasa su único test en 23,66 s. La salida cruda está arriba, junto con el git show --stat de los cuatro commits de este tramo y el commit docs. Los cuatro commits de este tramo son f3dc224 (docs), 2fefdd6 (3.5), 8e96021 (6.3) y 5be3ae6 (6.4). El árbol de trabajo queda limpio.
+
+Sin marcar en los apartados 0 a 6
+
+- 0.1, 0.2 y 1.6: no eran de este bloque.
+- 5.1 a 5.5: apartado 5, no lo toqué.
+- 6.5: endpoint de estado. En el texto añadí que no lista periodos terminadosni campañas no iniciadas.
+- 6.6: restricción por rol de finance. El coste retenido se guarda y no seexpone hasta entonces. Está anotado en el design.
+- 6.7: los 401/403 de todos los endpoints del change. Los de los endpoints deexcepciones y mapeos ya están probados dentro de 6.4 y 4.6.
+
+Decisiones tuyas, registradas antes del código
+
+- Ausencia (6.3). Solo líneas con mapeo validado, con el periodo terminado entre D-7 y D-1 y el mapeo validado en una fecha igual o anterior a suúltimo día. La fecha se compara como día, no como hora.
+- GET de excepciones (6.4). Primera y última fecha, número de días, y totalesde impresiones y clics, sin coste.
+- Ritmo. La función se queda como estaba. La tarea 3.5 documenta con un testque un periodo terminado con cero entregado marca under_delivering. El test del periodo no iniciado ya existía.
+- Separación de responsabilidades. Función de ritmo, vista de estado y ausencia quedan escritas en spec y design.
+
+Qué decidí yo
+
+- Estado de la campaña. La regla de ausencia no filtra por estado de lacampaña. El spec decía «línea activa» sin definirla, y filtrar por active dejaría sin evaluar el último periodo de una campaña ya cerrada. Siprefieres exigir active, cambia una condición.
+- Dónde está la detección. detect_missing_delivery es un método del serviciode ingesta y recibe el id del lote. Sigue sin conectarse a ningún planificador, como pediste.
+- Orden del GET. Si no se pasa status, devuelve todas, ordenadas por id ascendente. El spec no fija orden por defecto.
+- Respuesta del POST. resolve responde 200 con la excepción completa. El cuerpo con la nota es opcional.
+- Concurrencia. La resolución es un UPDATE condicionado a que siga abierta. Si dos peticiones resuelven la misma a la vez, la segunda recibe el 409 y laprimera resolución no se pisa.
+
+Riesgos
+
+- Sin conexión. La ausencia y la ingesta con excepciones solo existen como servicio y no hay nada que las ejecute todavía. Eso es la 7.1.
+- Primera pasada de ausencia. Evalúa solo los periodos que terminaron en la ventana. Un periodo terminado hace un mes y sin entrega no se detecta desdeahora, aunque esté dentro de lo que el mapeo cubre. Es lo que fijaste; si quieres una pasada inicial sobre histórico, es trabajo aparte.
+- Auditoría del cambio de row_count. Cualquier consumidor externo que leyera row_count como «filas almacenadas» verá otra cosa. Por ahora no hay ningunoen el código.
+
+**Ajuste humano**
+Los datos reales cambiaron el diseño. (1) Con un script de comparación vi que la API devuelve filas con cero impresiones para campañas activas (152 de 279 en dos días, y 40 de las 107 con línea atribuida). Eso obligó a tres decisiones antes de escribir código: una fila sin casar con impresiones y coste a cero no es excepción, la ausencia se mide por la suma de impresiones del flight y no por «no hay filas», y el aviso «sin datos» sigue siendo un indicador de salud de la ingesta (la campaña parada la cubre el ritmo). (2) Con un día de datos calculé que identificar la excepción por (tipo, DSP, pareja externa, fecha) llenaría la cola: unas 450 la primera noche y unas 65 más cada una. La identifiqué por pareja y guardé las cifras por día en una tabla hija; la primera ingesta real lo confirmó: 457 parejas-día quedaron en 84 filas. (3) Claude Code se paró a preguntar cuatro cosas que no salían del spec (qué líneas evalúa la ausencia, si el GET de la cola devuelve coste, cómo trata el ritmo un periodo terminado y cómo nombrar una columna que ya existía). Las contesté yo y retiré una instrucción mía, el test de «no marca» sobre la función de ritmo, porque mezclaba el cálculo con qué filas muestra la vista de estado. (4) Comprobé en el esquema real que los índices únicos no llevan la fecha. Un `grep` mío ocultó una columna y creí que faltaba `purchase_order_version_id`; Claude Code tenía razón al retirar esa limitación.
+
+
+**Prompt 5**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame. Si git status --short no está vacío, para.
+
+Objetivo: tareas 6.5 y 6.7, más el orden de la cola de excepciones. No toques el apartado 5 ni el frontend.
+
+Paso 0, sin código. Antes de decidir nada, comprueba cómo se relaciona hoy campaign_lines.contracted_impressions con campaign_periods: ¿el volumen es el total de la línea para toda la campaña o hay un reparto por periodo? Si no está repartido, no inventes un reparto: dime qué has encontrado y qué opciones ves, y espera mi respuesta antes de seguir.
+
+Decisiones, a registrar en spec y design en un commit docs(openspec): ... antes de escribir código:
+
+GET /api/campaign-status, roles operations y business, declarado como def. Una fila por línea de campaña de una campaña active con D-1 dentro de sus fechas. Los periodos terminados y las campañas no iniciadas no aparecen.
+Cada fila lleva: contratado, entregado hasta D-1, ratio, y el ritmo (esperado a la fecha, desviación y días restantes) con la función pura de la 3.2. El pacing_flag es por línea. El missing_data_flag se calcula por campaña (la última entrega de cualquiera de sus líneas es anterior a D-1; sin ninguna entrega se marca si D-1 es posterior o igual al inicio) y se replica en cada fila de la campaña. Una fila con cero impresiones cuenta como dato recibido.
+La agregación se hace en la base de datos, en una consulta, sin traer filas de entrega a la aplicación.
+La respuesta no contiene ningún campo de coste (la 6.6 está aplazada), y un test lo afirma recorriendo los nombres de todos los campos.
+Orden por defecto: filas con algún aviso primero, luego agencia, campaña y línea.
+La cola de excepciones (6.4) pasa a ordenarse por last_date descendente y después por id descendente.
+
+Pruebas. Cubre: una campaña terminada y otra no iniciada no aparecen; una línea con cero impresiones en un periodo en curso marca ritmo; una campaña cuya última entrega es anterior a D-1 marca datos ausentes; una con una fila de ceros en D-1 no los marca; contratado y entregado son campos distintos. Y para la 6.7: una prueba parametrizada que recorra todas las rutas de los routers de este change (mapeos, excepciones y estado) y afirme 401 sin token y 403 sin el rol operations, para que una ruta nueva sin protección haga fallar la suite.
+
+Restricciones: test primero, un commit por tarea y git add de rutas concretas; errores {"code","message"} por manejadores globales; no leas .env; no llames a servicios externos; si algo del spec es ambiguo, pregunta antes de decidir. Al terminar, reconstruye y pega la salida cruda de pytest con la línea de resultado completa dos veces, el git show --stat de todos los commits del bloque (no solo los últimos), y qué tareas quedan sin marcar. Sin resumen tuyo.
+
+**Respuesta**
+Me detengo antes de tocar nada, por dos motivos.
+
+1. El árbol de trabajo no está limpio. Estoy en feature/daily-campaign-delivery-status, pero git status --short muestra  M prompts.md. Tu contrato dice que en ese caso pare. No sé si ese cambio es tuyo y quieres conservarlo, y no lo voy a incluir en ningún commit. Dime si lo commiteas, lo descartas o me autorizas a seguir con él ahí.
+
+2. El objetivo no cuadra con el estado de tasks.md.
+- 6.5 y 6.7 ya están marcadas [x]: GET /campaign-status y el test parametrizado de 401/403 sobre las rutas registradas.
+- El orden de la cola de excepciones es la 6.9, también [x]. Ya existen sus tests (test_the_queue_is_ordered_by_last_date_then_id_both_descending y el de las excepciones sin last_date).
+- 6.6 es lo único abierto del apartado 6, y está aplazada a propósito.
+
+Además, la primera frase del mensaje, «Búscame tu respuesta a», parece un fragmento pegado a medias, y no sé a qué respuesta mía se refiere.
+
+Dime cuál de estas cosas quieres:
+- a) Una verificación de que 6.5, 6.7 y 6.9 se cumplen de verdad, con la salida real de los tests y sin cambiar código.
+- b) Reabrir alguna de las tres porque falta un escenario o un campo. Dime cuál y qué falta.
+- c) Otra cosa que se perdió en el mensaje.
+
+Cuando lo aclares, no toco el apartado 5 ni el frontend.
+
+**Ajuste humano**
+(1) El paso 0 de este prompt, que pedía investigar cómo se reparte el volumen contratado entre periodos, hizo aflorar un fallo del registro que llevaba días en los datos: una línea de un pedido de varios meses se guardaba una vez por periodo, con el volumen completo, y todas colgaban del primero (un `break` en el repositorio). La pista era la campaña de desarrollo con dos periodos y las dos líneas en el primero, que la primera semana di por «coherente». (2) Al explicar el hallazgo señalé, desde el negocio, que el modelo estaba al revés: una línea puede abarcar varios meses y los periodos (flights) cuelgan de la línea, no al contrario. El primer arreglo que se propuso, copiar la línea por mes y buscar la «hermana» al ingerir, era un parche sobre ese error y lo retiré. (3) La prueba de acceso la pedí construida a partir de las rutas registradas en la aplicación, no de una lista; Claude Code comprobó que muerde (quitó la protección de una ruta y fallaron sus tres tests) y detectó que esta versión de FastAPI envuelve los routers incluidos, así que añadió un test que cruza las rutas con el OpenAPI.
+
+
+
+---
+
+### Ajustes humanos de los bloques siguientes (pendientes de colocar bajo su prompt)
+
+**Cambio de modelo: líneas, flights y reparto del volumen (bloques A, B y C)**
+**Ajuste humano**
+Con el modelo corregido (campaña → líneas con fechas propias → flights mensuales) lo hice en tres bloques que no dejaron la suite en rojo: cimientos aditivos con las columnas nuevas nulables, registro con el modelo nuevo, y una migración final que mueve la ingesta y la ausencia a los flights y elimina `campaign_lines.campaign_period_id`. Decidí que el volumen mensual explícito es necesario, porque los budget flights suelen ser proporcionales pero no tienen por qué serlo: el pedido admite `monthly_volumes`, que debe cubrir exactamente los meses de la línea y sumar el total. Rechacé una decisión de Claude Code, aceptar un flight con cero impresiones, por incoherente con esa regla. Descarté migrar o fusionar las líneas duplicadas por el fallo (eran datos de desarrollo), y la migración falla con un mensaje claro si encuentra líneas sin `campaign_id`, probada con una base temporal con datos.
+
+**Verificar el reparto con una regla independiente**
+**Ajuste humano**
+Dos veces comprobé un reparto con un script aparte. La primera ejecuté su ejemplo por defecto y no los valores del test, así que no verificó nada; repetido con las fechas del test confirmó 808 y 192. La segunda, en el stack real: para un millón de impresiones en tres meses la base dio 326.087, 336.957 y 336.956, y la previsión que había recibido (336.957 en los dos últimos) estaba mal, porque sumaba 1.000.001. La regla de mayor resto con desempate al mes más temprano daba el resultado del sistema.
+
+**Zona horaria y comando nocturno (7.1)**
+**Ajuste humano**
+Al revisar el informe del endpoint de estado vi que el proveedor de «hoy» usaba UTC: entre medianoche y las 02:00 de Madrid, D-1 se desplazaba un día para el operador. Lo moví a una función única con zona `Europe/Madrid` configurable, con tests para el cambio de día y el de hora de verano. El comando nocturno lleva un candado de PostgreSQL, códigos de salida distintos (el 2 de `argparse` chocaba con «ya hay otra ejecución», así que los argumentos inválidos salen con 3) y una salida que solo imprime recuentos, con un test que comprueba que ningún valor de los datos llega a lo impreso. Claude Code nunca ejecutó el comando contra Adform: lo ejecuté yo.
+
+**La primera ingesta real y el mapeo de las líneas**
+**Ajuste humano**
+La primera ingesta real devolvió cero filas: la campaña de prueba empezaba el 1 de noviembre y la ventana de siete días no se solapaba con ninguna línea. Como no hay edición, recreé la base y la campaña con las fechas reales. La segunda, ya con fechas correctas, trajo tres filas con impresiones cero y clics positivos. Un diagnóstico por días (API frente a lo guardado, sin imprimir valores) demostró que el servicio guardaba exactamente lo que devolvía la API, y que había mapeado la pareja de una campaña anterior del mismo cliente. Que la validación diga `found` no prueba que la línea entregue ni que sea la correcta; lo anoté como limitación y como motivo de la 1a (elegir la línea por nombre). Tras rehacer el mapeo, las cinco métricas de los dos días completos coincidieron con el informe de la interfaz de Adform. Para no teclear identificadores creé una función que los pide con `read`, sin dejarlos en el historial, y que muestra a qué campaña y línea va a asociarlos. Tuve tres tropiezos que documento: un `delete` con una variable vacía que la transacción impidió, un token caducado que se mostró como `unauthenticated`, y un `read -p` que no existe en zsh.
+
+**Los informes de Excel y el informe único**
+**Ajuste humano**
+Tenía tres informes de Excel y ninguno servía para la subida: sin identificadores, con desglose por tamaño, país y región (13.543 filas para 141 ternas) y con el coste a nivel de campaña. Una coincidencia que se me presentó (142 ternas iguales a las 142 filas de la API) incluía en realidad la fila de total, y no la usé como prueba. Definí un único informe con identificadores y las cinco métricas, y comprobé contra la API que *Tracked Ads* es el `impressions`. La fila de total cambia de forma entre informes (fecha vacía o el texto `TOTAL`), así que el analizador debe reconocerla por la falta de identificadores. Como la ruta por API quedó verificada, aplacé la subida manual (5.x) y dejé documentado el formato.
+
+**Formulario: errores de línea que el backend no identifica**
+**Ajuste humano**
+El backend responde `{code, message}` sin decir qué línea falló. Elegí aprovechar que la vista previa es por línea: antes de enviar, el formulario calcula en silencio la de cada línea sin calcular, de modo que `line_dates_*` y `volume_too_small_for_flights` salen en la línea exacta y no hay `POST` de registro si alguna falla; el reparto manual se valida en el cliente; y los 422 que aun así lleguen se pintan en las líneas candidatas. Descarté añadir `line_number` al backend (queda como mejora aplazada). Claude Code corrigió sin que se lo pidiera que el botón se quedaba en «Registrando…» tras un error, y dejó una deuda de accesibilidad (los campos antiguos de línea sin `htmlFor`) que anoto para Playwright.
+
+**Confidencialidad de los datos de un cliente real**
+**Ajuste humano**
+La primera campaña con entrega real era de un cliente. Ni su nombre ni sus identificadores están en el repositorio ni en este fichero (lo comprobé con `git grep` y `git log -S`). En AdOps360 la campaña tiene un nombre neutro, y la entrega que se muestra es real frente a un contratado ficticio, lo que anotaré en la evidencia. La cola de excepciones guarda cifras de líneas de otros clientes, identificadas solo por números; para las capturas se prevé un difuminado de nombres en el catálogo de la 1a.
+
+**Errores del asistente que detecté y corregí**
+**Ajuste humano**
+Durante estas pruebas el asistente me dio instrucciones incorrectas que detecté al ejecutarlas: una ruta de mapeo que no existía (`/dsp-mappings`, cuando el esquema real es `/campaign-lines/{id}/dsp-mappings`) y un `read -p` de bash en zsh. También un `grep` que filtraba por `not null` ocultó una columna opcional y me llevó a creer que faltaba un dato que sí se guardaba. Los contrasté siempre con el esquema OpenAPI, con la salida real y con el código.
+
+**Patrón común (entrega final).** Los resúmenes de Claude Code volvieron a ser el punto débil: cortaban la línea de resultado de `pytest`, dieron por correctas expectativas que habían reescrito ellos mismos y, en alguna ocasión, un test escrito junto a su implementación no llegó a verse en rojo. Lo compensé pidiendo siempre la salida cruda y el `git show --stat` de cada commit y, sobre todo, verificando por una vía independiente: scripts de solo lectura contra la API, comparaciones con el informe de la interfaz, el stack real y consultas por recuentos. Lo que más cambió el diseño no salió de ningún test sino de los datos reales y del conocimiento del negocio: los ceros, el volumen de la cola y la jerarquía de líneas y periodos.
