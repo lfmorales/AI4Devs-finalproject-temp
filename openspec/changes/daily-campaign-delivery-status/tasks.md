@@ -172,7 +172,7 @@ One hand-written stylesheet, with no framework, no new dependency, no external f
 - [x] 8D.5 Tags and notices: status flags as coloured tags with text, error, warning, success and information notices, and loading, empty and error states
 - [x] 8D.6 Dialogs: centred native dialog with padding, rounded corners, soft shadow and dimmed `::backdrop`, without changing how it works as a modal
 - [x] 8D.7 Home, expired-session and access-denied screens as a centred card with the primary button
-- [ ] 8D.8 Stylesheet tests: root layout import, no external URL, focus, backdrop and reduced motion, and AA contrast of every declared pair
+- [x] 8D.8 Stylesheet tests: root layout import, no external URL, focus, backdrop and reduced motion, and AA contrast of every declared pair
 
 ## 9. Review and Update Existing Unit Tests (MANDATORY)
 
