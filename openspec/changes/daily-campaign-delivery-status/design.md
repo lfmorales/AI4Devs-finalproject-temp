@@ -127,6 +127,8 @@ It also introduces the first scheduled work in the product. Until now every writ
 10. `make campaign lines hang from the campaign` makes `campaign_id`, `line_number`, `start_date` and `end_date` mandatory and drops `campaign_lines.campaign_period_id`, its foreign key and its index. It fails with a message asking to recreate the development database if a line lacks `campaign_id`; its downgrade restores the column from each line's earliest flight.
 11. Rollback runs the migrations downward in reverse order. The unique constraint on `dsp_mappings` is restored to the original lookup index by its own migration's downgrade, so dropping only the delivery tables would leave it behind. Dropping the delivery tables does not touch the campaign tree, which nothing in them references the other way.
 
+**Deferred improvement: the registration errors could name the line.** The 422 codes `line_dates_*`, `flight_volumes_*` and `volume_too_small_for_flights` answer only `code` and `message`, so the registration form cannot tell which line failed when it has several. The form avoids most of them by validating locally and by previewing every line before it registers (the preview is per line, so its errors are exact), and paints what still arrives on the candidate lines. The backend could return the `line_number` in those errors; it is not implemented here.
+
 ## Open Questions
 
 - Whether the ingestion window should widen beyond 7 days for specific DSPs once their restatement behaviour is observed. It is a configuration value either way and does not change the schema or the task breakdown.

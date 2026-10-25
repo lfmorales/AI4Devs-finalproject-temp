@@ -113,6 +113,24 @@
 - [ ] 8.5 Implement the exception queue with resolution, guarded by the `operations` role, and write a test asserting what a user without the role sees
 - [ ] 8.6 Verify no cost or margin column renders for a user without `finance`, asserted by a test **(deferred: el endpoint de estado del corte no devuelve campos de coste)**
 
+## 8A. Frontend: Line Dates and Flights in the New Campaign Form
+
+The form lets each line have its own dates and shows the monthly split (flights). The types of the preview and of the line come from the real OpenAPI schema (`/api/openapi.json`). Behaviour:
+
+- Each line has the box «Heredar las fechas de la campaña», checked by default. Checked, neither `start_date` nor `end_date` is sent. Unchecked, a start and an end appear, validated in the Zod schema: inside the campaign's dates, with the end not before the start.
+- Each line has a button «Calcular reparto», enabled only when the campaign's dates, the line's dates (own or inherited) and the total volume are valid. It calls the preview and shows a table with month, window and volume, editable, plus «Suma X de Y».
+- Editing any volume turns the line into «reparto manual», with a button «Restablecer reparto proporcional». Only then is `monthly_volumes` sent. Submitting is blocked if the sum differs from the total, a volume is not positive, or the months are not exactly those of the preview.
+- If, after calculating, the campaign's dates, the line's dates or the total volume change, that line's preview is invalidated and a recalculation is asked for: a stale split is never sent.
+- Before registering, the preview of every line that has none is calculated silently; its `line_dates_*` and `volume_too_small_for_flights` errors are shown on that line (exact, the request is per line), and the registration is sent only if all pass.
+- The registration's own 422 codes `line_dates_*`, `flight_volumes_*` and `volume_too_small_for_flights` carry no line number, so they are shown on the candidate lines (own dates for `line_dates_*`, manual split for `flight_volumes_*`, proportional split for `volume_too_small_for_flights`), saying «en alguna de estas líneas» when there are several, and at form level when there is none. Messages come from the Zod schema or a code-to-Spanish table, never from searching library text.
+
+- [ ] 8A.1 Extend the Zod schema with the optional line dates, `monthly_volumes` and the manual split rules (coverage of the preview months, positive volumes, sum equal to the total), with the Spanish messages shared with the backend codes, tests first
+- [ ] 8A.2 Add a typed `previewFlights` function in `lib/api/` over the real client, tests first with a simulated `fetch` (200, 422 with each code, 401 and 403), and verify no component calls `fetch`
+- [ ] 8A.3 Add the line date control with the inherit box, tests first
+- [ ] 8A.4 Add the flight editor: calculate, table, «Suma X de Y», manual mode, reset and invalidation when the inputs change, tests first
+- [ ] 8A.5 Submit with the two rules (dates and `monthly_volumes` only when not inherited or manual) and the silent preview of lines that have none, tests first
+- [ ] 8A.6 Map the backend codes to Spanish messages on the exact line (preview) or the candidate lines (registration), and at form level when there is no candidate, tests first
+
 ## 9. Review and Update Existing Unit Tests (MANDATORY)
 
 - [ ] 9.1 Review every test touched by this change and update any asserting superseded behaviour
