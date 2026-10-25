@@ -3,7 +3,17 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createApiClient, ApiError } from "@/lib/api/client";
+import { previewFlights } from "@/lib/api/flights";
+import { FlightEditor } from "./FlightEditor";
 import { LineDatesControl } from "./LineDatesControl";
+import {
+  editVolume,
+  isStale,
+  newPreview,
+  previewRequestFor,
+  resetToProportional,
+  type LinePreview,
+} from "./line-flights";
 import { createCampaignSchema, type CampaignCreateRequest } from "./schema";
 
 interface MasterItem {
@@ -28,6 +38,10 @@ interface CampaignLine {
   inherit_dates: boolean;
   start_date: string;
   end_date: string;
+  /** The last «Calcular reparto» result; stale as soon as the dates or the volume stop matching it. */
+  preview: LinePreview | null;
+  calculating: boolean;
+  previewError: string | null;
 }
 
 interface FormData {
@@ -102,6 +116,9 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
         inherit_dates: true,
         start_date: "",
         end_date: "",
+        preview: null,
+        calculating: false,
+        previewError: null,
       },
     ],
   });
@@ -167,7 +184,7 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
     }
   }, [fieldErrors]);
 
-  const handleLineChange = (lineId: string, field: keyof CampaignLine, value: string | number | boolean) => {
+  const handleLineChange = (lineId: string, field: "dsp_id" | "channel_id" | "format_id" | "scope" | "market_description" | "contracted_impressions" | "sale_cpm" | "inherit_dates" | "start_date" | "end_date", value: string | number | boolean) => {
     const lineIndex = formData.lines.findIndex((l) => l.id === lineId);
     setFormData((prev) => ({
       ...prev,
@@ -183,6 +200,45 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
         delete updated[fieldPath];
         return updated;
       });
+    }
+  };
+
+  const updateLine = (lineId: string, change: (line: CampaignLine) => CampaignLine) => {
+    setFormData((prev) => ({ ...prev, lines: prev.lines.map((line) => (line.id === lineId ? change(line) : line)) }));
+  };
+
+  /** The request «Calcular reparto» would send for a line, or null while its inputs are not valid. */
+  const requestFor = (line: CampaignLine) =>
+    previewRequestFor({
+      campaignStart: formData.start_date,
+      campaignEnd: formData.end_date,
+      inheritDates: line.inherit_dates,
+      lineStart: line.start_date,
+      lineEnd: line.end_date,
+      total: line.contracted_impressions,
+    });
+
+  const calculateSplit = async (lineId: string) => {
+    const line = formData.lines.find((l) => l.id === lineId);
+    const request = line ? requestFor(line) : null;
+    if (!line || !request) return;
+
+    updateLine(lineId, (l) => ({ ...l, calculating: true, previewError: null }));
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!baseUrl) throw new Error("API URL not configured");
+      const response = await previewFlights(createApiClient({ baseUrl }), request);
+      updateLine(lineId, (l) => ({ ...l, calculating: false, preview: newPreview(request, response.flights) }));
+    } catch (err) {
+      const apiError = err && typeof err === "object" && "kind" in err ? (err as ApiError) : null;
+      if (apiError?.kind === "unauthenticated") onAuthError?.("unauthenticated");
+      if (apiError?.kind === "forbidden") onAuthError?.("forbidden");
+      updateLine(lineId, (l) => ({
+        ...l,
+        calculating: false,
+        preview: null,
+        previewError: "No se pudo calcular el reparto. Inténtalo de nuevo.",
+      }));
     }
   };
 
@@ -204,6 +260,9 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
           inherit_dates: true,
           start_date: "",
           end_date: "",
+          preview: null,
+          calculating: false,
+          previewError: null,
         },
       ],
     }));
@@ -799,6 +858,21 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                 endError={fieldErrors[`lines.${lineIndex}.end_date`]}
                 onInheritChange={(inherit) => handleLineChange(line.id, "inherit_dates", inherit)}
                 onDateChange={(field, value) => handleLineChange(line.id, field, value)}
+              />
+
+              <FlightEditor
+                canCalculate={requestFor(line) !== null}
+                calculating={line.calculating}
+                preview={line.preview && !isStale(line.preview, requestFor(line)) ? line.preview : null}
+                stale={line.preview !== null && isStale(line.preview, requestFor(line))}
+                error={line.previewError}
+                onCalculate={() => void calculateSplit(line.id)}
+                onEditVolume={(index, value) =>
+                  updateLine(line.id, (l) => (l.preview ? { ...l, preview: editVolume(l.preview, index, value) } : l))
+                }
+                onReset={() =>
+                  updateLine(line.id, (l) => (l.preview ? { ...l, preview: resetToProportional(l.preview) } : l))
+                }
               />
             </div>
           </div>
