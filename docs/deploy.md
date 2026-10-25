@@ -90,7 +90,36 @@ docker compose -f docker-compose.prod.yml run --rm backend alembic upgrade head
 
 Back up the `postgres_data` volume before a release that includes migrations.
 
-## 10. The first user
+## 10. Master data
+
+A fresh database has no agencies, advertisers, DSPs, channels, formats, campaign types, sectors or sales reps, and the "new campaign" form needs them. Load them from a JSON file with `scripts/load_masters.py`. Start from the template, which holds fictitious data:
+
+```
+cp deploy/masters.example.json deploy/masters.json
+chmod 644 deploy/masters.json
+```
+
+`deploy/masters.json` is ignored by git; the backend container runs as another user, which is why the file must be readable by others (it holds business names, not secrets). Edit it. Each section is a list of objects with a mandatory `name`; an agency also has a mandatory `holding_group` (the name of its group); a DSP may have `is_active` (true unless you say otherwise). Nothing else is accepted, and a misspelled section or key is an error.
+
+The file must keep a DSP named `Adform`, because the ingestion looks it up (it may already be stored from an earlier load). Every agency must name a group defined in the same file or already stored.
+
+Validate first, then load. The file is mounted read-only, since the image does not carry it:
+
+```
+docker compose -f docker-compose.prod.yml run --rm \
+  -v "$PWD/deploy/masters.json:/tmp/masters.json:ro" \
+  backend python -m scripts.load_masters /tmp/masters.json --check
+
+docker compose -f docker-compose.prod.yml run --rm \
+  -v "$PWD/deploy/masters.json:/tmp/masters.json:ro" \
+  backend python -m scripts.load_masters /tmp/masters.json
+```
+
+The output is counts per table (`created`, or `would create` with `--check`, and `existing`) and never a name. A problem in the file is reported by section and position, for example `agencies[2]: the holding group is neither in the file nor stored`. Exit code 0 means done, 1 the database failed, 2 the file or the arguments are invalid, 3 `DATABASE_URL` is missing.
+
+It is safe to run again, for example after adding an agency to the file: items are identified by name, new ones are created and existing ones are left exactly as they are. It never modifies or deletes: renaming a master, moving an agency to another group or changing a DSP's `is_active` is not done by this command. The load is a single transaction, so a failure stores nothing.
+
+## 11. The first user
 
 The development seed is not in the production image. Create the first user, with the roles you need, with:
 
@@ -101,9 +130,7 @@ docker compose -f docker-compose.prod.yml run --rm backend \
 
 Use the email Cognito puts in the token, spelled exactly the same: it is the only link between Cognito and the local user. The command creates the user if it does not exist, creates the requested role rows if they are missing, and prints counts only. Running it again changes nothing.
 
-**Pending, outside this change:** the master data (agencies, advertisers, DSPs, channels, formats...) is empty in a fresh production database and nothing here loads it; the "new campaign" form needs it.
-
-## 11. Nightly ingestion
+## 12. Nightly ingestion
 
 The ingestion is a command for the host scheduler, not a container. It needs the Adform credentials in `.env`:
 
@@ -113,13 +140,13 @@ docker compose -f docker-compose.prod.yml run --rm backend python -m scripts.run
 
 Run it once by hand and reconcile the figures before scheduling it (for example from the host's crontab, shortly after midnight, Europe/Madrid time). Exit codes: 0 succeeded, 1 failed, 2 another run holds the lock, 3 configuration is missing.
 
-## 12. Checking a deployment
+## 13. Checking a deployment
 
 - `curl -fsS https://<SERVER_NAME>/api/health` answers 200.
 - `curl -sI http://<SERVER_NAME>/` answers 301 to HTTPS.
 - `docker compose -f docker-compose.prod.yml ps` shows every service as healthy.
 - From outside, `nmap` of the instance shows only 22, 80 and 443.
 
-## 13. Logs and restarts
+## 14. Logs and restarts
 
 Every service rotates its logs (`json-file`, 10 MB by 5 files) and restarts unless stopped by hand, including after a reboot of the instance.
