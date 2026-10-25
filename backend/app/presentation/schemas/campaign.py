@@ -17,7 +17,21 @@ class MonthlyVolumeRequest(BaseModel):
     volume: int
 
 
-class CampaignLineCreateRequest(BaseModel):
+class LineDatesRequest(BaseModel):
+    """Optional dates of a line. They default to the campaign's and must be in order."""
+
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+    @model_validator(mode="after")
+    def _dates_are_in_order(self) -> "LineDatesRequest":
+        # Raised as a domain error, not a ValueError, so it leaves as {"code","message"} and not as a field error.
+        if self.start_date is not None and self.end_date is not None and self.start_date > self.end_date:
+            raise LineDatesInvalidError("line start must be <= line end")
+        return self
+
+
+class CampaignLineCreateRequest(LineDatesRequest):
     """Request schema for campaign line creation."""
 
     dsp_id: int
@@ -27,18 +41,8 @@ class CampaignLineCreateRequest(BaseModel):
     market_description: str
     contracted_impressions: int = Field(..., gt=0)
     sale_cpm: Decimal = Field(..., decimal_places=2)
-    # Both default to the campaign's dates; they must fall inside them.
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
     # Absent: the volume is split by days. Present: it must cover exactly the months the line runs in.
     monthly_volumes: Optional[list[MonthlyVolumeRequest]] = None
-
-    @model_validator(mode="after")
-    def _dates_are_in_order(self) -> "CampaignLineCreateRequest":
-        # Raised as a domain error, not a ValueError, so it leaves as {"code","message"} and not as a field error.
-        if self.start_date is not None and self.end_date is not None and self.start_date > self.end_date:
-            raise LineDatesInvalidError("line start must be <= line end")
-        return self
 
 
 class CampaignCreateRequest(BaseModel):
