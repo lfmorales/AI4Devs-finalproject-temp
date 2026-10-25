@@ -7,7 +7,6 @@ import Link from "next/link";
 
 import { useAuth } from "@/lib/auth/AuthContext";
 import { ForbiddenPagesProvider, useForbiddenPages } from "@/lib/auth/ForbiddenPages";
-import { getUserManager } from "@/lib/auth/user-manager";
 import { SessionExpiredPage } from "@/lib/components/SessionExpiredPage";
 
 const LINKS = [
@@ -18,18 +17,14 @@ const LINKS = [
 
 function Navigation() {
   const { hidden } = useForbiddenPages();
-
-  const handleSignOut = async () => {
-    await getUserManager().removeUser();
-    // The session will update through the AuthProvider's userUnloaded listener
-  };
+  const { signOut } = useAuth();
 
   return (
     <nav aria-label="Principal" style={{ display: "flex", gap: "1.5rem", alignItems: "center", padding: "0.75rem 2rem", borderBottom: "1px solid #e5e7eb" }}>
       {LINKS.filter((link) => !hidden.has(link.href)).map((link) => (
         <Link key={link.href} href={link.href}>{link.label}</Link>
       ))}
-      <button type="button" onClick={() => void handleSignOut()} style={{ marginLeft: "auto" }}>
+      <button type="button" onClick={() => void signOut()} style={{ marginLeft: "auto" }}>
         Cerrar sesión
       </button>
     </nav>

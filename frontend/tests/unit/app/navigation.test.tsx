@@ -21,8 +21,8 @@ vi.mock("next/navigation", () => ({ usePathname: () => "/status" }));
 
 function renderLayout(children: React.ReactNode, session: AuthContextValue["session"] = {
   status: "authenticated", email: "user@example.com", idToken: "token",
-}) {
-  const value: AuthContextValue = { session, signIn: vi.fn(), signOut: vi.fn() };
+}, signOut: AuthContextValue["signOut"] = vi.fn()) {
+  const value: AuthContextValue = { session, signIn: vi.fn(), signOut };
   return render(
     <AuthContext.Provider value={value}>
       <AuthenticatedLayout>{children}</AuthenticatedLayout>
@@ -46,13 +46,15 @@ describe("the navigation of the authenticated layout", () => {
     expect(within(nav).getByRole("button", { name: "Cerrar sesión" })).toBeInTheDocument();
   });
 
-  it("signs out when the button is pressed", async () => {
+  it("signs out through the auth context when the button is pressed", async () => {
     const user = userEvent.setup();
-    renderLayout(<div>content</div>);
+    const signOut = vi.fn();
+    renderLayout(<div>content</div>, { status: "authenticated", email: "user@example.com", idToken: "token" }, signOut);
 
     await user.click(screen.getByRole("button", { name: "Cerrar sesión" }));
 
-    expect(removeUser).toHaveBeenCalledTimes(1);
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(removeUser).not.toHaveBeenCalled();
   });
 
   it("shows no navigation to someone who is not signed in", () => {
@@ -78,7 +80,7 @@ describe("the navigation of the authenticated layout", () => {
 
     await waitFor(() => expect(screen.getByText("Acceso denegado")).toBeInTheDocument());
     const nav = screen.getByRole("navigation", { name: "Principal" });
-    expect(within(nav).queryByRole("link", { name: "Excepciones" })).not.toBeInTheDocument();
+    await waitFor(() => expect(within(nav).queryByRole("link", { name: "Excepciones" })).not.toBeInTheDocument());
     expect(within(nav).getByRole("link", { name: "Estado" })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Campañas" })).toBeInTheDocument();
   });
@@ -90,7 +92,7 @@ describe("the navigation of the authenticated layout", () => {
 
     await waitFor(() => expect(screen.getByText("Acceso denegado")).toBeInTheDocument());
     const nav = screen.getByRole("navigation", { name: "Principal" });
-    expect(within(nav).queryByRole("link", { name: "Estado" })).not.toBeInTheDocument();
+    await waitFor(() => expect(within(nav).queryByRole("link", { name: "Estado" })).not.toBeInTheDocument());
     expect(within(nav).getByRole("link", { name: "Excepciones" })).toBeInTheDocument();
   });
 
@@ -101,7 +103,7 @@ describe("the navigation of the authenticated layout", () => {
 
     await waitFor(() => expect(screen.getByText("Acceso denegado")).toBeInTheDocument());
     const nav = screen.getByRole("navigation", { name: "Principal" });
-    expect(within(nav).queryByRole("link", { name: "Campañas" })).not.toBeInTheDocument();
+    await waitFor(() => expect(within(nav).queryByRole("link", { name: "Campañas" })).not.toBeInTheDocument());
   });
 
   it("does not hide a link after a 401, which is about the session and not about roles", async () => {
