@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 
+import { AdformName } from "@/features/linking/AdformName";
 import { LinePickerDialog, type FatalKind } from "@/features/linking/LinePickerDialog";
 import { HISTORY_LOAD_WARNING, LINK_ERROR_MESSAGES, LINK_FAILED_MESSAGE, linkLeavesTheOpenQueue } from "@/features/linking/messages";
 import type { UnmappedLine } from "@/lib/api/dsp-catalog";
 import { createApiClient, type ApiError } from "@/lib/api/client";
-import { linkException, listIngestionExceptions, resolveIngestionException, type ExceptionStatus } from "@/lib/api/exceptions";
+import { linkException, listIngestionExceptions, resolveIngestionException, type ExceptionStatus, type IngestionException } from "@/lib/api/exceptions";
 import { useApiCall } from "@/lib/api/useApiCall";
 import { formatInteger } from "@/lib/format/integer";
 import { formatCatalogueName, formatDsp, formatExternalPair, leavesTheOpenQueue, RESOLVE_ERROR_MESSAGES, RESOLVE_FAILED_MESSAGE, TYPE_LABELS } from "./labels";
@@ -17,6 +18,10 @@ const CELL_STYLE = { padding: "0.5rem 1rem" } as const;
 
 /** The two failures that replace the whole page: the session is gone, or the user lacks the role. */
 export type { FatalKind };
+
+function CatalogueName({ row, name }: { row: IngestionException; name: string | null }) {
+  return row.exception_type === "unmatched_delivery" && name !== null ? <AdformName name={name} /> : <>{formatCatalogueName(row, name)}</>;
+}
 
 /** One tab of the queue: loads its own list, and resolves open exceptions without reloading it. */
 export function ExceptionList({ status, onFatal }: { status: ExceptionStatus; onFatal: (kind: FatalKind) => void }) {
@@ -127,8 +132,8 @@ export function ExceptionList({ status, onFatal }: { status: ExceptionStatus; on
                 <td style={CELL_STYLE}>{TYPE_LABELS[row.exception_type]}</td>
                 <td style={CELL_STYLE}>{formatDsp(row.dsp_id)}</td>
                 <td style={CELL_STYLE}>{formatExternalPair(row)}</td>
-                <td style={CELL_STYLE}>{formatCatalogueName(row, row.campaign_name)}</td>
-                <td style={CELL_STYLE}>{formatCatalogueName(row, row.line_item_name)}</td>
+                <td style={CELL_STYLE}><CatalogueName row={row} name={row.campaign_name} /></td>
+                <td style={CELL_STYLE}><CatalogueName row={row} name={row.line_item_name} /></td>
                 <td style={CELL_STYLE}>{row.first_date ?? "—"}</td>
                 <td style={CELL_STYLE}>{row.last_date ?? "—"}</td>
                 <td style={CELL_STYLE}>{row.days}</td>

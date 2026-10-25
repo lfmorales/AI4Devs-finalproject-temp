@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState, type FormEvent } from "react";
 
+import { AdformName } from "@/features/linking/AdformName";
 import { LinePickerDialog, type FatalKind } from "@/features/linking/LinePickerDialog";
 import { HISTORY_LOAD_WARNING } from "@/features/linking/messages";
 import { createApiClient, type ApiError } from "@/lib/api/client";
@@ -181,8 +182,8 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
           <tbody>
             {page.items.map((item) => (
               <tr key={pairKey(item)} style={{ borderBottom: "1px solid #e5e7eb" }}>
-                <td style={CELL_STYLE}>{item.campaign_name}</td>
-                <td style={CELL_STYLE}>{item.line_item_name}</td>
+                <td style={CELL_STYLE}><AdformName name={item.campaign_name} /></td>
+                <td style={CELL_STYLE}><AdformName name={item.line_item_name} /></td>
                 <td style={CELL_STYLE}>{formatLineDates(item)}</td>
                 <td style={CELL_STYLE}>{item.last_impressions_date ?? "—"}</td>
                 <td style={CELL_STYLE}>{item.mapped_line_id === null ? "No" : "Sí"}</td>

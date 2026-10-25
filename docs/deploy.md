@@ -51,6 +51,7 @@ Edit it and replace every example value. Besides the usual variables, set:
 - `SERVER_NAME`: the host name, without scheme (`adops.example.com`).
 - `NEXT_PUBLIC_API_URL`: `https://<SERVER_NAME>/api`.
 - `COGNITO_DOMAIN`: the hosted UI domain, without `https://`.
+- `NEXT_PUBLIC_MASK_NAMES` (optional): with the exact value `true`, every Adform campaign and line name is drawn blurred, cannot be selected and does not reveal on hover, which is useful for screenshots and demos. Leave it empty to show names normally. It is a build variable like the other `NEXT_PUBLIC_*` ones.
 
 `NEXT_PUBLIC_*` values and `COGNITO_DOMAIN` are inlined into the browser bundle when the frontend image is built, so changing them requires rebuilding that image. Only the public settings reach the frontend build; the DSP credentials never do. Never commit `.env`, and do not paste it in tickets or chats.
 

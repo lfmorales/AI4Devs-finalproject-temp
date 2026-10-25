@@ -150,7 +150,7 @@ The types come from the real OpenAPI schema (`DspCatalogPageResponse`, `Unmapped
 - [x] 8B.4 Integrate linking in the exception queue («Vincular a una línea», the row leaves «Abiertas» without reloading, the history warning, `campaign_name` and `line_item_name` with «Sin nombre en el catálogo»), tests first
 - [x] 8B.5 Add the «Catálogo Adform» page with its filters, pagination, navigation link and linking from a row (no identifier on screen, validation result, the null `last_impressions_date` notice, distinct loading, empty and error states, 401 and 403), tests first
 - [x] 8B.6 Add unlinking with its explicit confirmation, the removed-days count and the three Spanish error messages, tests first
-- [ ] 8B.7 Add `NEXT_PUBLIC_MASK_NAMES` (blurred, unselectable, no reveal on hover, with and without the variable), declared in `.env.example`, `docs/deploy.md`, the Dockerfile and `docker-compose.yml`, tests first
+- [x] 8B.7 Add `NEXT_PUBLIC_MASK_NAMES` (blurred, unselectable, no reveal on hover, with and without the variable), declared in `.env.example`, `docs/deploy.md`, the Dockerfile and `docker-compose.yml`, tests first
 
 ## 9. Review and Update Existing Unit Tests (MANDATORY)
 

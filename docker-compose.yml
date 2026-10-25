@@ -53,6 +53,8 @@ services:
         NEXT_PUBLIC_COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID}
         NEXT_PUBLIC_COGNITO_DOMAIN: ${COGNITO_DOMAIN}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        # "true" blurs every Adform campaign and line name (screenshots, demos). Empty shows them.
+        NEXT_PUBLIC_MASK_NAMES: ${NEXT_PUBLIC_MASK_NAMES:-}
     restart: unless-stopped
     depends_on:
       - backend
