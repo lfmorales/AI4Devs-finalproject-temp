@@ -64,7 +64,7 @@ The system SHALL allow a campaign to be registered without a purchase order refe
 
 ### Requirement: A line hangs from the campaign with its own dates
 
-The system SHALL attach every campaign line to the campaign, number the lines of a campaign from 1 in the order the purchase order lists them with no repeated number, and give each line a start and an end date. The dates are optional in the purchase order and default to the campaign's. A line's dates SHALL fall within the campaign's; otherwise the registration is rejected with the code `line_dates_outside_campaign` as an unprocessable request.
+The system SHALL attach every campaign line to the campaign, number the lines of a campaign from 1 in the order the purchase order lists them with no repeated number, and give each line a start and an end date. The dates are optional in the purchase order and default to the campaign's. A line's dates SHALL fall within the campaign's; otherwise the registration is rejected with the code `line_dates_outside_campaign` as an unprocessable request. A line whose start is after its end, whether both dates are given or one of them is completed from the campaign's, is rejected with the code `line_dates_invalid` as an unprocessable request.
 
 #### Scenario: Lines are numbered in purchase order sequence
 - **WHEN** a campaign is registered with three lines
@@ -78,6 +78,11 @@ The system SHALL attach every campaign line to the campaign, number the lines of
 #### Scenario: A line inside the campaign dates is accepted
 - **WHEN** a line starts after the campaign starts and ends before the campaign ends
 - **THEN** it keeps those dates
+
+#### Scenario: A line ending before it starts is rejected
+- **WHEN** a line is submitted with a start date after its end date
+- **THEN** the request is rejected with the code `line_dates_invalid`
+- **AND** no campaign, period or line is created
 
 #### Scenario: A line outside the campaign dates is rejected
 - **WHEN** a line starts before the campaign starts or ends after it ends
@@ -106,7 +111,7 @@ The system SHALL give every line one flight for each calendar month its dates in
 
 ### Requirement: Volume is split by days unless the purchase order states it
 
-The system SHALL split a line's total across its flights in proportion to the number of days of each window, both ends included, in whole impressions. The remainder goes to the windows with the largest fractional share and, on a tie, to the earliest month, so the parts always add up to the total. When the purchase order carries `monthly_volumes` (year, month and volume), those volumes SHALL be used instead, and they SHALL cover exactly the months the line intersects, each with a positive volume, adding up exactly to the line's total. Otherwise the registration is rejected as an unprocessable request with one of these codes:
+The system SHALL split a line's total across its flights in proportion to the number of days of each window, both ends included, in whole impressions. The remainder goes to the windows with the largest fractional share and, on a tie, to the earliest month, so the parts always add up to the total. If any flight would come out with zero impressions, the registration is rejected with the code `volume_too_small_for_flights` as an unprocessable request. When the purchase order carries `monthly_volumes` (year, month and volume), those volumes SHALL be used instead, and they SHALL cover exactly the months the line intersects, each with a positive volume, adding up exactly to the line's total. Otherwise the registration is rejected as an unprocessable request with one of these codes:
 
 - `flight_volumes_incomplete`: a month the line intersects is missing, one it does not intersect is present, or a month is repeated.
 - `flight_volumes_mismatch`: the volumes do not add up to the line's total.
@@ -120,6 +125,11 @@ The system SHALL split a line's total across its flights in proportion to the nu
 #### Scenario: A clipped window carries a smaller share
 - **WHEN** a line's first window covers half of its month
 - **THEN** that flight carries a proportionally smaller volume than a whole month
+
+#### Scenario: A total too small for its flights is rejected
+- **WHEN** a line's total split by days leaves a flight with zero impressions
+- **THEN** the request is rejected with the code `volume_too_small_for_flights`
+- **AND** no campaign, period, line or flight is created
 
 #### Scenario: Explicit monthly volumes are used as given
 - **WHEN** a purchase order lists a volume for each month a line intersects and they add up to the line's total
@@ -140,3 +150,21 @@ The system SHALL split a line's total across its flights in proportion to the nu
 #### Scenario: A volume that is not positive is rejected
 - **WHEN** `monthly_volumes` gives a month zero or a negative volume
 - **THEN** the request is rejected with the code `flight_volume_not_positive`
+
+### Requirement: The registration answers with each line and its flights
+
+The system SHALL answer a registration with the campaign, its periods as the campaign's calendar, and its lines. Each line SHALL carry its number, its start and end dates, its total contracted impressions and a list of its flights, and each flight SHALL carry the identifier of its campaign period, the year and month, its start and end dates and its contracted impressions. A line SHALL NOT carry a campaign period of its own.
+
+#### Scenario: A line over three months is answered with three flights
+- **WHEN** a campaign with one line over three months is registered
+- **THEN** the response has one line with three flights
+- **AND** the flights' impressions add up to the line's total
+- **AND** each flight's campaign period identifier is the identifier of one of the periods listed
+
+#### Scenario: Two lines over two months are not duplicated
+- **WHEN** a campaign with two lines over two months is registered
+- **THEN** the response has two lines of two flights each, and two periods
+
+#### Scenario: A failure leaves nothing stored
+- **WHEN** any line of the registration is rejected, or storing the campaign fails halfway
+- **THEN** no purchase order, campaign, period, line or flight remains
