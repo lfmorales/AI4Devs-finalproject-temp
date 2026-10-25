@@ -34,4 +34,5 @@ def create_dsp_mapping(
         validated_at=mapping.validated_at,
         validation=result.check,
         last_impressions_date=result.last_impressions_date,
+        needs_history_load=result.needs_history_load,
     )

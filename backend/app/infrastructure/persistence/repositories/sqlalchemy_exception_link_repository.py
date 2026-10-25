@@ -4,7 +4,7 @@ from sqlalchemy import exists, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.entities.dsp_mapping import DspMapping
+from app.domain.entities.dsp_mapping import DspMapping, LineDsp
 from app.domain.entities.ingestion_exception import ExceptionStatus, ExceptionType
 from app.domain.exceptions import MappingPairTakenError
 from app.domain.repositories.exception_link_repository import ExceptionLinkRepository, LinkableException
@@ -12,6 +12,7 @@ from app.domain.value_objects.delivery import ExternalLineKey
 from app.infrastructure.persistence.models.campaign import CampaignLineRecord
 from app.infrastructure.persistence.models.delivery import IngestionExceptionRecord
 from app.infrastructure.persistence.models.dsp_mapping import DSPMappingRecord
+from app.infrastructure.persistence.models.masters import DSPRecord
 from app.infrastructure.persistence.repositories.sqlalchemy_dsp_mapping_repository import PAIR_CONSTRAINT
 
 
@@ -30,8 +31,13 @@ class SqlAlchemyExceptionLinkRepository(ExceptionLinkRepository):
             record.id, ExceptionType(record.exception_type), ExceptionStatus(record.status), record.dsp_id, key
         )
 
-    def get_line_dsp_id(self, campaign_line_id: int) -> int | None:
-        return self._session.scalar(select(CampaignLineRecord.dsp_id).where(CampaignLineRecord.id == campaign_line_id))
+    def get_line(self, campaign_line_id: int) -> LineDsp | None:
+        row = self._session.execute(
+            select(DSPRecord.id, DSPRecord.name, CampaignLineRecord.start_date)
+            .join(CampaignLineRecord, CampaignLineRecord.dsp_id == DSPRecord.id)
+            .where(CampaignLineRecord.id == campaign_line_id)
+        ).one_or_none()
+        return None if row is None else LineDsp(row.id, row.name, row.start_date)
 
     def pair_exists(self, dsp_id: int, key: ExternalLineKey) -> bool:
         return bool(self._session.scalar(select(exists().where(

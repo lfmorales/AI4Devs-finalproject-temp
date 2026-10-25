@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app.domain.value_objects.delivery import ExternalLineKey, RetainedDelivery
+from app.presentation.dependencies import providers
 from app.infrastructure.persistence.models.delivery import (
     DailyDeliveryRecord,
     IngestionExceptionDeliveryRecord,
@@ -170,3 +171,16 @@ def test_linking_requires_the_operations_role(authenticated_client_no_operations
 
     assert response.status_code == 403
     assert set(response.json()) == {"code", "message"}
+
+
+@pytest.mark.parametrize(("start", "expected"), [(date(2026, 8, 12), True), (date(2026, 8, 13), False)])
+def test_the_response_says_whether_the_line_needs_a_history_load_at_both_edges_of_the_window(
+        authenticated_client, test_db_session, exception_id, start, expected):
+    authenticated_client.app.dependency_overrides[providers.get_today] = lambda: date(2026, 8, 20)
+    line = insert_campaign_line(
+        test_db_session, dsp_id=seeded_dsp_id(test_db_session), line_start=start, line_end=date(2026, 8, 31))
+    test_db_session.commit()
+
+    response = _link(authenticated_client, exception_id, line)
+
+    assert (response.status_code, response.json()["needs_history_load"]) == (200, expected)

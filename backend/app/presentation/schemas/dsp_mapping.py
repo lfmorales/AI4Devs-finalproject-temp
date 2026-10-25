@@ -21,3 +21,5 @@ class DspMappingResponse(BaseModel):
     # New and optional: when the pair is in the catalogue, the latest date it delivered impressions. A pair that
     # exists but never delivers shows null here while `validation` may still say found.
     last_impressions_date: date | None = None
+    # True when the line started before the normal ingestion window: the delivery before it is not loaded by itself.
+    needs_history_load: bool = False

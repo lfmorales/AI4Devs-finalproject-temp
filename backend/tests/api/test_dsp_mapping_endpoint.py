@@ -165,3 +165,22 @@ def test_the_field_is_null_and_the_rest_of_the_contract_unchanged_when_the_pair_
     assert body["last_impressions_date"] is None
     assert {"id", "campaign_line_id", "dsp_id", "external_campaign_id", "external_line_item_id", "validated_at",
             "validation"} <= set(body)
+
+
+TODAY = date(2026, 8, 20)
+
+
+def _line_starting(session, start: date) -> int:
+    line = insert_campaign_line(session, line_start=start, line_end=date(2026, 8, 31))
+    return line
+
+
+@pytest.mark.parametrize(("start", "expected"), [(date(2026, 8, 12), True), (date(2026, 8, 13), False)])
+def test_the_response_says_whether_the_line_needs_a_history_load_at_both_edges_of_the_window(
+        authenticated_client, test_db_session, start, expected):
+    authenticated_client.app.dependency_overrides[providers.get_today] = lambda: TODAY
+    _use_dsp_client(authenticated_client, ScriptedDspDeliveryClient(KEY))
+
+    response = _post(authenticated_client, _line_starting(test_db_session, start))
+
+    assert (response.status_code, response.json()["needs_history_load"]) == (201, expected)

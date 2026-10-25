@@ -113,15 +113,22 @@ def get_dsp_client_resolver() -> Callable[[str], DspDeliveryClient | None]:
     return resolve
 
 
+def get_today() -> date:
+    """The day the request is made (D) in the configured zone. A dependency so tests can pin it."""
+    return local_today(get_settings().app_timezone, _utc_now)
+
+
 def get_dsp_mapping_service(
     session: Annotated[Session, Depends(get_db_session)],
     resolver: Annotated[Callable[[str], DspDeliveryClient | None], Depends(get_dsp_client_resolver)],
+    today: Annotated[date, Depends(get_today)],
 ) -> DspMappingService:
     return DspMappingService(
         repository=SqlAlchemyDspMappingRepository(session),
         client_for_dsp=resolver,
         clock=lambda: datetime.now(UTC).replace(tzinfo=None),
         catalog=SqlAlchemyDspCatalogQueryRepository(session),
+        today=lambda: today,
     )
 
 
@@ -136,11 +143,13 @@ def get_ingestion_exception_service(
 
 def get_exception_linking_service(
     session: Annotated[Session, Depends(get_db_session)],
+    today: Annotated[date, Depends(get_today)],
 ) -> ExceptionLinkingService:
     return ExceptionLinkingService(
         links=SqlAlchemyExceptionLinkRepository(session),
         queue=SqlAlchemyExceptionQueueRepository(session),
         clock=lambda: datetime.now(UTC).replace(tzinfo=None),
+        today=lambda: today,
     )
 
 
@@ -160,11 +169,6 @@ def get_campaign_line_service(session: Annotated[Session, Depends(get_db_session
 
 def _utc_now() -> datetime:
     return utc_now()
-
-
-def get_today() -> date:
-    """The day the request is made (D) in the configured zone. A dependency so tests can pin it."""
-    return local_today(get_settings().app_timezone, _utc_now)
 
 
 def get_campaign_status_service(

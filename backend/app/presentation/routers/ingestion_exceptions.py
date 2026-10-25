@@ -87,4 +87,5 @@ def link_ingestion_exception(
             validated_at=mapping.validated_at,
         ),
         exception=_to_response(result.exception),
+        needs_history_load=result.needs_history_load,
     )

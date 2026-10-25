@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 import pytest
 from sqlalchemy import select
@@ -21,7 +21,8 @@ def test_the_dsp_of_a_line_is_read_with_its_name(rolled_back_session):
 
     line_dsp = SqlAlchemyDspMappingRepository(rolled_back_session).get_line_dsp(line_id)
 
-    assert line_dsp == LineDsp(dsp_id=seeded_dsp_id(rolled_back_session), dsp_name="Delivery fixture DSP")
+    assert line_dsp == LineDsp(
+        dsp_id=seeded_dsp_id(rolled_back_session), dsp_name="Delivery fixture DSP", line_start_date=date(2026, 8, 1))
 
 
 def test_a_missing_line_has_no_dsp(rolled_back_session):

@@ -22,11 +22,11 @@ class SqlAlchemyDspMappingRepository(DspMappingRepository):
 
     def get_line_dsp(self, campaign_line_id: int) -> LineDsp | None:
         row = self._session.execute(
-            select(DSPRecord.id, DSPRecord.name)
+            select(DSPRecord.id, DSPRecord.name, CampaignLineRecord.start_date)
             .join(CampaignLineRecord, CampaignLineRecord.dsp_id == DSPRecord.id)
             .where(CampaignLineRecord.id == campaign_line_id)
         ).one_or_none()
-        return None if row is None else LineDsp(dsp_id=row.id, dsp_name=row.name)
+        return None if row is None else LineDsp(dsp_id=row.id, dsp_name=row.name, line_start_date=row.start_date)
 
     def pair_exists(self, dsp_id: int, key: ExternalLineKey) -> bool:
         return bool(self._session.scalar(select(exists().where(

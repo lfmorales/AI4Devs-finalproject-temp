@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.domain.entities.dsp_mapping import DspMapping
+from app.domain.entities.dsp_mapping import DspMapping, LineDsp
 from app.domain.entities.ingestion_exception import ExceptionStatus, ExceptionType
 from app.domain.value_objects.delivery import ExternalLineKey
 
@@ -25,8 +25,8 @@ class ExceptionLinkRepository(ABC):
     def get_exception(self, exception_id: int) -> LinkableException | None: ...
 
     @abstractmethod
-    def get_line_dsp_id(self, campaign_line_id: int) -> int | None:
-        """The DSP the campaign line runs on, or None when the line does not exist."""
+    def get_line(self, campaign_line_id: int) -> LineDsp | None:
+        """The DSP the campaign line runs on and the day it starts, or None when the line does not exist."""
 
     @abstractmethod
     def pair_exists(self, dsp_id: int, key: ExternalLineKey) -> bool: ...

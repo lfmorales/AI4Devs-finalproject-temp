@@ -14,6 +14,7 @@ from app.domain.exceptions import (
 from app.domain.repositories.dsp_catalog_query_repository import DspCatalogQueryRepository
 from app.domain.repositories.dsp_mapping_repository import DspMappingRepository
 from app.domain.services.dsp_delivery_client import DspDeliveryClient
+from app.domain.value_objects.ingestion import needs_history_load
 from app.domain.value_objects.delivery import ExternalLineKey
 
 
@@ -29,6 +30,8 @@ class MappingCreationResult:
     check: IdentifierCheck
     # The latest date the pair delivered impressions according to the catalogue; None if unknown or never.
     last_impressions_date: date | None = None
+    # The line started before the normal window, so its earlier delivery is not loaded by itself.
+    needs_history_load: bool = False
 
 
 class DspMappingService:
@@ -45,11 +48,13 @@ class DspMappingService:
         client_for_dsp: Callable[[str], DspDeliveryClient | None],
         clock: Callable[[], datetime],
         catalog: DspCatalogQueryRepository | None = None,
+        today: Callable[[], date] | None = None,
     ) -> None:
         self._repository = repository
         self._client_for_dsp = client_for_dsp
         self._clock = clock
         self._catalog = catalog
+        self._today = today
 
     def create_mapping(
         self, campaign_line_id: int, external_campaign_id: str, external_line_item_id: str
@@ -71,7 +76,11 @@ class DspMappingService:
         mapping = self._repository.add(campaign_line_id, line_dsp.dsp_id, key, validated_at)
         last_impressions_date = None if self._catalog is None else self._catalog.find_last_impressions_date(
             line_dsp.dsp_id, key)
-        return MappingCreationResult(mapping, check, last_impressions_date)
+        history = (
+            self._today is not None and line_dsp.line_start_date is not None
+            and needs_history_load(line_dsp.line_start_date, self._today())
+        )
+        return MappingCreationResult(mapping, check, last_impressions_date, history)
 
     @staticmethod
     def _check_with_dsp(client: DspDeliveryClient, key: ExternalLineKey) -> IdentifierCheck:

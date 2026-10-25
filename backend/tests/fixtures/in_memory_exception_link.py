@@ -1,7 +1,7 @@
 from dataclasses import replace
-from datetime import datetime
+from datetime import date, datetime
 
-from app.domain.entities.dsp_mapping import DspMapping
+from app.domain.entities.dsp_mapping import DspMapping, LineDsp
 from app.domain.entities.ingestion_exception import ExceptionStatus
 from app.domain.exceptions import MappingPairTakenError
 from app.domain.repositories.exception_link_repository import ExceptionLinkRepository, LinkableException
@@ -16,6 +16,7 @@ class InMemoryExceptionLinkRepository(ExceptionLinkRepository):
                  mappings: dict[tuple[int, ExternalLineKey], int] | None = None) -> None:
         self._queue = queue
         self.line_dsp = line_dsp
+        self.line_start: dict[int, date] = {}
         self.mappings = dict(mappings or {})  # (dsp, key) -> line
         self.validated: dict[tuple[int, ExternalLineKey], datetime | None] = {}
         self.commits = self.rollbacks = 0
@@ -30,8 +31,9 @@ class InMemoryExceptionLinkRepository(ExceptionLinkRepository):
             summary.external_campaign_id, summary.external_line_item_id)
         return LinkableException(summary.id, summary.exception_type, summary.status, summary.dsp_id, key)
 
-    def get_line_dsp_id(self, campaign_line_id: int) -> int | None:
-        return self.line_dsp.get(campaign_line_id)
+    def get_line(self, campaign_line_id: int) -> LineDsp | None:
+        dsp_id = self.line_dsp.get(campaign_line_id)
+        return None if dsp_id is None else LineDsp(dsp_id, f"dsp-{dsp_id}", self.line_start.get(campaign_line_id))
 
     def pair_exists(self, dsp_id: int, key: ExternalLineKey) -> bool:
         return (dsp_id, key) in self.mappings

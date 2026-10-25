@@ -51,3 +51,5 @@ class LinkedMappingResponse(BaseModel):
 class LinkExceptionResponse(BaseModel):
     mapping: LinkedMappingResponse
     exception: IngestionExceptionResponse
+    # True when the line started before the normal ingestion window: the delivery before it is not loaded by itself.
+    needs_history_load: bool = False
