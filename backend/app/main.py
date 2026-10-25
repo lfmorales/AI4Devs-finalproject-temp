@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from app.presentation.errors import register_exception_handlers
 from app.presentation.routers import (
+    campaign_lines,
     campaign_status,
     campaigns,
     dsp_catalog,
@@ -23,6 +24,7 @@ def create_app() -> FastAPI:
     app.include_router(masters.router)
     app.include_router(dsp_mappings.router)
     app.include_router(dsp_catalog.router)
+    app.include_router(campaign_lines.router)
     app.include_router(ingestion_exceptions.router)
     app.include_router(flight_preview.router)
     app.include_router(campaign_status.router)

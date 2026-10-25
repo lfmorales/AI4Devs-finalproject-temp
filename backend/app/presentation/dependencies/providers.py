@@ -14,6 +14,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.services.authentication_service import AuthenticationService
+from app.application.services.campaign_line_service import CampaignLineService
 from app.application.services.campaign_status_service import CampaignStatusService
 from app.application.services.dsp_catalog_service import DspCatalogService
 from app.application.services.dsp_mapping_service import DspMappingService
@@ -25,6 +26,9 @@ from app.domain.services.dsp_delivery_client import DspDeliveryClient
 from app.infrastructure.auth.cognito_token_verifier import CognitoTokenVerifier
 from app.infrastructure.dsp.adform_delivery_client import AdformDeliveryClient
 from app.infrastructure.persistence.database import build_engine, build_session_factory
+from app.infrastructure.persistence.repositories.sqlalchemy_campaign_line_query_repository import (
+    SqlAlchemyCampaignLineQueryRepository,
+)
 from app.infrastructure.persistence.repositories.sqlalchemy_campaign_status_repository import (
     SqlAlchemyCampaignStatusRepository,
 )
@@ -123,6 +127,10 @@ def get_ingestion_exception_service(
 
 def get_dsp_catalog_service(session: Annotated[Session, Depends(get_db_session)]) -> DspCatalogService:
     return DspCatalogService(repository=SqlAlchemyDspCatalogQueryRepository(session))
+
+
+def get_campaign_line_service(session: Annotated[Session, Depends(get_db_session)]) -> CampaignLineService:
+    return CampaignLineService(repository=SqlAlchemyCampaignLineQueryRepository(session))
 
 
 def _utc_now() -> datetime:

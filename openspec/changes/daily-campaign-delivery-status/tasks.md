@@ -144,7 +144,7 @@ The form lets each line have its own dates and shows the monthly split (flights)
 - [x] 9A.3 Update the catalogue in the batch's transaction (new, updated, zeros, unattributed, failed batch) and always make the request, even with no mapped lines
 - [x] 9A.4 Add `window_start` and `window_end` to the batches with their check, set by every new batch, in a separate migration
 - [x] 9A.5 `GET /api/dsp-catalog` with filters, paging, `mapped` and no cost
-- [ ] 9A.6 `GET /api/campaign-lines/unmapped`
+- [x] 9A.6 `GET /api/campaign-lines/unmapped`
 - [ ] 9A.7 `POST /api/ingestion-exceptions/{id}/link`, atomic, with its errors
 - [ ] 9A.8 `DELETE /api/campaign-lines/{id}/dsp-mappings`
 - [ ] 9A.9 `last_impressions_date` in the mapping response, and `campaign_name` and `line_item_name` in the exception queue
