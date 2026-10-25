@@ -52,15 +52,15 @@ export default function AuthenticatedLayout({ children }: { children: ReactNode 
 
   if (session.status === "unauthenticated") {
     return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", backgroundColor: "#f9fafb" }}>
-        <div style={{ width: "100%", maxWidth: "28rem", padding: "3rem 1.5rem", textAlign: "center" }}>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: "bold", marginBottom: "1rem" }}>Por favor, inicia sesión</h1>
-          <p style={{ color: "#4b5563", marginBottom: "2rem" }}>
+      <div className="card-page">
+        <div className="card">
+          <h1>Por favor, inicia sesión</h1>
+          <p>
             Para continuar, necesitas autenticarte en el sistema.
           </p>
           <button
+            className="btn-primary"
             onClick={() => signIn(pathname || "/")}
-            style={{ width: "100%", padding: "0.5rem 1rem", backgroundColor: "#2563eb", color: "white", fontWeight: "600", borderRadius: "0.375rem" }}
           >
             Iniciar sesión
           </button>

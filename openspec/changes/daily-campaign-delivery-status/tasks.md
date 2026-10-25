@@ -171,7 +171,7 @@ One hand-written stylesheet, with no framework, no new dependency, no external f
 - [x] 8D.4 Forms and buttons: label over field, full-width fields, card fieldsets, compact flights table, field errors under the field, primary, secondary and danger buttons with a visible disabled state and a 36 px minimum height
 - [x] 8D.5 Tags and notices: status flags as coloured tags with text, error, warning, success and information notices, and loading, empty and error states
 - [x] 8D.6 Dialogs: centred native dialog with padding, rounded corners, soft shadow and dimmed `::backdrop`, without changing how it works as a modal
-- [ ] 8D.7 Home, expired-session and access-denied screens as a centred card with the primary button
+- [x] 8D.7 Home, expired-session and access-denied screens as a centred card with the primary button
 - [ ] 8D.8 Stylesheet tests: root layout import, no external URL, focus, backdrop and reduced motion, and AA contrast of every declared pair
 
 ## 9. Review and Update Existing Unit Tests (MANDATORY)

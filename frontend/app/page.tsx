@@ -27,12 +27,12 @@ export default function HomePage() {
 
   // Unauthenticated: show login page
   return (
-    <section>
-      <div style={{ textAlign: "center", padding: "2rem" }}>
+    <section className="card-page">
+      <div className="card">
         <h1>AdOps360</h1>
         <p>Campaign intake, delivery performance and margins in one place.</p>
         <p>Sign in to your account to continue.</p>
-        <button type="button" onClick={() => void signIn("/campaigns")}>
+        <button type="button" className="btn-primary" onClick={() => void signIn("/campaigns")}>
           Iniciar sesión
         </button>
       </div>
