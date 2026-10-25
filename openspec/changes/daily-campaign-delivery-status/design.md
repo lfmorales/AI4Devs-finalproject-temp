@@ -73,8 +73,6 @@ It also introduces the first scheduled work in the product. Until now every writ
 
 **The final cleanup migration makes the line model mandatory.** It makes `campaign_id`, `line_number`, `start_date` and `end_date` non-null on `campaign_lines` and drops `campaign_period_id` with its foreign key and index. If any line lacks one of them it fails and says the development database must be recreated. Its downgrade restores `campaign_period_id` from the period of each line's earliest flight, and fails with a clear message if a line has no flights.
 
-**Known limitation: the line is not linked to its purchase-order version.** `purchase_order_version_id` exists on the line entity and the column exists in the table, but the repository does not write it, so a line is not tied to the version of the purchase order that fixes its volume and CPM. It is not corrected here.
-
 **Monthly campaign periods stay as the campaign's calendar.** `campaign_periods` keeps serving billing and the monthly close, and a flight points at the period of its month. Nothing else hangs from a period any more once the line is moved.
 
 **Delivery does not change with the model.** `daily_deliveries` stays at line and day and `dsp_mappings` keeps pointing at the line. A delivery is stored even when it falls outside every flight of its line; it counts toward a flight only when it lies inside that flight's window.
