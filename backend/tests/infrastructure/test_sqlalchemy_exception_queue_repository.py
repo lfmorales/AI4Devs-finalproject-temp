@@ -71,15 +71,46 @@ def test_a_missing_delivery_exception_has_no_retained_days(rolled_back_session):
     assert (summary.campaign_line_id, summary.campaign_period_id) == (line, period)
 
 
-def test_listing_filters_by_status_and_orders_by_id(rolled_back_session):
+def test_listing_filters_by_status(rolled_back_session):
     first = _seed_unmatched(rolled_back_session, ExternalLineKey("1", "1"))
     second = _seed_unmatched(rolled_back_session, ExternalLineKey("2", "2"))
     queue = SqlAlchemyExceptionQueueRepository(rolled_back_session)
     queue.mark_resolved(first, NOW, insert_user(rolled_back_session), None)
 
-    assert [s.id for s in queue.list_summaries(None)] == [first, second]
+    assert {s.id for s in queue.list_summaries(None)} == {first, second}
     assert [s.id for s in queue.list_summaries(ExceptionStatus.OPEN)] == [second]
     assert [s.id for s in queue.list_summaries(ExceptionStatus.RESOLVED)] == [first]
+
+
+def _seed_unmatched_ending(session, key: ExternalLineKey, last_day: int) -> int:
+    repository = SqlAlchemyIngestionExceptionRepository(session)
+    exception_id = repository.get_or_create_unmatched(seeded_dsp_id(session), key, insert_ingestion_batch(session))
+    repository.add_retained(exception_id, [_retained(last_day, key, 10, 1, "0.1")])
+    repository.refresh_unmatched_date_spans(seeded_dsp_id(session))
+    return exception_id
+
+
+def test_the_queue_is_ordered_by_last_date_then_id_both_descending(rolled_back_session):
+    older = _seed_unmatched_ending(rolled_back_session, ExternalLineKey("1", "1"), 3)
+    newest = _seed_unmatched_ending(rolled_back_session, ExternalLineKey("2", "2"), 9)
+    tied_first = _seed_unmatched_ending(rolled_back_session, ExternalLineKey("3", "3"), 6)
+    tied_second = _seed_unmatched_ending(rolled_back_session, ExternalLineKey("4", "4"), 6)
+
+    queue = SqlAlchemyExceptionQueueRepository(rolled_back_session)
+
+    assert [s.id for s in queue.list_summaries(None)] == [newest, tied_second, tied_first, older]
+
+
+def test_an_exception_without_a_last_date_comes_after_the_dated_ones(rolled_back_session):
+    line = insert_campaign_line(rolled_back_session)
+    SqlAlchemyIngestionExceptionRepository(rolled_back_session).record_missing_delivery(
+        line, period_of_line(rolled_back_session, line), insert_ingestion_batch(rolled_back_session))
+    dated = _seed_unmatched_ending(rolled_back_session, ExternalLineKey("1", "1"), 3)
+
+    queue = SqlAlchemyExceptionQueueRepository(rolled_back_session)
+
+    assert [s.id for s in queue.list_summaries(None)][0] == dated
+    assert queue.list_summaries(None)[-1].campaign_line_id == line
 
 
 def test_a_missing_exception_has_no_summary(rolled_back_session):

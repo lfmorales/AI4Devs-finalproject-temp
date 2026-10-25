@@ -16,7 +16,9 @@ class SqlAlchemyExceptionQueueRepository(ExceptionQueueRepository):
         self._session = session
 
     def list_summaries(self, status: ExceptionStatus | None) -> list[ExceptionSummary]:
-        statement = self._summary_statement().order_by(IngestionExceptionRecord.id)
+        statement = self._summary_statement().order_by(
+            IngestionExceptionRecord.last_date.desc().nulls_last(), IngestionExceptionRecord.id.desc()
+        )
         if status is not None:
             statement = statement.where(IngestionExceptionRecord.status == status.value)
         return [_to_summary(row) for row in self._session.execute(statement)]
