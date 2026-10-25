@@ -201,3 +201,65 @@ nav[aria-label="Principal"] :focus-visible {
 .page-header h1 {
   margin-bottom: 0;
 }
+
+/* Tables */
+
+.table-scroll {
+  overflow-x: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+th,
+td {
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border);
+}
+
+thead th {
+  background: var(--color-surface-alt);
+  font-weight: 650;
+  white-space: nowrap;
+  border-bottom: 2px solid var(--color-border);
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+tbody tr:hover {
+  background: var(--color-surface-alt);
+}
+
+th.num,
+td.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+th[aria-sort] button {
+  padding: 0;
+  min-height: 0;
+  background: none;
+  border: 0;
+  font-weight: inherit;
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+
+th[aria-sort="ascending"] button::after {
+  content: " ▲";
+}
+
+th[aria-sort="descending"] button::after {
+  content: " ▼";
+}

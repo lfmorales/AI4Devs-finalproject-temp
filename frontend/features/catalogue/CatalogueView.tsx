@@ -29,8 +29,6 @@ import {
 import { UnlinkDialog } from "./UnlinkDialog";
 
 const PAGE_SIZE = 50;
-const HEADER_STYLE = { textAlign: "left", padding: "0.5rem 1rem", fontWeight: "600" } as const;
-const CELL_STYLE = { padding: "0.5rem 1rem" } as const;
 
 interface Filters {
   q: string;
@@ -168,26 +166,27 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
     const unlinking = page.items.find((item) => pairKey(item) === unlinkingKey) ?? null;
     return (
       <>
-        <table aria-label="Catálogo Adform" style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="table-scroll">
+        <table aria-label="Catálogo Adform">
           <thead>
-            <tr style={{ backgroundColor: "#f3f4f6", borderBottom: "2px solid #d1d5db" }}>
-              <th scope="col" style={HEADER_STYLE}>Campaña</th>
-              <th scope="col" style={HEADER_STYLE}>Línea</th>
-              <th scope="col" style={HEADER_STYLE}>Fechas de la línea</th>
-              <th scope="col" style={HEADER_STYLE}>Última fecha con impresiones</th>
-              <th scope="col" style={HEADER_STYLE}>Vinculada</th>
-              <th scope="col" style={HEADER_STYLE}>Acciones</th>
+            <tr>
+              <th scope="col">Campaña</th>
+              <th scope="col">Línea</th>
+              <th scope="col">Fechas de la línea</th>
+              <th scope="col">Última fecha con impresiones</th>
+              <th scope="col">Vinculada</th>
+              <th scope="col">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {page.items.map((item) => (
-              <tr key={pairKey(item)} style={{ borderBottom: "1px solid #e5e7eb" }}>
-                <td style={CELL_STYLE}><AdformName name={item.campaign_name} /></td>
-                <td style={CELL_STYLE}><AdformName name={item.line_item_name} /></td>
-                <td style={CELL_STYLE}>{formatLineDates(item)}</td>
-                <td style={CELL_STYLE}>{item.last_impressions_date ?? "—"}</td>
-                <td style={CELL_STYLE}>{item.mapped_line_id === null ? "No" : "Sí"}</td>
-                <td style={CELL_STYLE}>
+              <tr key={pairKey(item)}>
+                <td><AdformName name={item.campaign_name} /></td>
+                <td><AdformName name={item.line_item_name} /></td>
+                <td>{formatLineDates(item)}</td>
+                <td>{item.last_impressions_date ?? "—"}</td>
+                <td>{item.mapped_line_id === null ? "No" : "Sí"}</td>
+                <td>
                   {item.mapped_line_id !== null && (
                     <button
                       type="button"
@@ -211,6 +210,7 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
             ))}
           </tbody>
         </table>
+        </div>
         <nav aria-label="Paginación del catálogo" style={{ display: "flex", gap: "1rem", alignItems: "center", marginTop: "1rem" }}>
           <button type="button" disabled={page.offset === 0} onClick={() => setOffset(Math.max(0, page.offset - PAGE_SIZE))}>Anterior</button>
           <span>Mostrando {formatInteger(page.offset + 1)}–{formatInteger(page.offset + page.items.length)} de {formatInteger(page.total)}</span>

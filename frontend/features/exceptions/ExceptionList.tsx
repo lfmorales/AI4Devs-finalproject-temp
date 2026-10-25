@@ -13,8 +13,6 @@ import { formatInteger } from "@/lib/format/integer";
 import { formatCatalogueName, formatDsp, formatExternalPair, leavesTheOpenQueue, RESOLVE_ERROR_MESSAGES, RESOLVE_FAILED_MESSAGE, TYPE_LABELS } from "./labels";
 import { ResolveDialog } from "./ResolveDialog";
 
-const HEADER_STYLE = { textAlign: "left", padding: "0.5rem 1rem", fontWeight: "600" } as const;
-const CELL_STYLE = { padding: "0.5rem 1rem" } as const;
 
 /** The two failures that replace the whole page: the session is gone, or the user lacks the role. */
 export type { FatalKind };
@@ -110,36 +108,37 @@ export function ExceptionList({ status, onFatal }: { status: ExceptionStatus; on
           <p>{status === "open" ? "No hay excepciones abiertas" : "No hay excepciones resueltas"}</p>
         </div>
       ) : (
-        <table aria-label="Cola de excepciones" style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="table-scroll">
+        <table aria-label="Cola de excepciones">
           <thead>
-            <tr style={{ backgroundColor: "#f3f4f6", borderBottom: "2px solid #d1d5db" }}>
-              <th scope="col" style={HEADER_STYLE}>Tipo</th>
-              <th scope="col" style={HEADER_STYLE}>DSP</th>
-              <th scope="col" style={HEADER_STYLE}>Pareja externa</th>
-              <th scope="col" style={HEADER_STYLE}>Campaña Adform</th>
-              <th scope="col" style={HEADER_STYLE}>Línea Adform</th>
-              <th scope="col" style={HEADER_STYLE}>Primera fecha</th>
-              <th scope="col" style={HEADER_STYLE}>Última fecha</th>
-              <th scope="col" style={HEADER_STYLE}>Días</th>
-              <th scope="col" style={HEADER_STYLE}>Impresiones</th>
-              <th scope="col" style={HEADER_STYLE}>Clics</th>
-              <th scope="col" style={HEADER_STYLE}>{status === "open" ? "Acciones" : "Nota"}</th>
+            <tr>
+              <th scope="col">Tipo</th>
+              <th scope="col">DSP</th>
+              <th scope="col">Pareja externa</th>
+              <th scope="col">Campaña Adform</th>
+              <th scope="col">Línea Adform</th>
+              <th scope="col">Primera fecha</th>
+              <th scope="col">Última fecha</th>
+              <th scope="col" className="num">Días</th>
+              <th scope="col" className="num">Impresiones</th>
+              <th scope="col" className="num">Clics</th>
+              <th scope="col">{status === "open" ? "Acciones" : "Nota"}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
-                <td style={CELL_STYLE}>{TYPE_LABELS[row.exception_type]}</td>
-                <td style={CELL_STYLE}>{formatDsp(row.dsp_id)}</td>
-                <td style={CELL_STYLE}>{formatExternalPair(row)}</td>
-                <td style={CELL_STYLE}><CatalogueName row={row} name={row.campaign_name} /></td>
-                <td style={CELL_STYLE}><CatalogueName row={row} name={row.line_item_name} /></td>
-                <td style={CELL_STYLE}>{row.first_date ?? "—"}</td>
-                <td style={CELL_STYLE}>{row.last_date ?? "—"}</td>
-                <td style={CELL_STYLE}>{row.days}</td>
-                <td style={CELL_STYLE}>{formatInteger(row.impressions_total)}</td>
-                <td style={CELL_STYLE}>{formatInteger(row.clicks_total)}</td>
-                <td style={CELL_STYLE}>
+              <tr key={row.id}>
+                <td>{TYPE_LABELS[row.exception_type]}</td>
+                <td>{formatDsp(row.dsp_id)}</td>
+                <td>{formatExternalPair(row)}</td>
+                <td><CatalogueName row={row} name={row.campaign_name} /></td>
+                <td><CatalogueName row={row} name={row.line_item_name} /></td>
+                <td>{row.first_date ?? "—"}</td>
+                <td>{row.last_date ?? "—"}</td>
+                <td className="num">{row.days}</td>
+                <td className="num">{formatInteger(row.impressions_total)}</td>
+                <td className="num">{formatInteger(row.clicks_total)}</td>
+                <td>
                   {status === "open" ? (
                     <span style={{ display: "flex", gap: "0.5rem" }}>
                       {row.exception_type === "unmatched_delivery" && (
@@ -163,6 +162,7 @@ export function ExceptionList({ status, onFatal }: { status: ExceptionStatus; on
             ))}
           </tbody>
         </table>
+        </div>
       )}
       {linkingId !== null && (
         <LinePickerDialog

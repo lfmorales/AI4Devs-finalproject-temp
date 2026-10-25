@@ -102,35 +102,37 @@ export default function CampaignsPage() {
       )}
 
       {campaigns && campaigns.length > 0 && (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="table-scroll">
+        <table>
           <thead>
-            <tr style={{ backgroundColor: "#f3f4f6", borderBottom: "2px solid #d1d5db" }}>
-              <th style={{ textAlign: "left", padding: "0.5rem 1rem", fontWeight: "600" }}>ID</th>
-              <th style={{ textAlign: "left", padding: "0.5rem 1rem", fontWeight: "600" }}>Nombre</th>
-              <th style={{ textAlign: "left", padding: "0.5rem 1rem", fontWeight: "600" }}>Nombre mostrado</th>
-              <th style={{ textAlign: "left", padding: "0.5rem 1rem", fontWeight: "600" }}>Agencia</th>
-              <th style={{ textAlign: "left", padding: "0.5rem 1rem", fontWeight: "600" }}>Anunciante</th>
-              <th style={{ textAlign: "left", padding: "0.5rem 1rem", fontWeight: "600" }}>Estado</th>
-              <th style={{ textAlign: "left", padding: "0.5rem 1rem", fontWeight: "600" }}>Inicio</th>
-              <th style={{ textAlign: "left", padding: "0.5rem 1rem", fontWeight: "600" }}>Fin</th>
-              <th style={{ textAlign: "left", padding: "0.5rem 1rem", fontWeight: "600" }}>Acciones</th>
+            <tr>
+              <th className="num">ID</th>
+              <th>Nombre</th>
+              <th>Nombre mostrado</th>
+              <th>Agencia</th>
+              <th>Anunciante</th>
+              <th>Estado</th>
+              <th>Inicio</th>
+              <th>Fin</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {campaigns.map((campaign) => (
-              <tr key={campaign.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
-                <td style={{ padding: "0.5rem 1rem" }}>{campaign.id}</td>
-                <td style={{ padding: "0.5rem 1rem" }}>{campaign.name}</td>
-                <td style={{ padding: "0.5rem 1rem" }}>{campaign.display_name}</td>
-                <td style={{ padding: "0.5rem 1rem" }}>{campaign.agency_id}</td>
-                <td style={{ padding: "0.5rem 1rem" }}>{campaign.advertiser_id}</td>
-                <td style={{ padding: "0.5rem 1rem" }}>{campaign.status}</td>
-                <td style={{ padding: "0.5rem 1rem" }}>{campaign.start_date}</td>
-                <td style={{ padding: "0.5rem 1rem" }}>{campaign.end_date}</td>
+              <tr key={campaign.id}>
+                <td className="num">{campaign.id}</td>
+                <td>{campaign.name}</td>
+                <td>{campaign.display_name}</td>
+                <td>{campaign.agency_id}</td>
+                <td>{campaign.advertiser_id}</td>
+                <td>{campaign.status}</td>
+                <td>{campaign.start_date}</td>
+                <td>{campaign.end_date}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );
