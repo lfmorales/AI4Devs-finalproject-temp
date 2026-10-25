@@ -101,6 +101,8 @@ It also introduces the first scheduled work in the product. Until now every writ
 
 **The two flags are different questions.** The missing-data flag asks whether the latest delivery predates D-1, and a row of zero impressions counts as data received. A campaign that keeps sending rows of zeros is stalled, which the pacing deviation flag covers.
 
+**The Adform interface export has a verified format.** The manual upload is deferred (the API route is the path verified against the real account), but the report the Adform interface exports was inspected and its format is recorded here for when the upload is built. The workbook has a sheet named `Sheet`. The header row is found by column names, starting at column B, not by a fixed row. The columns are `Date`, `Campaign ID`, `Campaign`, `Line Item ID`, `Line Item`, `Campaign Currency`, `Tracked Ads` (the impressions), `Clicks`, `Cost`, `Measurable Impressions` and `Viewable Impressions for IAB Viewability`. Dates are written `dd/mm/yyyy`. A total row at the end carries no identifiers and must not be read as delivery. Cost has up to six decimals.
+
 **A batch counts rows read.** `row_count` is the number of rows read from the DSP; rows without an attributed line item are counted in `ignored_row_count` and unmatched rows of zeros in `zero_unmatched_row_count`. The states are `running`, `succeeded` and `failed`.
 
 ## Risks / Trade-offs

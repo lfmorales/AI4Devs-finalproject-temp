@@ -1,7 +1,7 @@
 ## 0. Setup: Create Feature Branch (MANDATORY - FIRST STEP)
 
-- [ ] 0.1 Create feature branch `feature/daily-campaign-delivery-status` from `final-project-LFMC` and verify `git status` reports it as current **(desviación: rama creada desde final-project-LFMC, no desde main)**
-- [ ] 0.2 Verify `register-campaign-from-purchase-order` is applied: campaign lines and validated DSP mappings exist to ingest against
+- [x] 0.1 Create feature branch `feature/daily-campaign-delivery-status` from `final-project-LFMC` and verify `git status` reports it as current **(desviación: rama creada desde final-project-LFMC, no desde main)** (deviation: branch created from final-project-LFMC, not main)
+- [x] 0.2 Verify `register-campaign-from-purchase-order` is applied: campaign lines and validated DSP mappings exist to ingest against
 
 ## 1. Database: Delivery Schema
 
@@ -33,7 +33,7 @@
 
 ## 4. Backend: Adform Connector and Ingestion Service
 
-- [x] 4.1 Implement the Adform delivery client in `infrastructure/dsp/` behind the interface from 2.1, with authentication and pagination, verified against the sandbox **(verificado contra la cuenta real de Adform, solo lectura, con adform_smoke el 2026-10-24: 142 filas, operación succeeded)**
+- [x] 4.1 Implement the Adform delivery client in `infrastructure/dsp/` behind the interface from 2.1, with authentication and pagination, verified against the sandbox **(verificado contra la cuenta real de Adform, solo lectura, con adform_smoke el 2026-10-24: 142 filas, operación succeeded)** (verified against the real Adform account, read-only, 2026-10-25: mapping, nightly command and idempotent re-run; stored delivery matches the interface export for impressions, clicks, cost, measurable and viewable)
 - [x] 4.2 Verify no credential reaches the logs or an error response, asserted by a test on the log output
 - [x] 4.3 Implement the ingestion application service over the D-7 to D-1 window, writing through a bulk path rather than materialising entities, and verify memory stays bounded on a 1 M-row run **(partial: memoria verificada en el servicio con 1 M de filas y un destino contador; la escritura a PostgreSQL se verifica por trozos, no con 1 M de filas)**
 - [x] 4.4 Implement batch recording for success and failure and verify a failed run leaves a batch with a failed outcome and no partial range
@@ -53,11 +53,11 @@
 
 ## 5. Backend: Manual Upload Route
 
-- [ ] 5.1 Implement the spreadsheet parser in `infrastructure/spreadsheets/` behind an interface, and verify pandas and openpyxl are imported nowhere else
-- [ ] 5.2 Write failing tests asserting structure is validated before content and that a malformed file fails naming file, sheet and row
-- [ ] 5.3 Implement the upload endpoint validating file type and size before parsing, storing the file in S3, and verify the tests from 5.2 pass **(partial: almacenamiento en disco detrás de una interfaz, en lugar de S3)**
-- [ ] 5.4 Verify an uploaded file produces delivery records indistinguishable from the API route, asserted by a test comparing both paths
-- [ ] 5.5 Write a test asserting a user without `operations` receives 403 on the upload endpoint
+- [ ] 5.1 Implement the spreadsheet parser in `infrastructure/spreadsheets/` behind an interface, and verify pandas and openpyxl are imported nowhere else **(deferred: the API route is verified against the real account; the format of the Adform export is recorded in design.md)**
+- [ ] 5.2 Write failing tests asserting structure is validated before content and that a malformed file fails naming file, sheet and row **(deferred: the API route is verified against the real account; the format of the Adform export is recorded in design.md)**
+- [ ] 5.3 Implement the upload endpoint validating file type and size before parsing, storing the file in S3, and verify the tests from 5.2 pass **(partial: almacenamiento en disco detrás de una interfaz, en lugar de S3)** **(deferred: the API route is verified against the real account; the format of the Adform export is recorded in design.md)**
+- [ ] 5.4 Verify an uploaded file produces delivery records indistinguishable from the API route, asserted by a test comparing both paths **(deferred: the API route is verified against the real account; the format of the Adform export is recorded in design.md)**
+- [ ] 5.5 Write a test asserting a user without `operations` receives 403 on the upload endpoint **(deferred: the API route is verified against the real account; the format of the Adform export is recorded in design.md)**
 
 ## 6. Backend: Exceptions and Status API
 
@@ -99,7 +99,7 @@
 
 ## 7. Backend: Scheduled Run
 
-- [x] 7.1 Implement the nightly ingestion as `python -m scripts.run_ingestion [--date YYYY-MM-DD]`, a container command invoked by the host scheduler, using the same service as every other route, with an advisory lock and the exit codes 0 (succeeded), 1 (failed), 2 (another run holds the lock) and 3 (missing configuration), and tests for success, client failure, busy lock, missing configuration and a repeated window **(la línea de crontab de ejemplo está en el design)**
+- [x] 7.1 Implement the nightly ingestion as `python -m scripts.run_ingestion [--date YYYY-MM-DD]`, a container command invoked by the host scheduler, using the same service as every other route, with an advisory lock and the exit codes 0 (succeeded), 1 (failed), 2 (another run holds the lock) and 3 (missing configuration), and tests for success, client failure, busy lock, missing configuration and a repeated window **(la línea de crontab de ejemplo está en el design)** (verified against the real Adform account, read-only, 2026-10-25: mapping, nightly command and idempotent re-run; stored delivery matches the interface export for impressions, clicks, cost, measurable and viewable)
 - [ ] 7.2 Verify the status view reads the last successful batch so a stale page is visibly stale, asserted by a test with a failed most-recent run **(deferred: indicador de página desactualizada)**
 - [x] 7.3 Calculate today and the ingestion window in the configured time zone (`Europe/Madrid` by default) in one function used by the command, the API's `get_today` and the Adform client, with tests for the change of day between 22:00 and 02:00 in Madrid and for the daylight saving changes
 - [x] 7.4 Write a test with synthetic data asserting that no value, identifier, name, amount, token or DSP error text appears in what the command prints
