@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 
 import AuthenticatedLayout from "@/app/(authenticated)/layout";
 import CampaignsPage from "@/app/(authenticated)/campaigns/page";
+import DspCatalogPage from "@/app/(authenticated)/dsp-catalog/page";
 import ExceptionsPage from "@/app/(authenticated)/exceptions/page";
 import StatusPage from "@/app/(authenticated)/status/page";
 import { AuthContext, type AuthContextValue } from "@/lib/auth/AuthContext";
@@ -36,13 +37,14 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.unstubAllGlobals());
 
 describe("the navigation of the authenticated layout", () => {
-  it("links campaigns, status and exceptions, and has the sign-out button", () => {
+  it("links campaigns, status, exceptions and the Adform catalogue, and has the sign-out button", () => {
     renderLayout(<div>content</div>);
 
     const nav = screen.getByRole("navigation", { name: "Principal" });
     expect(within(nav).getByRole("link", { name: "Campañas" })).toHaveAttribute("href", "/campaigns");
     expect(within(nav).getByRole("link", { name: "Estado" })).toHaveAttribute("href", "/status");
     expect(within(nav).getByRole("link", { name: "Excepciones" })).toHaveAttribute("href", "/exceptions");
+    expect(within(nav).getByRole("link", { name: "Catálogo Adform" })).toHaveAttribute("href", "/dsp-catalog");
     expect(within(nav).getByRole("button", { name: "Cerrar sesión" })).toBeInTheDocument();
   });
 
@@ -70,7 +72,7 @@ describe("the navigation of the authenticated layout", () => {
 
     await screen.findByText("No hay campañas en curso");
     const nav = screen.getByRole("navigation", { name: "Principal" });
-    expect(within(nav).getAllByRole("link")).toHaveLength(3);
+    expect(within(nav).getAllByRole("link")).toHaveLength(4);
   });
 
   it("hides the exceptions link once the exception queue answers 403, and keeps the others", async () => {
@@ -83,6 +85,17 @@ describe("the navigation of the authenticated layout", () => {
     await waitFor(() => expect(within(nav).queryByRole("link", { name: "Excepciones" })).not.toBeInTheDocument());
     expect(within(nav).getByRole("link", { name: "Estado" })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Campañas" })).toBeInTheDocument();
+  });
+
+  it("hides the catalogue link once the catalogue answers 403, and keeps the others", async () => {
+    installRoutes({ "GET /dsp-catalog?limit=50&offset=0": forbidden });
+
+    renderLayout(<DspCatalogPage />);
+
+    await waitFor(() => expect(screen.getByText("Acceso denegado")).toBeInTheDocument());
+    const nav = screen.getByRole("navigation", { name: "Principal" });
+    await waitFor(() => expect(within(nav).queryByRole("link", { name: "Catálogo Adform" })).not.toBeInTheDocument());
+    expect(within(nav).getByRole("link", { name: "Excepciones" })).toBeInTheDocument();
   });
 
   it("hides the status link once the status page answers 403", async () => {

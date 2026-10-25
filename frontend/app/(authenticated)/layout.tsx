@@ -13,6 +13,7 @@ const LINKS = [
   { href: "/campaigns", label: "Campañas" },
   { href: "/status", label: "Estado" },
   { href: "/exceptions", label: "Excepciones" },
+  { href: "/dsp-catalog", label: "Catálogo Adform" },
 ];
 
 function Navigation() {

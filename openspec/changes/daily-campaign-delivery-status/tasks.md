@@ -148,7 +148,7 @@ The types come from the real OpenAPI schema (`DspCatalogPageResponse`, `Unmapped
 - [x] 8B.2 Group integers from four digits in every integer formatter through one shared formatter (`useGrouping: 'always'`), tests first
 - [x] 8B.3 Add the line-picker dialog (unmapped lines, text search, accessible labels, Spanish messages for the six link codes inside the dialog), tests first
 - [x] 8B.4 Integrate linking in the exception queue («Vincular a una línea», the row leaves «Abiertas» without reloading, the history warning, `campaign_name` and `line_item_name` with «Sin nombre en el catálogo»), tests first
-- [ ] 8B.5 Add the «Catálogo Adform» page with its filters, pagination, navigation link and linking from a row (no identifier on screen, validation result, the null `last_impressions_date` notice, distinct loading, empty and error states, 401 and 403), tests first
+- [x] 8B.5 Add the «Catálogo Adform» page with its filters, pagination, navigation link and linking from a row (no identifier on screen, validation result, the null `last_impressions_date` notice, distinct loading, empty and error states, 401 and 403), tests first
 - [ ] 8B.6 Add unlinking with its explicit confirmation, the removed-days count and the three Spanish error messages, tests first
 - [ ] 8B.7 Add `NEXT_PUBLIC_MASK_NAMES` (blurred, unselectable, no reveal on hover, with and without the variable), declared in `.env.example`, `docs/deploy.md`, the Dockerfile and `docker-compose.yml`, tests first
 
