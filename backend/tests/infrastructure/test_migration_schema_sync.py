@@ -26,7 +26,7 @@ def test_migration_schema_matches_models(test_db_session):
         'users', 'roles', 'user_roles',
         'holding_groups', 'agencies', 'advertisers', 'dsps',
         'channels', 'formats', 'campaign_types', 'sectors', 'sales_reps',
-        'campaigns', 'campaign_periods', 'campaign_lines',
+        'campaigns', 'campaign_periods', 'campaign_lines', 'campaign_line_periods',
         'purchase_orders', 'purchase_order_versions',
         'dsp_mappings',
         'daily_deliveries', 'ingestion_batches', 'ingestion_exceptions', 'ingestion_exception_deliveries',

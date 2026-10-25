@@ -16,6 +16,7 @@ from app.infrastructure.persistence.models.campaign import (
     CampaignRecord,
     CampaignPeriodRecord,
     CampaignLineRecord,
+    CampaignLinePeriodRecord,
 )
 from app.infrastructure.persistence.models.purchase_order import (
     PurchaseOrderRecord,
@@ -45,6 +46,7 @@ __all__ = [
     "CampaignRecord",
     "CampaignPeriodRecord",
     "CampaignLineRecord",
+    "CampaignLinePeriodRecord",
     "PurchaseOrderRecord",
     "PurchaseOrderVersionRecord",
     "DSPMappingRecord",

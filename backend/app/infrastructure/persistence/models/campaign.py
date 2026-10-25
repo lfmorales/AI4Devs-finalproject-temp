@@ -1,10 +1,10 @@
 """Campaign tree: campaigns, campaign periods, and campaign lines."""
 
 from datetime import date
-from sqlalchemy import String, ForeignKey, Date, BigInteger, Enum as SQLEnum
+from sqlalchemy import CheckConstraint, Index, String, ForeignKey, Date, BigInteger, UniqueConstraint, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 from decimal import Decimal
-from sqlalchemy import Numeric
+from sqlalchemy import Numeric, text
 
 from app.infrastructure.persistence.base import Base
 
@@ -40,9 +40,21 @@ class CampaignPeriodRecord(Base):
 
 class CampaignLineRecord(Base):
     __tablename__ = "campaign_lines"
+    __table_args__ = (
+        # Nullable while the line still hangs from a period; only lines that have both are held to it.
+        Index(
+            "uq_campaign_lines_campaign_line_number", "campaign_id", "line_number", unique=True,
+            postgresql_where=text("campaign_id IS NOT NULL AND line_number IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     campaign_period_id: Mapped[int] = mapped_column(ForeignKey("campaign_periods.id"), nullable=False, index=True)
+    # The line is moving under its campaign: these stay empty until the registration writes them.
+    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id"), nullable=True)
+    line_number: Mapped[int | None] = mapped_column(nullable=True)
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     purchase_order_version_id: Mapped[int | None] = mapped_column(ForeignKey("purchase_order_versions.id"), nullable=True)
     dsp_id: Mapped[int] = mapped_column(ForeignKey("dsps.id"), nullable=False, index=True)
     channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id"), nullable=False)
@@ -52,3 +64,20 @@ class CampaignLineRecord(Base):
     contracted_impressions: Mapped[int] = mapped_column(BigInteger, nullable=False)
     sale_cpm: Mapped[Decimal] = mapped_column(Numeric(precision=10, scale=2), nullable=False)
     currency: Mapped[str] = mapped_column(String, nullable=False, default="EUR")
+
+
+class CampaignLinePeriodRecord(Base):
+    """A flight: the volume of one line in one calendar month, over the days the two share."""
+
+    __tablename__ = "campaign_line_periods"
+    __table_args__ = (
+        UniqueConstraint("campaign_line_id", "campaign_period_id", name="uq_campaign_line_periods_line_period"),
+        CheckConstraint("flight_start <= flight_end", name="ck_campaign_line_periods_window_order"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    campaign_line_id: Mapped[int] = mapped_column(ForeignKey("campaign_lines.id"), nullable=False)
+    campaign_period_id: Mapped[int] = mapped_column(ForeignKey("campaign_periods.id"), nullable=False, index=True)
+    flight_start: Mapped[date] = mapped_column(Date, nullable=False)
+    flight_end: Mapped[date] = mapped_column(Date, nullable=False)
+    contracted_impressions: Mapped[int] = mapped_column(BigInteger, nullable=False)
