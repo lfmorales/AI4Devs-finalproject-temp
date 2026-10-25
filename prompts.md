@@ -1262,6 +1262,30 @@ Restricciones: sin credenciales, claves ni certificados en el repositorio (añad
 **Herramienta** Claude Code
 **Prompt**
 
+Empieza ejecutando git branch --show-current; si no sale feature/daily-campaign-delivery-status, para y avísame. Si git status --short no está vacío, para. No toques el frontend.
+
+Objetivo: la base de la 1a en el backend: un catálogo de líneas de Adform que rellena la ingesta, y vincular y desvincular. Antes de escribir nada, lee el cliente de Adform, delivery_ingestion_service, dsp_mapping_service, ingestion_exception_service, los esquemas de mapeos y excepciones y adform_smoke.py, y dime: dónde se construye la petición a Adform y qué columnas lee el servicio, y si ya existe algún endpoint que liste líneas de campaña sin mapeo. Si algo no está claro, pregunta.
+
+Decisiones, a registrar en spec, design y tasks (apartado nuevo 9A) en un commit docs(openspec): ... antes del código:
+
+La petición nocturna pide 8 dimensiones, el tope de la API: date, campaignID, campaign, lineItemID, lineItem, lineItemStartDate, lineItemEndDate y campaignCurrency, con las mismas cinco métricas. El cliente lee por nombre de cabecera, las columnas nuevas no cambian el grano (una fila por fecha, campaña y línea) y las fechas llegan como AAAA-MM-DDTHH:MM:SS: se toma solo la fecha. Sigue siendo una sola petición.
+Tabla dsp_catalog_lines (migración con --autogenerate, test_migration_schema_sync en verde): dsp_id, external_campaign_id y external_line_item_id (texto), campaign_name, line_item_name, line_start_date, line_end_date, first_seen_date, last_seen_date y last_impressions_date (nulable: la última fecha vista con impresiones mayores que cero). Única por (DSP, pareja). La ingesta la actualiza con todas las filas atribuidas (lineItemID mayor que 0 y moneda EUR) de la ventana, estén mapeadas o no y sean de ceros o no, en la misma transacción que el lote: si el lote falla, el catálogo no cambia. Las filas sin línea atribuida no entran.
+GET /api/dsp-catalog, rol operations, def: filtros dsp_id, q (texto en los nombres, sin distinguir mayúsculas), mapped (verdadero, falso o ausente) y active_since (fecha); paginado (50 por defecto, 200 como máximo). Cada elemento lleva nombres, pareja, fechas, last_impressions_date y mapped_line_id si existe mapeo. Sin coste.
+GET /api/campaign-lines/unmapped, rol operations: líneas de AdOps360 sin mapeo, con id, nombre de campaña, número de línea, fechas y DSP.
+POST /api/ingestion-exceptions/{id}/link con {"campaign_line_id": N}: en una sola transacción, crea el mapeo con la pareja de esa excepción y la resuelve con la nota automática «linked to line N». El mapeo queda validado porque la pareja está en el catálogo (no se pregunta a Adform). Errores {"code","message"} por manejadores globales: 404 exception_not_found y line_not_found; 409 exception_already_resolved, mapping_pair_taken y exception_not_linkable (solo vale para unmatched_delivery). La entrega retenida no pasa a daily_deliveries: la ventana de siete días la traerá.
+DELETE /api/campaign-lines/{id}/dsp-mappings: si la línea tiene exactamente un mapeo, lo borra junto con la entrega ingerida de esa línea (solo puede venir de él), en una transacción, y devuelve cuántos días de entrega retira; con varios, 409 ambiguous_mapping; sin ninguno, 404. Documenta en el design que reabrir la excepción queda fuera: la entrega reaparecerá como «sin casar» en la siguiente ingesta.
+La respuesta del POST de mapeos incluye, si la pareja está en el catálogo, last_impressions_date (campo nuevo opcional, sin romper el contrato actual), para detectar parejas que existen pero no entregan.
+Las respuestas de la cola de excepciones incluyen campaign_name y line_item_name, nulables, tomados del catálogo. Sin coste.
+Todo bajo operations, y las rutas nuevas quedan cubiertas por el test de protección de rutas, que se construye a partir de las registradas.
+
+Pruebas, test primero, un commit por tarea: actualización del catálogo (nueva, actualizada, de ceros, sin atribuir, y lote fallido que no la toca); el cliente con las 8 dimensiones y una respuesta sintética; el endpoint del catálogo (filtros, paginación, mapped, sin coste); link (éxito, ya resuelta, pareja ocupada, no vinculable, línea inexistente y atomicidad); unlink (una pareja, varias, ninguna, y que borra la entrega); los campos nuevos de las respuestas; y que la salida de run_ingestion y del script de humo no imprime nombres.
+
+Restricciones: no edites uv.lock; no leas .env; no llames a servicios externos; commits pequeños con git add de rutas concretas; si algo es ambiguo, pregunta. Al terminar, reconstruye y pega la salida cruda de pytest con la línea de resultado completa dos veces, el git show --stat de todos los commits y qué tareas quedan sin marcar. Sin resumen tuyo.
+
+**Prompt 8**
+**Herramienta** Claude Code
+**Prompt**
+
 ### Ajustes humanos de los bloques siguientes (pendientes de colocar bajo su prompt)
 
 **Cambio de modelo: líneas, flights y reparto del volumen (bloques A, B y C)**
