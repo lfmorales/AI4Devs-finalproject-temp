@@ -112,3 +112,19 @@ class LineDatesInvalidError(DomainError):
 
 class VolumeTooSmallForFlightsError(DomainError):
     """Splitting a line's volume by days would leave a flight with no impressions."""
+
+
+class LineNotFoundError(DomainError):
+    """No campaign line has this id (the answer of the link operation)."""
+
+
+class ExceptionNotLinkableError(DomainError):
+    """Only an unmatched-delivery exception can be linked to a campaign line."""
+
+
+class MappingPairTakenError(DomainError):
+    """The exception's identifier pair is already mapped to a campaign line of its DSP."""
+
+
+class LineDspMismatchError(DomainError):
+    """The campaign line runs on a different DSP than the identifier pair."""

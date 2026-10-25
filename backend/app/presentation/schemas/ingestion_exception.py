@@ -29,3 +29,22 @@ class IngestionExceptionResponse(BaseModel):
 
 class ResolveExceptionRequest(BaseModel):
     note: str | None = None
+
+
+class LinkExceptionRequest(BaseModel):
+    campaign_line_id: int
+
+
+class LinkedMappingResponse(BaseModel):
+    id: int
+    campaign_line_id: int
+    dsp_id: int
+    external_campaign_id: str
+    external_line_item_id: str
+    # Always set: the exception proves the pair exists in the DSP, so no question is asked to it.
+    validated_at: datetime
+
+
+class LinkExceptionResponse(BaseModel):
+    mapping: LinkedMappingResponse
+    exception: IngestionExceptionResponse

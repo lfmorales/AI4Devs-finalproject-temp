@@ -18,6 +18,7 @@ from app.application.services.campaign_line_service import CampaignLineService
 from app.application.services.campaign_status_service import CampaignStatusService
 from app.application.services.dsp_catalog_service import DspCatalogService
 from app.application.services.dsp_mapping_service import DspMappingService
+from app.application.services.exception_linking_service import ExceptionLinkingService
 from app.application.services.ingestion_exception_service import IngestionExceptionService
 from app.config import get_settings
 from app.domain.exceptions import DspNotConfiguredError
@@ -34,6 +35,9 @@ from app.infrastructure.persistence.repositories.sqlalchemy_campaign_status_repo
 )
 from app.infrastructure.persistence.repositories.sqlalchemy_dsp_catalog_query_repository import (
     SqlAlchemyDspCatalogQueryRepository,
+)
+from app.infrastructure.persistence.repositories.sqlalchemy_exception_link_repository import (
+    SqlAlchemyExceptionLinkRepository,
 )
 from app.infrastructure.persistence.repositories.sqlalchemy_exception_queue_repository import (
     SqlAlchemyExceptionQueueRepository,
@@ -120,6 +124,16 @@ def get_ingestion_exception_service(
     session: Annotated[Session, Depends(get_db_session)],
 ) -> IngestionExceptionService:
     return IngestionExceptionService(
+        queue=SqlAlchemyExceptionQueueRepository(session),
+        clock=lambda: datetime.now(UTC).replace(tzinfo=None),
+    )
+
+
+def get_exception_linking_service(
+    session: Annotated[Session, Depends(get_db_session)],
+) -> ExceptionLinkingService:
+    return ExceptionLinkingService(
+        links=SqlAlchemyExceptionLinkRepository(session),
         queue=SqlAlchemyExceptionQueueRepository(session),
         clock=lambda: datetime.now(UTC).replace(tzinfo=None),
     )

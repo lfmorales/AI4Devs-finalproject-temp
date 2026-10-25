@@ -20,6 +20,10 @@ from app.domain.exceptions import (
     DspResponseFormatError,
     DspUnreachableError,
     DuplicateDspMappingError,
+    ExceptionNotLinkableError,
+    LineDspMismatchError,
+    LineNotFoundError,
+    MappingPairTakenError,
     IngestionExceptionAlreadyResolvedError,
     FlightVolumeNotPositiveError,
     FlightVolumesIncompleteError,
@@ -71,6 +75,16 @@ _ERROR_MAPPINGS: dict[type[DomainError], _ErrorMapping] = {
     IngestionExceptionNotFoundError: _ErrorMapping(404, "exception_not_found", "The exception does not exist"),
     IngestionExceptionAlreadyResolvedError: _ErrorMapping(
         409, "exception_already_resolved", "The exception is already resolved"
+    ),
+    ExceptionNotLinkableError: _ErrorMapping(
+        409, "exception_not_linkable", "Only an unmatched-delivery exception can be linked to a line"
+    ),
+    MappingPairTakenError: _ErrorMapping(
+        409, "mapping_pair_taken", "These DSP identifiers are already mapped to a campaign line"
+    ),
+    LineNotFoundError: _ErrorMapping(404, "line_not_found", "The campaign line does not exist"),
+    LineDspMismatchError: _ErrorMapping(
+        422, "line_dsp_mismatch", "The campaign line runs on a different DSP than the identifiers"
     ),
     LineDatesInvalidError: _ErrorMapping(
         422, "line_dates_invalid", "A line's start date cannot be after its end date"
