@@ -174,6 +174,21 @@ One hand-written stylesheet, with no framework, no new dependency, no external f
 - [x] 8D.7 Home, expired-session and access-denied screens as a centred card with the primary button
 - [x] 8D.8 Stylesheet tests: root layout import, no external URL, focus, backdrop and reduced motion, and AA contrast of every declared pair
 
+## 8E. Frontend: Exception Queue Filter
+
+A filter over the list of the active tab of `/exceptions`, in the style of the catalogue's. It is applied in the browser over what `GET /ingestion-exceptions` already returned: no request and no parameter are added. Behaviour:
+
+- A search box «Buscar excepciones» (label tied with `htmlFor`) and a selector «Tipo» with «Todas», «Entrega sin casar» (`unmatched_delivery`) and «Ausencia» (`missing_delivery`).
+- The search ignores case and accents (Unicode normalisation) and looks in `campaign_name`, `line_item_name`, the DSP, the external pair and the text of absence exceptions («Línea X, periodo Y»). An empty string shows everything; the terms separated by spaces must all match.
+- A counter «Mostrando X de Y», a button «Limpiar filtros» and the state «No hay excepciones que coincidan con la búsqueda», distinct from the empty queue and from loading.
+- The searched text lives only in the component state: not in the URL and not in the browser storage. The filter is kept when the tab changes. Resolving or linking an exception removes its row from the list and lowers the counter without losing the filter.
+- With `NEXT_PUBLIC_MASK_NAMES=true` the search by name still works and the names stay blurred.
+- It uses the classes of the global stylesheet; no new CSS unless needed.
+
+- [ ] 8E.1 Add the pure filter (normalisation, searchable text, all terms, type), tests first
+- [ ] 8E.2 Add the controls, the counter, «Limpiar filtros» and the no-match state to the exception queue, tests first
+- [ ] 8E.3 Keep the filter across tabs and after resolving or linking, with no request, URL or storage involved, and under the name masking, tests first
+
 ## 9. Review and Update Existing Unit Tests (MANDATORY)
 
 - [ ] 9.1 Review every test touched by this change and update any asserting superseded behaviour
