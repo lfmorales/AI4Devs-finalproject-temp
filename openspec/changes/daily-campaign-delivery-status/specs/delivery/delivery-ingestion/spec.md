@@ -258,3 +258,79 @@ The system SHALL provide the command `python -m scripts.run_ingestion`, to be in
 - **AND** it never prints an identifier, a name, an amount, a token or the text of a DSP error
 - **AND** a failure is summarised by the name of its error class
 
+
+### Requirement: The Adform line catalogue is filled by the ingestion
+
+The system SHALL ask Adform, in the one nightly request, for `date`, `campaignID`, `campaign`, `lineItemID`, `lineItem`, `lineItemStartDate`, `lineItemEndDate` and `campaignCurrency` with the same five metrics, and SHALL keep one catalogue row per DSP and identifier pair (`dsp_catalog_lines`) with the campaign and line item names, the line's dates, `first_seen_date`, `last_seen_date` and `last_impressions_date`. The catalogue SHALL be updated, in the same transaction as the batch, with every attributed row of the window (line item greater than 0 and currency EUR), mapped or not and with zeros or not. Rows without an attributed line item SHALL NOT enter. The dates arrive as `YYYY-MM-DDTHH:MM:SS` and only the date is kept. `first_seen_date` and `last_seen_date` are the oldest and the latest delivery date seen for the pair, and `last_impressions_date` the latest one with impressions greater than 0 (null if none); `last_seen_date` is the last date with a row in Adform, not real activity. The request SHALL be made even when no line has a validated mapping, so that the catalogue can be filled before the first mapping exists.
+
+#### Scenario: A new pair enters the catalogue
+- **WHEN** a run reads an attributed row whose pair is not in the catalogue
+- **THEN** a catalogue row is created with its names, dates and seen dates
+
+#### Scenario: A known pair is updated
+- **WHEN** a later run reads rows of a pair already in the catalogue
+- **THEN** names and dates take the latest values and the seen dates only widen
+
+#### Scenario: A pair that only delivers zeros enters with no impressions date
+- **WHEN** every row of a pair has zero impressions
+- **THEN** the pair is in the catalogue and `last_impressions_date` is null
+
+#### Scenario: Unattributed rows do not enter
+- **WHEN** a row has no attributed line item
+- **THEN** the catalogue does not change
+
+#### Scenario: A failed batch leaves the catalogue untouched
+- **WHEN** the batch fails after the catalogue was prepared
+- **THEN** the catalogue is as it was before the run
+
+#### Scenario: A run without mapped lines still fills the catalogue
+- **WHEN** no line has a validated mapping
+- **THEN** one request is made, the catalogue is filled, the batch is recorded and the output shows `mapped_lines: 0`
+
+### Requirement: The catalogue can be listed by operations
+
+The system SHALL expose `GET /api/dsp-catalog` to the `operations` role, with the filters `dsp_id`, `q` (case-insensitive text in either name), `mapped` (true, false or absent) and `active_since` (`last_seen_date >= active_since`), paginated (50 by default, 200 at most). Each item SHALL carry the names, the pair, the dates, `last_impressions_date` and `mapped_line_id` when a mapping exists. It SHALL carry no cost.
+
+#### Scenario: Filtering and paging
+- **WHEN** the catalogue is requested with filters and a page size
+- **THEN** only matching rows are returned, at most the page size, and a page size above 200 is rejected
+
+#### Scenario: Reading the catalogue requires the operations role
+- **WHEN** a user without the `operations` role requests it
+- **THEN** the request is rejected as forbidden
+
+### Requirement: Lines without a mapping can be listed
+
+The system SHALL expose `GET /api/campaign-lines/unmapped` to the `operations` role, listing the lines with no DSP mapping with their id, campaign name, line number, dates and DSP.
+
+### Requirement: An exception is linked to a campaign line
+
+The system SHALL expose `POST /api/ingestion-exceptions/{id}/link` with `{"campaign_line_id": N}`, which in one transaction creates a validated mapping from the pair of an `unmatched_delivery` exception to that line and resolves the exception with the note `linked to line N`. The mapping is validated because the exception proves the pair exists in Adform; the pair need not be in the catalogue and Adform is not asked. The retained delivery SHALL NOT move to the daily deliveries: the seven-day window will bring it. The errors are 404 `exception_not_found` and `line_not_found`, and 409 `exception_already_resolved`, `mapping_pair_taken` and `exception_not_linkable` (any type other than `unmatched_delivery`). Nothing is stored when any of them occurs.
+
+#### Scenario: Linking succeeds
+- **WHEN** an open unmatched exception is linked to an existing line
+- **THEN** the mapping exists and is validated, and the exception is resolved with the automatic note
+
+#### Scenario: Linking fails whole
+- **WHEN** the exception is resolved, the pair is taken, the type is not linkable or a line or exception does not exist
+- **THEN** the matching error is returned and no mapping is created and no exception changes
+
+### Requirement: A line's mapping can be removed with its delivery
+
+The system SHALL expose `DELETE /api/campaign-lines/{id}/dsp-mappings`. When the line has exactly one mapping, it deletes the mapping and the line's ingested delivery in one transaction and returns how many days of delivery it removes; with several mappings it answers 409 `ambiguous_mapping`; with none, 404. The delivery of a line only comes from its mapping while the API is the only ingestion route; this assumption must be revisited when the manual upload exists. Reopening the exception is out of scope: the delivery reappears as unmatched at the next ingestion.
+
+### Requirement: Mapping responses warn about idle pairs and missing history
+
+The response of the mapping creation SHALL include `last_impressions_date` (optional, null when the pair is not in the catalogue) and, with that of the link, `needs_history_load`: true when the mapped line started before the start of the normal window (today minus 7 days, in the Madrid zone). A line starting exactly on that day does not need it.
+
+### Requirement: A custom range can be loaded
+
+`python -m scripts.run_ingestion --from YYYY-MM-DD --to YYYY-MM-DD` SHALL accept both arguments together, never with `--date`, for at most 31 days and with `--to` not after D-1 in the Madrid zone; anything else exits with 3. It SHALL make one request for the whole range, select the lines whose dates overlap it, and use the same service and the same idempotent replacement. Every batch SHALL record its window in `window_start` and `window_end` (both null or both set, start not after end; legacy batches have none). Absence detection SHALL NOT run with a custom range and the output says `absences: skipped, custom range`. The output always shows `mapped_lines` and only counts.
+
+#### Scenario: Range rules
+- **WHEN** the range exceeds 31 days, ends after D-1, lacks one bound or is combined with `--date`
+- **THEN** the exit code is 3 and nothing is requested
+
+#### Scenario: Repeating a range changes nothing
+- **WHEN** the same range runs twice with the same figures
+- **THEN** the stored delivery is the same

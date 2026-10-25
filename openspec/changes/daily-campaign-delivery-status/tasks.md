@@ -137,6 +137,21 @@ The form lets each line have its own dates and shows the monthly split (flights)
 - [ ] 9.1 Review every test touched by this change and update any asserting superseded behaviour
 - [ ] 9.2 Verify each role-guarded endpoint added here has its negative authorisation case covered
 
+## 9A. Backend: Adform Line Catalogue, Linking and Range Loads
+
+- [ ] 9A.1 Request the eight dimensions and read the catalogue columns by name, with a synthetic response, tests first
+- [ ] 9A.2 Create `dsp_catalog_lines` with its migration (`--autogenerate`, schema sync green)
+- [ ] 9A.3 Update the catalogue in the batch's transaction (new, updated, zeros, unattributed, failed batch) and always make the request, even with no mapped lines
+- [ ] 9A.4 Add `window_start` and `window_end` to the batches with their check, set by every new batch, in a separate migration
+- [ ] 9A.5 `GET /api/dsp-catalog` with filters, paging, `mapped` and no cost
+- [ ] 9A.6 `GET /api/campaign-lines/unmapped`
+- [ ] 9A.7 `POST /api/ingestion-exceptions/{id}/link`, atomic, with its errors
+- [ ] 9A.8 `DELETE /api/campaign-lines/{id}/dsp-mappings`
+- [ ] 9A.9 `last_impressions_date` in the mapping response, and `campaign_name` and `line_item_name` in the exception queue
+- [ ] 9A.10 `needs_history_load` in the mapping and link responses, at both edges
+- [ ] 9A.11 `run_ingestion --from --to` with its rules, one request, no absences and an idempotent repetition
+- [ ] 9A.12 The outputs of `run_ingestion` and the smoke script print no names
+
 ## 10. Run Unit Tests and Verify Database State (MANDATORY)
 
 - [ ] 10.1 Capture the pre-test database baseline for delivery, batches and exceptions

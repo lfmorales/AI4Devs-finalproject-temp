@@ -148,3 +148,11 @@ The system SHALL let an operations user resolve an exception, SHALL keep an unre
 #### Scenario: Resolving requires the operations role
 - **WHEN** a user without the `operations` role resolves an exception
 - **THEN** the request is rejected as forbidden
+
+### Requirement: The queue names the campaign and line item
+
+The responses of the exception queue SHALL include `campaign_name` and `line_item_name`, nullable, taken from the catalogue by DSP and pair. They carry no cost.
+
+#### Scenario: A pair in the catalogue is named
+- **WHEN** an unmatched exception's pair is in the catalogue
+- **THEN** the response carries both names, and null otherwise
