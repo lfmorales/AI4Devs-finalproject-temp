@@ -89,6 +89,12 @@ It also introduces the first scheduled work in the product. Until now every writ
 
 **The exception queue exposes what was retained, not its cost.** An exception shows its first and last dates, its number of days, and the total impressions and clicks it retains. The retained media cost is stored but not returned by any endpoint until the finance restriction of the status API exists, because cost figures are restricted to `finance` and the queue is open to `operations`.
 
+**The daily status is one query.** `GET /api/campaign-status` joins flights to their line, campaign and agency, keeps the flights whose window contains D-1 for `active` campaigns, sums the line's impressions from `flight_start` to D-1 with a correlated aggregate, and takes each campaign's latest delivery date with an aggregate over its lines, all in one statement; delivery rows never reach the application. The application then applies the pure pacing function and the missing-data rule to the figures. D is the day of the request, from an injectable clock. A row counts as a warning when its `pacing_flag` or its campaign's `missing_data_flag` is raised; rows are ordered warnings first, then agency name, campaign name and line number. The response has no cost field and a test walks every field name, nested ones included, to keep it so; the finance restriction (6.6) stays deferred.
+
+**Every route of this change is checked for authentication and role by introspection.** The 401/403 test is parametrized over the routes registered in the application, not over a hand-written list, so a new route that skips authentication or a role requirement fails the suite. Routes outside this change (health, campaigns, masters) are excluded by an explicit allow list of public or out-of-scope paths.
+
+**The exception queue is ordered by recency.** By `last_date` descending, then `id` descending.
+
 **The two flags are different questions.** The missing-data flag asks whether the latest delivery predates D-1, and a row of zero impressions counts as data received. A campaign that keeps sending rows of zeros is stalled, which the pacing deviation flag covers.
 
 **A batch counts rows read.** `row_count` is the number of rows read from the DSP; rows without an attributed line item are counted in `ignored_row_count` and unmatched rows of zeros in `zero_unmatched_row_count`. The states are `running`, `succeeded` and `failed`.

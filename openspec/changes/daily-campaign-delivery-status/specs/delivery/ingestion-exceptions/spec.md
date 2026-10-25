@@ -125,6 +125,11 @@ The system SHALL let an operations user resolve an exception, SHALL keep an unre
 - **WHEN** an operations user requests the exceptions with a status of open or resolved
 - **THEN** only the exceptions with that status are returned
 
+#### Scenario: The queue lists the most recently active exceptions first
+- **WHEN** an operations user reads the exception queue
+- **THEN** exceptions are ordered by their last date, most recent first
+- **AND** exceptions with the same last date are ordered by identifier, highest first
+
 #### Scenario: The queue shows what was retained without its cost
 - **WHEN** an operations user reads the exception queue
 - **THEN** each unmatched-delivery exception shows its first and last dates, its number of days, and the total impressions and clicks it retains
