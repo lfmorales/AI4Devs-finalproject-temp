@@ -4,6 +4,7 @@ from datetime import date, datetime
 
 from app.domain.entities.ingestion_batch import BatchStatus, IngestionRoute
 from app.domain.repositories.unit_of_work import UnitOfWork
+from app.domain.services.catalog_observation import CatalogObserver
 from app.domain.services.delivery_combination import combine_daily_deliveries
 from app.domain.services.delivery_range_replacement import DeliveryRangeReplacer
 from app.domain.services.dsp_delivery_client import DspDeliveryClient
@@ -38,6 +39,7 @@ class IngestionRunResult:
     ignored_row_count: int
     zero_unmatched_row_count: int
     skipped_line_ids: tuple[int, ...] = ()
+    mapped_line_count: int = 0
 
 
 class DeliveryIngestionService:
@@ -75,6 +77,7 @@ class DeliveryIngestionService:
         return IngestionRunResult(
             batch_id, window, counts.rows_read, counts.stored_row_count, counts.unmatched_row_count,
             counts.ignored_row_count, counts.zero_unmatched_row_count, targets.unmapped_line_ids,
+            len({line.campaign_line_id for line in targets.mapped_lines}),
         )
 
     def detect_missing_delivery(self, dsp_id: int, today: date, batch_id: int) -> int:
@@ -105,20 +108,20 @@ class DeliveryIngestionService:
     def _ingest(
         self, dsp_id: int, batch_id: int, window: DeliveryDateRange, targets: IngestionTargets
     ) -> _RunCounts:
-        if not targets.mapped_lines:
-            return _RunCounts()  # Nothing to ask the DSP for; the quota is shared with the whole agency.
-
+        # The DSP is asked even when no line is mapped: the catalogue has to be filled before the first mapping.
         line_by_key = {
             ExternalLineKey.from_raw(line.key.external_campaign_id, line.key.external_line_item_id): line.campaign_line_id
             for line in targets.mapped_lines
         }
         rows_read = unmatched_row_count = ignored_row_count = zero_unmatched_row_count = 0
         retained: dict[tuple[ExternalLineKey, date], RetainedDelivery] = {}
+        catalog = CatalogObserver()
 
         def _attributed_rows() -> Iterator[tuple[int, DspDeliveryRow]]:
             nonlocal rows_read, unmatched_row_count, ignored_row_count, zero_unmatched_row_count
             for row in self._dsp_client.fetch_delivery(window):
                 rows_read += 1
+                catalog.add(row)  # every attributed row of the window, mapped or not, zeros or not
                 if row.key is None:
                     # Counted on the batch, never worked as an exception: there is no line item to chase.
                     ignored_row_count += 1
@@ -144,6 +147,8 @@ class DeliveryIngestionService:
             stored = DeliveryRangeReplacer(unit_of_work).replace_range_in_transaction(
                 {line.campaign_line_id for line in targets.mapped_lines}, window, deliveries
             )
+            # After the stream above has been consumed, before the exceptions: all in this one transaction.
+            unit_of_work.catalog.upsert_all(dsp_id, catalog.observations())
             UnmatchedDeliveryRecorder().record(
                 unit_of_work.exceptions, dsp_id, batch_id, window, retained.values()
             )

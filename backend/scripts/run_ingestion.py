@@ -166,6 +166,7 @@ def _run(session_factory: Callable[[], Session], client: DspDeliveryClient, toda
     out(f"ignored_rows: {result.ignored_row_count}")
     out(f"zero_unmatched_rows: {result.zero_unmatched_row_count}")
     out(f"new_exceptions: {new_exceptions}")
+    out(f"mapped_lines: {result.mapped_line_count}")
     out(f"skipped_lines: {len(result.skipped_line_ids)}")
     out(f"absences: {absences}")
     return EXIT_SUCCEEDED

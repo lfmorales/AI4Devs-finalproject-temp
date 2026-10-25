@@ -46,5 +46,5 @@ def test_a_run_where_no_line_is_mapped_still_succeeds_and_reports_them_all():
 
     result = harness.service.run(DSP_ID, TODAY)
 
-    assert (result.skipped_line_ids, harness.client.requested_ranges) == ((UNMAPPED,), [])
+    assert (result.skipped_line_ids, len(harness.client.requested_ranges)) == ((UNMAPPED,), 1)
     assert next(iter(harness.batches.records.values())).status is BatchStatus.SUCCEEDED

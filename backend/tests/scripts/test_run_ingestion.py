@@ -210,3 +210,26 @@ def test_there_is_no_dry_run_option_and_an_unknown_option_exits_3_not_2(scenario
 
     assert code == 3
     assert scenario.client.requested_ranges == []
+
+
+def test_the_output_shows_how_many_lines_are_mapped(scenario):
+    assert scenario.run() == 0
+
+    assert "mapped_lines: 2" in scenario.output
+
+
+def test_a_run_with_no_mapped_line_records_the_batch_fills_the_catalogue_and_says_so(scenario):
+    from app.infrastructure.persistence.models.dsp_catalog import DspCatalogLineRecord
+    from app.infrastructure.persistence.models.dsp_mapping import DSPMappingRecord
+    from tests.fixtures.delivery_rows import catalog_info
+
+    scenario.session.query(DSPMappingRecord).delete()
+    scenario.session.commit()
+    scenario.client = InMemoryDspDeliveryClient([dsp_row(D5, STRANGER, impressions=40, catalog=catalog_info())])
+
+    assert scenario.run() == 0
+
+    assert "mapped_lines: 0" in scenario.output
+    assert scenario.batch_statuses() == ["succeeded"]
+    assert scenario.count(DspCatalogLineRecord) == 1
+    assert len(scenario.client.requested_ranges) == 1

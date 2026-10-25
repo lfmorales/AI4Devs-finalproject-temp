@@ -3,7 +3,7 @@
 from datetime import date
 from decimal import Decimal
 
-from app.domain.value_objects.delivery import DailyDelivery, DspDeliveryRow, ExternalLineKey
+from app.domain.value_objects.delivery import DailyDelivery, DspDeliveryRow, ExternalLineKey, LineCatalogInfo
 
 
 def external_key(campaign: str = "campaign-1", line_item: str = "line-item-1") -> ExternalLineKey:
@@ -22,6 +22,7 @@ def dsp_row(
     screen: str | None = None,
     line_format: str | None = None,
     unattributed: bool = False,
+    catalog: LineCatalogInfo | None = None,
 ) -> DspDeliveryRow:
     return DspDeliveryRow(
         key=None if unattributed else key or external_key(),
@@ -34,6 +35,7 @@ def dsp_row(
         banner_size=banner_size,
         screen=screen,
         line_format=line_format,
+        catalog=catalog,
     )
 
 
@@ -58,3 +60,12 @@ def daily_delivery(
         screen=None,
         line_format=line_format,
     )
+
+
+def catalog_info(
+    campaign_name: str = "Synthetic Campaign",
+    line_item_name: str = "Synthetic Line",
+    line_start_date: date | None = date(2026, 7, 1),
+    line_end_date: date | None = date(2026, 9, 30),
+) -> LineCatalogInfo:
+    return LineCatalogInfo(campaign_name, line_item_name, line_start_date, line_end_date)

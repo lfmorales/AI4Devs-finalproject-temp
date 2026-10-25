@@ -10,6 +10,7 @@ from app.domain.value_objects.ingestion import IngestionTargets, MappedLine
 from tests.fixtures.dsp_delivery_client import InMemoryDspDeliveryClient
 from tests.fixtures.in_memory_delivery_repository import InMemoryDeliveryRepository
 from tests.fixtures.in_memory_unit_of_work import (
+    InMemoryDspCatalogRepository,
     InMemoryIngestionBatchRepository,
     InMemoryIngestionExceptionRepository,
     InMemoryIngestionTargetRepository,
@@ -34,6 +35,7 @@ class IngestionHarness:
         self.deliveries = InMemoryDeliveryRepository(existing)
         self.batches = InMemoryIngestionBatchRepository()
         self.exceptions = InMemoryIngestionExceptionRepository()
+        self.catalog = InMemoryDspCatalogRepository()
         self.targets = InMemoryIngestionTargetRepository(
             IngestionTargets(mapped_lines=tuple(mapped_lines), unmapped_line_ids=tuple(unmapped_line_ids))
         )
@@ -46,7 +48,7 @@ class IngestionHarness:
         )
 
     def _new_unit_of_work(self) -> InMemoryUnitOfWork:
-        unit_of_work = InMemoryUnitOfWork(self.deliveries, self.batches, self.targets, self.exceptions)
+        unit_of_work = InMemoryUnitOfWork(self.deliveries, self.batches, self.targets, self.exceptions, self.catalog)
         self.units_of_work.append(unit_of_work)
         return unit_of_work
 

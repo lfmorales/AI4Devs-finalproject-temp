@@ -1,10 +1,12 @@
 from dataclasses import replace
 from app.domain.entities.ingestion_exception import ExceptionStatus, ExceptionType, IngestionException
 from app.domain.entities.ingestion_batch import BatchStatus, IngestionBatch, IngestionRoute
+from app.domain.repositories.dsp_catalog_repository import DspCatalogRepository
 from app.domain.repositories.ingestion_batch_repository import IngestionBatchRepository
 from app.domain.repositories.ingestion_exception_repository import IngestionExceptionRepository
 from app.domain.repositories.ingestion_target_repository import IngestionTargetRepository
 from app.domain.repositories.unit_of_work import UnitOfWork
+from app.domain.value_objects.catalog import CatalogLineObservation
 from app.domain.value_objects.delivery import DeliveryDateRange, ExternalLineKey, RetainedDelivery
 from app.domain.value_objects.ingestion import IngestionTargets, MissingDeliveryCandidate
 from collections.abc import Iterable
@@ -114,6 +116,16 @@ class InMemoryIngestionExceptionRepository(IngestionExceptionRepository):
                 self.exceptions[exception.id] = replace(exception, first_date=min(days), last_date=max(days))
 
 
+class InMemoryDspCatalogRepository(DspCatalogRepository):
+    def __init__(self) -> None:
+        self.entries: dict[tuple[int, ExternalLineKey], CatalogLineObservation] = {}
+
+    def upsert_all(self, dsp_id: int, observations: Iterable[CatalogLineObservation]) -> None:
+        for observation in observations:
+            stored = self.entries.get((dsp_id, observation.key))
+            self.entries[(dsp_id, observation.key)] = observation if stored is None else observation.merged_into(stored)
+
+
 class InMemoryUnitOfWork(UnitOfWork):
     """Restores what it holds on rollback, the way a database transaction would."""
 
@@ -123,23 +135,27 @@ class InMemoryUnitOfWork(UnitOfWork):
         batches: InMemoryIngestionBatchRepository | None = None,
         targets: InMemoryIngestionTargetRepository | None = None,
         exceptions: InMemoryIngestionExceptionRepository | None = None,
+        catalog: InMemoryDspCatalogRepository | None = None,
     ) -> None:
         self.deliveries = deliveries
         self.batches = batches or InMemoryIngestionBatchRepository()
         self.targets = targets or InMemoryIngestionTargetRepository(IngestionTargets(mapped_lines=()))
         self.exceptions = exceptions or InMemoryIngestionExceptionRepository()
+        self.catalog = catalog or InMemoryDspCatalogRepository()
         self.entered_count = 0
         self.commit_count = 0
         self.rollback_count = 0
         self._snapshot = dict(deliveries.rows)
         self._batch_snapshot = dict(self.batches.records)
         self._exception_snapshot = (dict(self.exceptions.exceptions), dict(self.exceptions.retained))
+        self._catalog_snapshot = dict(self.catalog.entries)
 
     def __enter__(self) -> "InMemoryUnitOfWork":
         self.entered_count += 1
         self._snapshot = dict(self.deliveries.rows)
         self._batch_snapshot = dict(self.batches.records)
         self._exception_snapshot = (dict(self.exceptions.exceptions), dict(self.exceptions.retained))
+        self._catalog_snapshot = dict(self.catalog.entries)
         return self
 
     def commit(self) -> None:
@@ -151,3 +167,4 @@ class InMemoryUnitOfWork(UnitOfWork):
         self.batches.records = dict(self._batch_snapshot)
         self.exceptions.exceptions, self.exceptions.retained = (
             dict(self._exception_snapshot[0]), dict(self._exception_snapshot[1]))
+        self.catalog.entries = dict(self._catalog_snapshot)

@@ -42,12 +42,12 @@ def test_one_request_serves_every_mapped_line():
     assert len(harness.client.requested_ranges) == 1
 
 
-def test_no_request_is_made_when_no_line_is_mapped():
+def test_one_request_is_made_even_when_no_line_is_mapped_because_the_catalogue_is_filled_from_it():
     harness = IngestionHarness(mapped_lines=[])
 
     result = harness.service.run(DSP_ID, TODAY)
 
-    assert (harness.client.requested_ranges, result.stored_row_count) == ([], 0)
+    assert (len(harness.client.requested_ranges), result.stored_row_count) == (1, 0)
 
 
 def test_delivery_is_stored_against_the_line_its_key_is_mapped_to():

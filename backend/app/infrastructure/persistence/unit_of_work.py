@@ -4,6 +4,9 @@ from types import TracebackType
 from sqlalchemy.orm import Session
 
 from app.domain.repositories.unit_of_work import UnitOfWork
+from app.infrastructure.persistence.repositories.sqlalchemy_dsp_catalog_repository import (
+    SqlAlchemyDspCatalogRepository,
+)
 from app.infrastructure.persistence.repositories.sqlalchemy_delivery_repository import (
     SqlAlchemyDeliveryRepository,
     SqlAlchemyIngestionBatchRepository,
@@ -30,6 +33,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self.batches = SqlAlchemyIngestionBatchRepository(session)
         self.targets = SqlAlchemyIngestionTargetRepository(session)
         self.exceptions = SqlAlchemyIngestionExceptionRepository(session)
+        self.catalog = SqlAlchemyDspCatalogRepository(session)
         return self
 
     def __exit__(
