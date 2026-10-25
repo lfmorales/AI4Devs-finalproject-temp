@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.services.authentication_service import AuthenticationService
 from app.application.services.campaign_status_service import CampaignStatusService
+from app.application.services.dsp_catalog_service import DspCatalogService
 from app.application.services.dsp_mapping_service import DspMappingService
 from app.application.services.ingestion_exception_service import IngestionExceptionService
 from app.config import get_settings
@@ -26,6 +27,9 @@ from app.infrastructure.dsp.adform_delivery_client import AdformDeliveryClient
 from app.infrastructure.persistence.database import build_engine, build_session_factory
 from app.infrastructure.persistence.repositories.sqlalchemy_campaign_status_repository import (
     SqlAlchemyCampaignStatusRepository,
+)
+from app.infrastructure.persistence.repositories.sqlalchemy_dsp_catalog_query_repository import (
+    SqlAlchemyDspCatalogQueryRepository,
 )
 from app.infrastructure.persistence.repositories.sqlalchemy_exception_queue_repository import (
     SqlAlchemyExceptionQueueRepository,
@@ -115,6 +119,10 @@ def get_ingestion_exception_service(
         queue=SqlAlchemyExceptionQueueRepository(session),
         clock=lambda: datetime.now(UTC).replace(tzinfo=None),
     )
+
+
+def get_dsp_catalog_service(session: Annotated[Session, Depends(get_db_session)]) -> DspCatalogService:
+    return DspCatalogService(repository=SqlAlchemyDspCatalogQueryRepository(session))
 
 
 def _utc_now() -> datetime:

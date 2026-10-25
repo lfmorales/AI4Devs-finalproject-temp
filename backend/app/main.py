@@ -1,7 +1,16 @@
 from fastapi import FastAPI
 
 from app.presentation.errors import register_exception_handlers
-from app.presentation.routers import health, campaigns, masters, dsp_mappings, flight_preview, ingestion_exceptions, campaign_status
+from app.presentation.routers import (
+    campaign_status,
+    campaigns,
+    dsp_catalog,
+    dsp_mappings,
+    flight_preview,
+    health,
+    ingestion_exceptions,
+    masters,
+)
 
 
 def create_app() -> FastAPI:
@@ -13,6 +22,7 @@ def create_app() -> FastAPI:
     app.include_router(campaigns.router)
     app.include_router(masters.router)
     app.include_router(dsp_mappings.router)
+    app.include_router(dsp_catalog.router)
     app.include_router(ingestion_exceptions.router)
     app.include_router(flight_preview.router)
     app.include_router(campaign_status.router)
