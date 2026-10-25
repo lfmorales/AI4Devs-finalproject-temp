@@ -12,11 +12,17 @@ from app.infrastructure.persistence.models.delivery import (
     IngestionExceptionDeliveryRecord,
     IngestionExceptionRecord,
 )
-from tests.fixtures.delivery_data import insert_campaign_line, insert_ingestion_batch, insert_user, seeded_dsp_id
+from tests.fixtures.delivery_data import (
+    insert_campaign_line,
+    insert_ingestion_batch,
+    insert_user,
+    period_of_line,
+    seeded_dsp_id,
+)
 
 
 def _period_of(session, line_id: int) -> int:
-    return session.get(CampaignLineRecord, line_id).campaign_period_id
+    return period_of_line(session, line_id)
 
 
 def _unmatched(session, batch_id: int, **overrides: object) -> IngestionExceptionRecord:

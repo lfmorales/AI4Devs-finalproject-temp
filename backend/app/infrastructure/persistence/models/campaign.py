@@ -41,7 +41,7 @@ class CampaignPeriodRecord(Base):
 class CampaignLineRecord(Base):
     __tablename__ = "campaign_lines"
     __table_args__ = (
-        # Nullable while the line still hangs from a period; only lines that have both are held to it.
+        # Kept as the partial index the additive migration created; with both columns mandatory it covers every row.
         Index(
             "uq_campaign_lines_campaign_line_number", "campaign_id", "line_number", unique=True,
             postgresql_where=text("campaign_id IS NOT NULL AND line_number IS NOT NULL"),
@@ -49,12 +49,11 @@ class CampaignLineRecord(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    campaign_period_id: Mapped[int] = mapped_column(ForeignKey("campaign_periods.id"), nullable=False, index=True)
-    # The line is moving under its campaign: these stay empty until the registration writes them.
-    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id"), nullable=True)
-    line_number: Mapped[int | None] = mapped_column(nullable=True)
-    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # A line hangs from its campaign, numbered within it, with its own dates. Its months are its flights.
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), nullable=False)
+    line_number: Mapped[int] = mapped_column(nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
     purchase_order_version_id: Mapped[int | None] = mapped_column(ForeignKey("purchase_order_versions.id"), nullable=True)
     dsp_id: Mapped[int] = mapped_column(ForeignKey("dsps.id"), nullable=False, index=True)
     channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id"), nullable=False)

@@ -27,7 +27,12 @@ def _flight(line_id: int, period_id: int, **overrides: object) -> CampaignLinePe
 
 
 def _period_id_of(session, line_id: int) -> int:
-    return session.scalar(select(CampaignLineRecord.campaign_period_id).where(CampaignLineRecord.id == line_id))
+    """The period of the line's own flight, or of its campaign's only period for a line with none."""
+    return session.scalar(
+        select(CampaignPeriodRecord.id)
+        .join(CampaignLineRecord, CampaignLineRecord.campaign_id == CampaignPeriodRecord.campaign_id)
+        .where(CampaignLineRecord.id == line_id)
+    )
 
 
 def _second_line_of_the_same_campaign(session, line_id: int) -> int:
@@ -35,7 +40,7 @@ def _second_line_of_the_same_campaign(session, line_id: int) -> int:
     first = session.get(CampaignLineRecord, line_id)
     second = CampaignLineRecord(
         campaign_id=first.campaign_id, line_number=2, start_date=first.start_date, end_date=first.end_date,
-        campaign_period_id=first.campaign_period_id, dsp_id=first.dsp_id, channel_id=first.channel_id,
+        dsp_id=first.dsp_id, channel_id=first.channel_id,
         format_id=first.format_id, scope="national", market_description="Nacional",
         contracted_impressions=10, sale_cpm=first.sale_cpm,
     )
@@ -125,21 +130,6 @@ def test_a_campaign_cannot_repeat_a_line_number(rolled_back_session):
         )
 
 
-def test_lines_without_a_campaign_or_a_number_do_not_collide(rolled_back_session):
-    line_id = insert_campaign_line(rolled_back_session)
-    other_line_id = _second_line_of_the_same_campaign(rolled_back_session, line_id)
-    campaign_id = campaign_id_of(rolled_back_session, line_id)
-
-    # Both rows keep a null number, and a numbered line may coexist with an unnumbered one.
-    rolled_back_session.execute(
-        update(CampaignLineRecord).where(CampaignLineRecord.id == line_id).values(campaign_id=campaign_id, line_number=None)
-    )
-    rolled_back_session.execute(
-        update(CampaignLineRecord).where(CampaignLineRecord.id == other_line_id).values(campaign_id=campaign_id, line_number=None)
-    )
-    rolled_back_session.flush()
-
-
 def test_a_line_number_is_reusable_across_campaigns(rolled_back_session):
     first_line = insert_campaign_line(rolled_back_session, campaign_name="First campaign")
     second_line = insert_campaign_line(rolled_back_session, campaign_name="Second campaign")
@@ -172,3 +162,17 @@ def test_the_partial_unique_index_exists_and_covers_campaign_and_number(rolled_b
 
     assert index["unique"] is True
     assert index["column_names"] == ["campaign_id", "line_number"]
+
+
+def test_a_line_cannot_be_stored_without_its_campaign_number_and_dates(rolled_back_session):
+    line_id = insert_campaign_line(rolled_back_session)
+    for column in ("campaign_id", "line_number", "start_date", "end_date"):
+        with pytest.raises(IntegrityError):
+            with rolled_back_session.begin_nested():
+                rolled_back_session.execute(
+                    update(CampaignLineRecord).where(CampaignLineRecord.id == line_id).values({column: None})
+                )
+
+
+def test_a_line_has_no_period_of_its_own(rolled_back_session):
+    assert "campaign_period_id" not in {c["name"] for c in inspect(rolled_back_session.get_bind()).get_columns("campaign_lines")}

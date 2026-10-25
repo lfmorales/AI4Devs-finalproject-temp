@@ -19,6 +19,7 @@ from tests.fixtures.delivery_data import (
     insert_campaign_line,
     insert_ingestion_batch,
     insert_user,
+    period_of_line,
     seeded_dsp_id,
 )
 
@@ -60,7 +61,7 @@ def test_a_missing_delivery_exception_has_no_retained_days(rolled_back_session):
     line = insert_campaign_line(rolled_back_session)
     from app.infrastructure.persistence.models.campaign import CampaignLineRecord
 
-    period = rolled_back_session.get(CampaignLineRecord, line).campaign_period_id
+    period = period_of_line(rolled_back_session, line)
     SqlAlchemyIngestionExceptionRepository(rolled_back_session).record_missing_delivery(
         line, period, insert_ingestion_batch(rolled_back_session))
 

@@ -77,14 +77,11 @@ class CampaignRepositoryImpl(CampaignRepositoryInterface):
             line_models = []
             flight_models = []
             for line in campaign.lines:
-                first_flight = line.flights[0]
                 line_model = CampaignLineRecord(
                     campaign_id=campaign_id,
                     line_number=line.line_number,
                     start_date=line.start_date,
                     end_date=line.end_date,
-                    # Transitional: still mandatory in the table, filled from the first flight until the cleanup drops it.
-                    campaign_period_id=period_models_by_key[(first_flight.period_year, first_flight.period_month)].id,
                     purchase_order_version_id=line.purchase_order_version_id,
                     dsp_id=line.dsp_id,
                     channel_id=line.channel_id,

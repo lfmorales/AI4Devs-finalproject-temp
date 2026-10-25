@@ -100,7 +100,6 @@ def insert_campaign_line(
         line_number=1,
         start_date=line_start or start_date,
         end_date=line_end or end_date,
-        campaign_period_id=period.id,
         dsp_id=dsp_id if dsp_id is not None else seeded_dsp_id(session),
         channel_id=channel.id,
         format_id=line_format.id,
@@ -146,6 +145,14 @@ def replace_flights(session: Session, campaign_line_id: int, windows: list[tuple
         period_ids.append(period.id)
     session.flush()
     return period_ids
+
+
+def period_of_line(session: Session, campaign_line_id: int) -> int:
+    """The campaign period of a fixture line's only flight."""
+    return session.scalars(
+        select(CampaignLinePeriodRecord.campaign_period_id)
+        .where(CampaignLinePeriodRecord.campaign_line_id == campaign_line_id)
+    ).one()
 
 
 def insert_ingestion_batch(session: Session, route: str = "api") -> int:

@@ -112,19 +112,6 @@ def test_periods_are_resolved_by_year_and_month_and_not_by_position(session):
     assert rows and all(month == start.month for month, start in rows)
 
 
-def test_the_transitional_period_of_a_line_is_the_period_of_its_first_flight(session):
-    campaign = _campaign([_line(start_date=date(2026, 9, 10))])
-
-    _save(session, campaign)
-
-    line = session.scalars(select(CampaignLineRecord)).one()
-    first_flight_period = session.scalar(
-        select(CampaignLinePeriodRecord.campaign_period_id).order_by(CampaignLinePeriodRecord.flight_start).limit(1)
-    )
-    september = session.scalar(select(CampaignPeriodRecord.id).where(CampaignPeriodRecord.period_month == 9))
-    assert line.campaign_period_id == first_flight_period == september
-
-
 def test_identifiers_are_handed_back_to_the_entities(session):
     campaign = _campaign([_line()])
 

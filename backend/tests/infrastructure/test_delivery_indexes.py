@@ -19,8 +19,8 @@ def test_delivery_line_and_date_are_covered_by_the_grain_constraint(test_engine)
     assert ("campaign_line_id", "delivery_date") in _indexed_columns(test_engine, "daily_deliveries")
 
 
-def test_campaign_period_of_a_line_is_indexed(test_engine):
-    assert ("campaign_period_id",) in _indexed_columns(test_engine, "campaign_lines")
+def test_campaign_period_of_a_flight_is_indexed(test_engine):
+    assert ("campaign_period_id",) in _indexed_columns(test_engine, "campaign_line_periods")
 
 
 def test_dsp_mapping_is_indexed_by_line_and_by_external_identifiers(test_engine):
