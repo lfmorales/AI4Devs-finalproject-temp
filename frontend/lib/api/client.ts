@@ -88,6 +88,7 @@ export class ApiError extends Error {
 export interface ApiClient {
   get<TResponse>(path: string): Promise<TResponse>;
   post<TResponse>(path: string, body: unknown): Promise<TResponse>;
+  delete<TResponse>(path: string): Promise<TResponse>;
 }
 
 function kindForStatus(status: number): ApiErrorKind {
@@ -153,6 +154,7 @@ export function createApiClient({ baseUrl }: { baseUrl: string }): ApiClient {
 
   return {
     get: <TResponse,>(path: string) => request<TResponse>(path, { method: "GET" }),
+    delete: <TResponse,>(path: string) => request<TResponse>(path, { method: "DELETE" }),
     post: <TResponse,>(path: string, body: unknown) =>
       request<TResponse>(path, {
         method: "POST",

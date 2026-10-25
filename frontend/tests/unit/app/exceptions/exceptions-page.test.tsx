@@ -22,7 +22,7 @@ function exception(overrides: Partial<IngestionException> = {}): IngestionExcept
     id: 5, exception_type: "unmatched_delivery", status: "open", ingestion_batch_id: 3, dsp_id: 1,
     external_campaign_id: "C-9", external_line_item_id: "L-9", campaign_line_id: null, campaign_period_id: null,
     first_date: "2026-08-03", last_date: "2026-08-08", days: 3, impressions_total: 40000, clicks_total: 11000,
-    resolved_at: null, resolved_by: null, note: null, ...overrides,
+    resolved_at: null, resolved_by: null, note: null, campaign_name: null, line_item_name: null, ...overrides,
   };
 }
 

@@ -59,6 +59,8 @@ const EXCEPTION: IngestionException = {
   resolved_at: null,
   resolved_by: null,
   note: null,
+  campaign_name: null,
+  line_item_name: null,
 };
 
 beforeEach(() => vi.clearAllMocks());
