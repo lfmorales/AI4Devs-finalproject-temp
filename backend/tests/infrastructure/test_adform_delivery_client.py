@@ -17,7 +17,7 @@ from app.domain.exceptions import (
     UnsupportedCurrencyError,
 )
 from app.domain.services.dsp_delivery_client import DspDeliveryClient
-from app.domain.value_objects.delivery import DeliveryDateRange, ExternalLineKey
+from app.domain.value_objects.delivery import DeliveryDateRange, ExternalLineKey, LineCatalogInfo
 from app.infrastructure.dsp.adform_delivery_client import AdformDeliveryClient
 from tests.fixtures.fake_adform import COLUMN_HEADERS, LOCATION_PATH, OPERATION_PATH, FakeAdform, report_row
 
@@ -66,7 +66,10 @@ def test_the_data_request_has_the_contracted_body_and_a_bearer_token():
     assert str(data_request.url) == "https://api.adform.com/v1/buyer/stats/data"
     assert data_request.headers["authorization"] == "Bearer synthetic-access-token"
     assert json.loads(data_request.content) == {
-        "dimensions": ["date", "campaignID", "lineItemID", "campaignCurrency"],
+        "dimensions": [
+            "date", "campaignID", "campaign", "lineItemID", "lineItem", "lineItemStartDate", "lineItemEndDate",
+            "campaignCurrency",
+        ],
         "metrics": ["impressions", "clicks", "cost", "measurableImpressions", "viewImpressionsIAB"],
         "filter": {"date": {"from": "2026-08-03", "to": "2026-08-09"}},
         "paging": {"limit": 0},
@@ -216,3 +219,34 @@ def test_an_unreachable_dsp_is_an_error_while_resolving_not_an_unknown_pair():
 
     with pytest.raises(DspUnreachableError):
         _client(fake).resolve_identifiers("1001", "2001")
+
+
+def test_a_row_carries_the_catalogue_names_and_the_dates_without_their_time():
+    row = _fetch(FakeAdform(rows=[report_row(
+        campaign_name="Synthetic Spring", line_item_name="Synthetic Line 7",
+        line_start="2026-07-01T00:00:00", line_end="2026-09-30T23:59:59")]))[0]
+
+    assert row.catalog == LineCatalogInfo("Synthetic Spring", "Synthetic Line 7", date(2026, 7, 1), date(2026, 9, 30))
+
+
+@pytest.mark.parametrize("unreadable", [None, "", "not a date"])
+def test_an_unreadable_line_date_is_kept_as_none_and_does_not_fail_the_row(unreadable):
+    row = _fetch(FakeAdform(rows=[report_row(line_start=unreadable, line_end=unreadable)]))[0]
+
+    assert (row.catalog.line_start_date, row.catalog.line_end_date) == (None, None)
+    assert row.impressions == 1000
+
+
+def test_a_row_without_an_attributed_line_item_carries_no_catalogue_entry():
+    row = _fetch(FakeAdform(rows=[report_row(line_item_id=0, currency="-")]))[0]
+
+    assert row.catalog is None
+
+
+@pytest.mark.parametrize("column", ["campaign", "lineItem", "lineItemStartDate", "lineItemEndDate"])
+def test_a_report_lacking_a_catalogue_column_is_a_format_error_naming_it(column):
+    headers = [h for h in COLUMN_HEADERS if h != column]
+    row = [cell for cell, header in zip(report_row(), COLUMN_HEADERS) if header != column]
+
+    with pytest.raises(DspResponseFormatError, match=column):
+        _fetch(FakeAdform(rows=[row], headers=headers))

@@ -139,7 +139,7 @@ The form lets each line have its own dates and shows the monthly split (flights)
 
 ## 9A. Backend: Adform Line Catalogue, Linking and Range Loads
 
-- [ ] 9A.1 Request the eight dimensions and read the catalogue columns by name, with a synthetic response, tests first
+- [x] 9A.1 Request the eight dimensions and read the catalogue columns by name, with a synthetic response, tests first
 - [ ] 9A.2 Create `dsp_catalog_lines` with its migration (`--autogenerate`, schema sync green)
 - [ ] 9A.3 Update the catalogue in the batch's transaction (new, updated, zeros, unattributed, failed batch) and always make the request, even with no mapped lines
 - [ ] 9A.4 Add `window_start` and `window_end` to the batches with their check, set by every new batch, in a separate migration

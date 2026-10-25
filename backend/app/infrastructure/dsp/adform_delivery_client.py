@@ -27,7 +27,7 @@ from app.domain.exceptions import (
     UnsupportedCurrencyError,
 )
 from app.domain.services.dsp_delivery_client import DspDeliveryClient
-from app.domain.value_objects.delivery import DeliveryDateRange, DspDeliveryRow, ExternalLineKey
+from app.domain.value_objects.delivery import DeliveryDateRange, DspDeliveryRow, ExternalLineKey, LineCatalogInfo
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,11 @@ SCOPES = "https://api.adform.com/scope/buyer.stats https://api.adform.com/scope/
 MIN_POLL_INTERVAL_SECONDS = 3.0
 IDENTIFIER_LOOKBACK_DAYS = 30
 
-_DIMENSIONS = ["date", "campaignID", "lineItemID", "campaignCurrency"]
+# Eight dimensions, the API's maximum. The names and dates do not change the grain: one row per date, campaign and line.
+_DIMENSIONS = [
+    "date", "campaignID", "campaign", "lineItemID", "lineItem", "lineItemStartDate", "lineItemEndDate",
+    "campaignCurrency",
+]
 _METRICS = ["impressions", "clicks", "cost", "measurableImpressions", "viewImpressionsIAB"]
 _REQUIRED_COLUMNS = [*_DIMENSIONS, *_METRICS]
 _REPORTED_CURRENCY = "EUR"
@@ -192,12 +196,17 @@ class AdformDeliveryClient(DspDeliveryClient):
         try:
             line_item_id = int(cells["lineItemID"])
             currency = str(cells["campaignCurrency"])
+            catalog = None
             if is_unattributed(line_item_id, currency):
                 key = None  # Delivery Adform does not attribute to a line item.
             elif currency != _REPORTED_CURRENCY:
                 raise UnsupportedCurrencyError("The report contains a currency other than EUR")
             else:
                 key = ExternalLineKey.from_raw(int(cells["campaignID"]), line_item_id)
+                catalog = LineCatalogInfo(
+                    str(cells["campaign"]), str(cells["lineItem"]),
+                    _date_or_none(cells["lineItemStartDate"]), _date_or_none(cells["lineItemEndDate"]),
+                )
             return DspDeliveryRow(
                 key=key,
                 delivery_date=date.fromisoformat(str(cells["date"])[:10]),
@@ -209,9 +218,18 @@ class AdformDeliveryClient(DspDeliveryClient):
                 banner_size=None,
                 screen=None,
                 line_format=None,
+                catalog=catalog,
             )
         except (ValueError, TypeError, InvalidOperation):
             raise DspResponseFormatError("A report row holds a value of an unexpected type") from None
+
+
+def _date_or_none(value: Any) -> date | None:
+    """The date part of a `YYYY-MM-DDTHH:MM:SS` text; a missing or unreadable one is None, not a failed run."""
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
 
 
 def _json(response: httpx.Response) -> dict[str, Any]:

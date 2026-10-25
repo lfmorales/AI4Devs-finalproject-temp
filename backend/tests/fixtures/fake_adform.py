@@ -7,8 +7,8 @@ from typing import Any
 import httpx
 
 COLUMN_HEADERS = [
-    "date", "campaignID", "lineItemID", "campaignCurrency",
-    "impressions", "clicks", "cost", "measurableImpressions", "viewImpressionsIAB",
+    "date", "campaignID", "campaign", "lineItemID", "lineItem", "lineItemStartDate", "lineItemEndDate",
+    "campaignCurrency", "impressions", "clicks", "cost", "measurableImpressions", "viewImpressionsIAB",
 ]
 OPERATION_PATH = "/v1/buyer/stats/operations/op-1"
 LOCATION_PATH = "/v1/buyer/stats/data/op-1"
@@ -25,8 +25,15 @@ def report_row(
     cost: str = "12.5",
     measurable: int = 900,
     viewable: int = 700,
+    campaign_name: str = "Synthetic Campaign",
+    line_item_name: str = "Synthetic Line Item",
+    line_start: str | None = "2026-07-01T00:00:00",
+    line_end: str | None = "2026-09-30T23:59:59",
 ) -> list[Any]:
-    return [date_text, campaign_id, line_item_id, currency, impressions, clicks, _Raw(cost), measurable, viewable]
+    return [
+        date_text, campaign_id, campaign_name, line_item_id, line_item_name, line_start, line_end, currency,
+        impressions, clicks, _Raw(cost), measurable, viewable,
+    ]
 
 
 class _Raw:

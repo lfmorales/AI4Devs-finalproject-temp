@@ -34,6 +34,16 @@ class ExternalLineKey:
         return cls(str(external_campaign_id).strip(), str(external_line_item_id).strip())
 
 
+@dataclass(frozen=True)
+class LineCatalogInfo:
+    """What a DSP says about a line item next to its delivery: the names and the line's own dates."""
+
+    campaign_name: str
+    line_item_name: str
+    line_start_date: date | None
+    line_end_date: date | None
+
+
 def _require_decimal_media_cost(media_cost: object) -> None:
     # Float cost drifts when summed over millions of rows.
     if not isinstance(media_cost, Decimal):
@@ -55,6 +65,8 @@ class DspDeliveryRow:
     banner_size: str | None
     screen: str | None
     line_format: str | None
+    # Only for attributed rows from a DSP that names its line items.
+    catalog: LineCatalogInfo | None = None
 
     def __post_init__(self) -> None:
         _require_decimal_media_cost(self.media_cost)
