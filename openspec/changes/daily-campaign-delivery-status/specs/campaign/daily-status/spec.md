@@ -1,15 +1,15 @@
 ## Purpose
 
-The view operations opens every morning: which active campaigns are delivering, how they pace against what was contracted, and which ones have stopped — replacing a per-DSP download routine with a page that already knows.
+The view operations opens every morning: which active campaigns are delivering, how their flights pace against what was contracted, and which ones have stopped — replacing a per-DSP download routine with a page that already knows.
 
 ## ADDED Requirements
 
 ### Requirement: Contracted and delivered volume are shown as distinct quantities
 
-The system SHALL present contracted volume and delivered volume as separate figures together with their ratio, and SHALL NOT present a single combined impressions figure.
+The system SHALL present, for each flight, contracted volume and delivered volume as separate figures together with their ratio, and SHALL NOT present a single combined impressions figure. The contracted volume is the flight's and the delivered volume is the line's delivery inside the flight's window up to D-1.
 
 #### Scenario: Both quantities are visible
-- **WHEN** an active campaign is shown in the daily status
+- **WHEN** a flight of an active campaign is shown in the daily status
 - **THEN** its contracted volume, its delivered volume and the ratio between them are all present
 
 ### Requirement: An active campaign missing D-1 delivery is flagged
@@ -46,32 +46,42 @@ The system SHALL flag an active campaign whose most recent delivery predates D-1
 
 ### Requirement: Pacing deviation beyond ten percent is flagged
 
-The system SHALL compare delivered volume against the volume expected by the current date within the period, and SHALL flag a deviation of more than ten percent in either direction.
+The system SHALL compare, for each flight, delivered volume inside its window against the volume expected by the current date within that window, and SHALL flag a deviation of more than ten percent in either direction. The flag belongs to the flight.
 
 #### Scenario: Under-delivery beyond the threshold is flagged
-- **WHEN** a campaign line has delivered more than ten percent below what is expected to date
-- **THEN** it is flagged as deviating, together with the days remaining in the period
+- **WHEN** a flight has delivered more than ten percent below what is expected to date
+- **THEN** it is flagged as deviating, together with the days remaining in the flight
 
 #### Scenario: Over-delivery beyond the threshold is flagged
-- **WHEN** a campaign line has delivered more than ten percent above what is expected to date
+- **WHEN** a flight has delivered more than ten percent above what is expected to date
 - **THEN** it is flagged as deviating
 
 #### Scenario: Delivery within the threshold is not flagged
-- **WHEN** a campaign line paces within ten percent of expectation
+- **WHEN** a flight paces within ten percent of expectation
 - **THEN** no deviation flag is raised
 
 ### Requirement: Pacing, the status view and absence are separate responsibilities
 
-The system SHALL calculate pacing for a campaign line from its contracted volume, its period bounds, a date and its delivered volume, without regard to whether the period is shown. Which periods and campaigns the daily status lists is decided by the status view, and delivery that never arrived in a finished period is surfaced by the absence exception, not by the pacing flag.
+The system SHALL calculate pacing for a flight from its contracted volume, its window bounds, a date and the volume delivered inside the window, without regard to whether the flight is shown. Which flights and campaigns the daily status lists is decided by the status view, and delivery that never arrived in a finished flight is surfaced by the absence exception, not by the pacing flag.
 
-#### Scenario: The pacing calculation does not hide a finished period
-- **WHEN** pacing is calculated for a period that has ended with nothing delivered against a contracted volume
+#### Scenario: The pacing calculation does not hide a finished flight
+- **WHEN** pacing is calculated for a flight that has ended with nothing delivered against a contracted volume
 - **THEN** it reports under-delivery
 
-#### Scenario: The status view lists neither finished periods nor campaigns that have not started
+#### Scenario: The status view lists one row per running flight of an active campaign
 - **WHEN** the daily status is read
-- **THEN** a period that has ended is not listed
+- **THEN** it has one row for each flight whose window contains D-1 and whose campaign has status `active`
+- **AND** a flight that has ended is not listed
+- **AND** a flight that has not started is not listed
 - **AND** a campaign that has not started is not listed
+
+#### Scenario: A line in two months shows only the month in course
+- **WHEN** a line has flights in August and September and D-1 falls in September
+- **THEN** only the September flight is listed, with its own contracted volume and the delivery inside its window
+
+#### Scenario: The missing-data flag belongs to the campaign and repeats on each row
+- **WHEN** a campaign has several rows in the daily status
+- **THEN** each carries the campaign's missing-data flag, calculated from the latest delivery of any of its lines
 
 ### Requirement: Cost and margin figures are restricted to finance
 

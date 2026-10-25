@@ -57,28 +57,33 @@ The system SHALL NOT turn a row that the DSP reports without an attributed line 
 - **THEN** no exception is recorded for it
 - **AND** the batch counts it among its ignored rows
 
-### Requirement: A line with no delivery in a finished period is an exception
+### Requirement: A line with no delivery in a finished flight is an exception
 
-The system SHALL record a campaign line as a `missing_delivery` exception when the sum of its impressions across a campaign period is zero, or when it has no delivery row in that period at all. Only a line with a validated DSP mapping is evaluated, and only for a period whose last day falls inside the ingestion window, between D-7 and D-1, and on or after the day the mapping was validated. There SHALL be at most one such exception per line and period.
+The system SHALL record a campaign line as a `missing_delivery` exception when the sum of its impressions inside the window of one of its flights is zero, or when it has no delivery row in that window at all. Only a line with a validated DSP mapping is evaluated, and only for a flight whose last day (`flight_end`) falls inside the ingestion window, between D-7 and D-1, and on or after the day the mapping was validated. The exception is identified by the line and the flight's campaign period, so there SHALL be at most one such exception per line and period. A delivery dated outside every flight of its line is stored all the same, and counts toward a flight only when it lies inside that flight's window.
 
-#### Scenario: A finished period with no rows is flagged
-- **WHEN** a period's last day is inside the ingestion window and one of its mapped lines has no delivery row in it
+#### Scenario: A finished flight with no rows is flagged
+- **WHEN** a flight's last day is inside the ingestion window and its mapped line has no delivery row inside the flight's window
 - **THEN** an exception is recorded against that line and period
 
-#### Scenario: A finished period with only zero impressions is flagged
-- **WHEN** a period's last day is inside the ingestion window and every delivery row of one of its mapped lines has zero impressions
+#### Scenario: A finished flight with only zero impressions is flagged
+- **WHEN** a flight's last day is inside the ingestion window and every delivery row of its mapped line inside the flight's window has zero impressions
 - **THEN** an exception is recorded against that line and period
 
-#### Scenario: A period still running is not flagged for absence
-- **WHEN** a period's last day is after D-1
-- **THEN** no absence exception is raised for its lines
+#### Scenario: Delivery outside the flight does not count for it
+- **WHEN** a mapped line delivers only on days outside the window of a finished flight
+- **THEN** that flight is flagged
+- **AND** the delivery outside the window is stored
 
-#### Scenario: A period that ended before the window is not evaluated
-- **WHEN** a period's last day is before D-7
-- **THEN** no absence exception is raised for its lines
+#### Scenario: A flight still running is not flagged for absence
+- **WHEN** a flight's last day is after D-1
+- **THEN** no absence exception is raised for its line
 
-#### Scenario: A period that ended before the mapping was validated is not flagged
-- **WHEN** a line's mapping was validated after the last day of a period
+#### Scenario: A flight that ended before the window is not evaluated
+- **WHEN** a flight's last day is before D-7
+- **THEN** no absence exception is raised for its line
+
+#### Scenario: A flight that ended before the mapping was validated is not flagged
+- **WHEN** a line's mapping was validated after the last day of a flight
 - **THEN** no absence exception is raised for that line and period
 
 #### Scenario: A line without a validated mapping is not evaluated
