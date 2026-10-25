@@ -125,7 +125,7 @@ The form lets each line have its own dates and shows the monthly split (flights)
 - The registration's own 422 codes `line_dates_*`, `flight_volumes_*` and `volume_too_small_for_flights` carry no line number, so they are shown on the candidate lines (own dates for `line_dates_*`, manual split for `flight_volumes_*`, proportional split for `volume_too_small_for_flights`), saying «en alguna de estas líneas» when there are several, and at form level when there is none. Messages come from the Zod schema or a code-to-Spanish table, never from searching library text.
 
 - [x] 8A.1 Extend the Zod schema with the optional line dates, `monthly_volumes` and the manual split rules (coverage of the preview months, positive volumes, sum equal to the total), with the Spanish messages shared with the backend codes, tests first
-- [ ] 8A.2 Add a typed `previewFlights` function in `lib/api/` over the real client, tests first with a simulated `fetch` (200, 422 with each code, 401 and 403), and verify no component calls `fetch`
+- [x] 8A.2 Add a typed `previewFlights` function in `lib/api/` over the real client, tests first with a simulated `fetch` (200, 422 with each code, 401 and 403), and verify no component calls `fetch`
 - [ ] 8A.3 Add the line date control with the inherit box, tests first
 - [ ] 8A.4 Add the flight editor: calculate, table, «Suma X de Y», manual mode, reset and invalidation when the inputs change, tests first
 - [ ] 8A.5 Submit with the two rules (dates and `monthly_volumes` only when not inherited or manual) and the silent preview of lines that have none, tests first
