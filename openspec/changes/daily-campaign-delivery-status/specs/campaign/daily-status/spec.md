@@ -115,6 +115,14 @@ The system SHALL expose the daily status at `GET /api/campaign-status` to users 
 - **THEN** the request is rejected as forbidden
 - **AND** a request without a valid token is rejected as unauthenticated
 
+### Requirement: The daily status takes its day from the configured time zone
+
+The system SHALL take D, and from it D-1, for the pacing and the missing-data flag of the daily status from the same time zone as the ingestion, `Europe/Madrid` unless configured otherwise, and not from UTC.
+
+#### Scenario: Just after midnight in Madrid the status already looks at the new day
+- **WHEN** the status is read at 00:30 in Madrid on 11 August, which is 22:30 UTC on the 10th
+- **THEN** D-1 is 10 August
+
 ### Requirement: Cost and margin figures are restricted to finance
 
 The system SHALL withhold cost and margin figures from users who do not hold the `finance` role, in the API response and not only in the interface.

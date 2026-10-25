@@ -210,3 +210,51 @@ The system SHALL accept the creation of a DSP mapping only from a user holding t
 - **WHEN** a mapping is created for a pair already mapped for that DSP
 - **THEN** it is rejected as a conflict without asking the DSP
 
+### Requirement: Today and the ingestion window are calendar days in a configured time zone
+
+The system SHALL calculate "today", and from it the D-1 and the D-7 to D-1 window, as a calendar date in the time zone `Europe/Madrid`, configurable by an environment variable, and SHALL use that same zone for the ingestion, the pacing and the missing-data flag of the daily status, whatever the zone of the server.
+
+#### Scenario: Late evening in Madrid is already the next day
+- **WHEN** it is 23:30 in Madrid on 10 August, which is 21:30 UTC
+- **THEN** today is 10 August and D-1 is 9 August
+- **AND** at 00:30 in Madrid on 11 August, 22:30 UTC on the 10th, today is 11 August
+
+#### Scenario: A change of daylight saving time does not move the day
+- **WHEN** the clocks change in Madrid
+- **THEN** every instant still belongs to exactly one calendar day of Madrid
+- **AND** today is the date shown on a clock in Madrid at that instant
+
+#### Scenario: The API and the nightly command agree on the day
+- **WHEN** the daily status and the nightly run are evaluated at the same instant
+- **THEN** both use the same today
+
+### Requirement: The nightly ingestion is one command that uses the same service as every other route
+
+The system SHALL provide the command `python -m scripts.run_ingestion`, to be invoked by the host scheduler, that calculates the window, ingests the lines with a validated mapping with one request to the DSP, records the batch, and then runs the absence detection with the identifier of that batch, through the same service as any other entry route. An optional `--date YYYY-MM-DD` SHALL replace today so a window can be repeated. There SHALL be no dry-run option.
+
+#### Scenario: A successful run ingests and then detects absence
+- **WHEN** the command runs and the DSP answers
+- **THEN** the batch succeeds, absence is detected with that batch's identifier, and the exit code is 0
+
+#### Scenario: A failed run leaves a failed batch and no partial rows
+- **WHEN** the DSP client fails
+- **THEN** a batch with a failed outcome exists, the window holds no partial rows, absence is not detected and the exit code is 1
+
+#### Scenario: Two runs never overlap
+- **WHEN** the command starts while another run holds the lock
+- **THEN** it does nothing and exits with code 2
+
+#### Scenario: Missing configuration stops the run before it starts
+- **WHEN** the DSP credentials, the database or the time zone are not configured
+- **THEN** no batch is created and the exit code is 3
+
+#### Scenario: Repeating a window changes nothing
+- **WHEN** the command runs twice for the same date and the DSP reports the same figures
+- **THEN** the delivery rows and the exceptions are the same as after the first run
+
+#### Scenario: The output states counts and never values
+- **WHEN** the command prints its result
+- **THEN** it shows only states and counts: rows read, ignored, unmatched zeros, new exceptions, skipped lines and absences
+- **AND** it never prints an identifier, a name, an amount, a token or the text of a DSP error
+- **AND** a failure is summarised by the name of its error class
+
