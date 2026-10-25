@@ -5,8 +5,12 @@ from decimal import Decimal
 
 import pytest
 
+from app.domain.value_objects.catalog import CatalogLineObservation
 from app.domain.value_objects.delivery import ExternalLineKey, RetainedDelivery
 from app.infrastructure.persistence.models.identity import UserRecord
+from app.infrastructure.persistence.repositories.sqlalchemy_dsp_catalog_repository import (
+    SqlAlchemyDspCatalogRepository,
+)
 from app.infrastructure.persistence.repositories.sqlalchemy_ingestion_exception_repository import (
     SqlAlchemyIngestionExceptionRepository,
 )
@@ -133,3 +137,54 @@ def test_resolving_without_a_token_is_unauthenticated(client):
     response = client.post("/ingestion-exceptions/1/resolve")
 
     assert (response.status_code, response.json()["code"]) == (401, "unauthenticated")
+
+
+def _catalogue_the_exception_pair(session) -> None:
+    SqlAlchemyDspCatalogRepository(session).upsert_all(seeded_dsp_id(session), [CatalogLineObservation(
+        key=ExternalLineKey("9", "9"), campaign_name="Synthetic Campaign", line_item_name="Synthetic Line",
+        line_start_date=None, line_end_date=None, first_seen_date=date(2026, 8, 3), last_seen_date=date(2026, 8, 5),
+        last_impressions_date=date(2026, 8, 5),
+    )])
+
+
+def test_the_queue_names_the_campaign_and_the_line_item_from_the_catalogue(authenticated_client, test_db_session, exception_id):
+    _catalogue_the_exception_pair(test_db_session)
+
+    item = authenticated_client.get("/ingestion-exceptions").json()[0]
+
+    assert (item["campaign_name"], item["line_item_name"]) == ("Synthetic Campaign", "Synthetic Line")
+
+
+def test_the_names_are_null_when_the_pair_is_not_in_the_catalogue(authenticated_client, exception_id):
+    item = authenticated_client.get("/ingestion-exceptions").json()[0]
+
+    assert (item["campaign_name"], item["line_item_name"]) == (None, None)
+
+
+def test_a_resolved_exception_still_shows_its_names(authenticated_client, test_db_session, exception_id):
+    _catalogue_the_exception_pair(test_db_session)
+
+    resolved = authenticated_client.post(f"/ingestion-exceptions/{exception_id}/resolve").json()
+
+    assert resolved["campaign_name"] == "Synthetic Campaign"
+
+
+def test_names_do_not_bring_a_cost_into_the_queue(authenticated_client, test_db_session, exception_id):
+    _catalogue_the_exception_pair(test_db_session)
+
+    text = authenticated_client.get("/ingestion-exceptions").text.lower()
+
+    assert "cost" not in text and COST_MARKER not in text
+
+
+def test_a_missing_delivery_exception_has_no_names(authenticated_client, test_db_session):
+    from tests.fixtures.delivery_data import insert_campaign_line, period_of_line
+
+    line = insert_campaign_line(test_db_session)
+    SqlAlchemyIngestionExceptionRepository(test_db_session).record_missing_delivery(
+        line, period_of_line(test_db_session, line), insert_ingestion_batch(test_db_session))
+    _catalogue_the_exception_pair(test_db_session)
+
+    item = authenticated_client.get("/ingestion-exceptions").json()[0]
+
+    assert (item["exception_type"], item["campaign_name"], item["line_item_name"]) == ("missing_delivery", None, None)

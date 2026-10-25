@@ -38,6 +38,8 @@ def _to_response(summary: ExceptionSummary) -> IngestionExceptionResponse:
         resolved_at=summary.resolved_at,
         resolved_by=summary.resolved_by,
         note=summary.note,
+        campaign_name=summary.campaign_name,
+        line_item_name=summary.line_item_name,
     )
 
 

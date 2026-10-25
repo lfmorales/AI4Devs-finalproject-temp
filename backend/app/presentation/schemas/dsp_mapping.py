@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -18,3 +18,6 @@ class DspMappingResponse(BaseModel):
     external_line_item_id: str
     validated_at: datetime | None
     validation: IdentifierCheck
+    # New and optional: when the pair is in the catalogue, the latest date it delivered impressions. A pair that
+    # exists but never delivers shows null here while `validation` may still say found.
+    last_impressions_date: date | None = None

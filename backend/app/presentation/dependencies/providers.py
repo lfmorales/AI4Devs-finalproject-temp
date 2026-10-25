@@ -121,6 +121,7 @@ def get_dsp_mapping_service(
         repository=SqlAlchemyDspMappingRepository(session),
         client_for_dsp=resolver,
         clock=lambda: datetime.now(UTC).replace(tzinfo=None),
+        catalog=SqlAlchemyDspCatalogQueryRepository(session),
     )
 
 

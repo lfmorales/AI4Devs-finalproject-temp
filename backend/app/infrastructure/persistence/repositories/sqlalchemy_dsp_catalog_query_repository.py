@@ -1,8 +1,11 @@
+from datetime import date
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.domain.entities.dsp_catalog import CatalogLineSummary, CatalogPage, CatalogQuery
 from app.domain.repositories.dsp_catalog_query_repository import DspCatalogQueryRepository
+from app.domain.value_objects.delivery import ExternalLineKey
 from app.infrastructure.persistence.models.dsp_catalog import DspCatalogLineRecord
 from app.infrastructure.persistence.models.dsp_mapping import DSPMappingRecord
 
@@ -39,6 +42,14 @@ class SqlAlchemyDspCatalogQueryRepository(DspCatalogQueryRepository):
             source.order_by(line.last_seen_date.desc(), line.id).limit(query.limit).offset(query.offset)
         )
         return CatalogPage([_to_summary(row[0], row.mapped_line_id) for row in rows], int(total))
+
+    def find_last_impressions_date(self, dsp_id: int, key: ExternalLineKey) -> date | None:
+        line = DspCatalogLineRecord
+        return self._session.scalar(select(line.last_impressions_date).where(
+            line.dsp_id == dsp_id,
+            line.external_campaign_id == key.external_campaign_id,
+            line.external_line_item_id == key.external_line_item_id,
+        ))
 
 
 def _escape_like(text: str) -> str:

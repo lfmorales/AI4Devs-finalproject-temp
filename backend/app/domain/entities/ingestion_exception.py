@@ -59,3 +59,6 @@ class ExceptionSummary:
     resolved_at: datetime | None = None
     resolved_by: int | None = None
     note: str | None = None
+    # From the DSP catalogue by DSP and pair; None when the pair is not in it or the exception carries no pair.
+    campaign_name: str | None = None
+    line_item_name: str | None = None

@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 
 from app.domain.entities.dsp_mapping import DspMapping
@@ -11,6 +11,7 @@ from app.domain.exceptions import (
     DspUnreachableError,
     DuplicateDspMappingError,
 )
+from app.domain.repositories.dsp_catalog_query_repository import DspCatalogQueryRepository
 from app.domain.repositories.dsp_mapping_repository import DspMappingRepository
 from app.domain.services.dsp_delivery_client import DspDeliveryClient
 from app.domain.value_objects.delivery import ExternalLineKey
@@ -26,6 +27,8 @@ class IdentifierCheck(StrEnum):
 class MappingCreationResult:
     mapping: DspMapping
     check: IdentifierCheck
+    # The latest date the pair delivered impressions according to the catalogue; None if unknown or never.
+    last_impressions_date: date | None = None
 
 
 class DspMappingService:
@@ -41,10 +44,12 @@ class DspMappingService:
         repository: DspMappingRepository,
         client_for_dsp: Callable[[str], DspDeliveryClient | None],
         clock: Callable[[], datetime],
+        catalog: DspCatalogQueryRepository | None = None,
     ) -> None:
         self._repository = repository
         self._client_for_dsp = client_for_dsp
         self._clock = clock
+        self._catalog = catalog
 
     def create_mapping(
         self, campaign_line_id: int, external_campaign_id: str, external_line_item_id: str
@@ -64,7 +69,9 @@ class DspMappingService:
         check = self._check_with_dsp(client, key)
         validated_at = self._clock() if check is IdentifierCheck.FOUND else None
         mapping = self._repository.add(campaign_line_id, line_dsp.dsp_id, key, validated_at)
-        return MappingCreationResult(mapping, check)
+        last_impressions_date = None if self._catalog is None else self._catalog.find_last_impressions_date(
+            line_dsp.dsp_id, key)
+        return MappingCreationResult(mapping, check, last_impressions_date)
 
     @staticmethod
     def _check_with_dsp(client: DspDeliveryClient, key: ExternalLineKey) -> IdentifierCheck:

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities.ingestion_exception import ExceptionStatus, ExceptionSummary, ExceptionType
 from app.domain.repositories.exception_queue_repository import ExceptionQueueRepository
+from app.infrastructure.persistence.models.dsp_catalog import DspCatalogLineRecord
 from app.infrastructure.persistence.models.delivery import (
     IngestionExceptionDeliveryRecord,
     IngestionExceptionRecord,
@@ -59,8 +60,17 @@ class SqlAlchemyExceptionQueueRepository(ExceptionQueueRepository):
                 func.coalesce(totals.c.days, 0).label("days"),
                 func.coalesce(totals.c.impressions_total, 0).label("impressions_total"),
                 func.coalesce(totals.c.clicks_total, 0).label("clicks_total"),
+                DspCatalogLineRecord.campaign_name.label("campaign_name"),
+                DspCatalogLineRecord.line_item_name.label("line_item_name"),
             )
             .outerjoin(totals, totals.c.exception_id == exception.id)
+            # At most one catalogue row per DSP and pair, so the join never repeats an exception.
+            .outerjoin(
+                DspCatalogLineRecord,
+                (DspCatalogLineRecord.dsp_id == exception.dsp_id)
+                & (DspCatalogLineRecord.external_campaign_id == exception.external_campaign_id)
+                & (DspCatalogLineRecord.external_line_item_id == exception.external_line_item_id),
+            )
         )
 
 
@@ -84,4 +94,6 @@ def _to_summary(row) -> ExceptionSummary:  # type: ignore[no-untyped-def]
         resolved_at=record.resolved_at,
         resolved_by=record.resolved_by,
         note=record.note,
+        campaign_name=row.campaign_name,
+        line_item_name=row.line_item_name,
     )

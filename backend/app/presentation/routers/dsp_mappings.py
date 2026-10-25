@@ -33,4 +33,5 @@ def create_dsp_mapping(
         external_line_item_id=mapping.key.external_line_item_id,
         validated_at=mapping.validated_at,
         validation=result.check,
+        last_impressions_date=result.last_impressions_date,
     )

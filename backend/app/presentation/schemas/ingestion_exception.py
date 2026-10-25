@@ -25,6 +25,9 @@ class IngestionExceptionResponse(BaseModel):
     resolved_at: datetime | None
     resolved_by: int | None
     note: str | None
+    # From the DSP catalogue; null when the pair is not in it.
+    campaign_name: str | None
+    line_item_name: str | None
 
 
 class ResolveExceptionRequest(BaseModel):
