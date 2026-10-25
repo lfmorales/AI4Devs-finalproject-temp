@@ -1,3 +1,4 @@
+import { NO_CATALOGUE_NAME } from "@/features/linking/messages";
 import type { ExceptionType, IngestionException } from "@/lib/api/exceptions";
 
 export const TYPE_LABELS: Record<ExceptionType, string> = {
@@ -29,4 +30,10 @@ export function formatExternalPair(row: IngestionException): string {
     return `${row.external_campaign_id ?? "—"} / ${row.external_line_item_id ?? "—"}`;
   }
   return row.campaign_line_id === null ? "—" : `Línea ${row.campaign_line_id}, periodo ${row.campaign_period_id ?? "—"}`;
+}
+
+/** A catalogue name; only a pair from the DSP has one, so the other exception types show a dash. */
+export function formatCatalogueName(row: IngestionException, name: string | null): string {
+  if (row.exception_type !== "unmatched_delivery") return "—";
+  return name ?? NO_CATALOGUE_NAME;
 }
