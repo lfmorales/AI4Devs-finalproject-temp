@@ -150,3 +150,13 @@ def test_absence_of_a_flight_is_recorded_once_across_two_runs_through_postgres(r
     assert (first, second) == (1, 0)
     assert (exception.campaign_line_id, exception.campaign_period_id) == (line, august)
     assert july != august
+
+
+def test_delivery_outside_every_flight_of_its_line_is_stored_all_the_same(rolled_back_session):
+    setup = _Setup(rolled_back_session, [dsp_row(D5, MAPPED, impressions=700)])
+    replace_flights(rolled_back_session, setup.line_id, [(date(2026, 8, 1), date(2026, 8, 2))])  # the 5th is outside
+
+    setup.run()
+
+    stored = rolled_back_session.scalars(select(DailyDeliveryRecord)).one()
+    assert (stored.campaign_line_id, stored.delivery_date, stored.impressions) == (setup.line_id, D5, 700)
