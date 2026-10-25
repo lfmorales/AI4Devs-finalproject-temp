@@ -58,7 +58,7 @@ describe("the exception queue filter", () => {
 
     expect(search()).toBeInTheDocument();
     const type = screen.getByLabelText("Tipo");
-    expect(within(type).getAllByRole("option").map((option) => option.textContent)).toEqual(["Todas", "Entrega sin casar", "Ausencia"]);
+    expect(within(type).getAllByRole("option").map((option) => option.textContent)).toEqual(["Todas", "Entrega sin emparejar", "Entrega ausente"]);
   });
 
   it("shows every row and «Mostrando 3 de 3» before any filtering", async () => {
@@ -108,11 +108,11 @@ describe("the exception queue filter", () => {
     const user = userEvent.setup();
     await renderQueue();
 
-    await user.selectOptions(screen.getByLabelText("Tipo"), "Ausencia");
+    await user.selectOptions(screen.getByLabelText("Tipo"), "Entrega ausente");
     expect(shownIds()).toEqual([3]);
     expect(screen.getByText("Mostrando 1 de 3")).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText("Tipo"), "Entrega sin casar");
+    await user.selectOptions(screen.getByLabelText("Tipo"), "Entrega sin emparejar");
     expect(shownIds()).toEqual([1, 2]);
   });
 
@@ -120,7 +120,7 @@ describe("the exception queue filter", () => {
     const user = userEvent.setup();
     await renderQueue();
     await user.type(search(), "navidad");
-    await user.selectOptions(screen.getByLabelText("Tipo"), "Entrega sin casar");
+    await user.selectOptions(screen.getByLabelText("Tipo"), "Entrega sin emparejar");
 
     await user.click(screen.getByRole("button", { name: "Limpiar filtros" }));
 
@@ -170,7 +170,7 @@ describe("the filter state", () => {
     const requests = await renderQueue();
 
     await user.type(search(), "navidad");
-    await user.selectOptions(screen.getByLabelText("Tipo"), "Ausencia");
+    await user.selectOptions(screen.getByLabelText("Tipo"), "Entrega ausente");
     await user.click(screen.getByRole("button", { name: "Limpiar filtros" }));
 
     expect(requests.map((request) => request.path)).toEqual(["/ingestion-exceptions?status=open"]);
@@ -180,7 +180,7 @@ describe("the filter state", () => {
     const user = userEvent.setup();
     await renderQueue(QUEUE, { [RESOLVED]: () => reply(200, [exception({ id: 8, status: "resolved" }), exception({ id: 9, status: "resolved", campaign_name: "Otra", line_item_name: "Cosa" })]) });
     await user.type(search(), "navidad");
-    await user.selectOptions(screen.getByLabelText("Tipo"), "Entrega sin casar");
+    await user.selectOptions(screen.getByLabelText("Tipo"), "Entrega sin emparejar");
 
     await user.click(screen.getByRole("tab", { name: "Resueltas" }));
     await screen.findByRole("table", { name: "Cola de excepciones" });
@@ -217,7 +217,7 @@ describe("the filter state", () => {
         exception: { ...VERANO, status: "resolved" }, needs_history_load: false,
       }),
     });
-    await user.selectOptions(screen.getByLabelText("Tipo"), "Entrega sin casar");
+    await user.selectOptions(screen.getByLabelText("Tipo"), "Entrega sin emparejar");
     expect(screen.getByText("Mostrando 2 de 3")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Vincular a una línea (excepción 2)" }));
@@ -235,7 +235,7 @@ describe("the filter state", () => {
     await renderQueue();
 
     await user.type(search(), "secretoXYZ");
-    await user.selectOptions(screen.getByLabelText("Tipo"), "Ausencia");
+    await user.selectOptions(screen.getByLabelText("Tipo"), "Entrega ausente");
 
     expect(`${window.location.href}${window.location.search}${window.location.hash}`).not.toContain("secretoXYZ");
     expect(window.location.search).toBe("");

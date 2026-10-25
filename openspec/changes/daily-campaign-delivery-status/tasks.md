@@ -178,7 +178,7 @@ One hand-written stylesheet, with no framework, no new dependency, no external f
 
 A filter over the list of the active tab of `/exceptions`, in the style of the catalogue's. It is applied in the browser over what `GET /ingestion-exceptions` already returned: no request and no parameter are added. Behaviour:
 
-- A search box «Buscar excepciones» (label tied with `htmlFor`) and a selector «Tipo» with «Todas», «Entrega sin casar» (`unmatched_delivery`) and «Ausencia» (`missing_delivery`).
+- A search box «Buscar excepciones» (label tied with `htmlFor`) and a selector «Tipo» with «Todas», «Entrega sin emparejar» (`unmatched_delivery`) and «Entrega ausente» (`missing_delivery`), the same labels as the table.
 - The search ignores case and accents (Unicode normalisation) and looks in `campaign_name`, `line_item_name`, the DSP, the external pair and the text of absence exceptions («Línea X, periodo Y»). An empty string shows everything; the terms separated by spaces must all match.
 - A counter «Mostrando X de Y», a button «Limpiar filtros» and the state «No hay excepciones que coincidan con la búsqueda», distinct from the empty queue and from loading.
 - The searched text lives only in the component state: not in the URL and not in the browser storage. The filter is kept when the tab changes. Resolving or linking an exception removes its row from the list and lowers the counter without losing the filter.

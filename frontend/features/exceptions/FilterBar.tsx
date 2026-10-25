@@ -1,5 +1,6 @@
 import { useId } from "react";
 
+import { TYPE_LABELS } from "./labels";
 import { hasActiveFilter, NO_FILTER, type ExceptionFilter, type TypeFilter } from "./filter";
 
 interface FilterBarProps {
@@ -25,8 +26,8 @@ export function FilterBar({ filter, shown, total, onChange }: FilterBarProps) {
           <label htmlFor={typeId}>Tipo</label>
           <select id={typeId} value={filter.type} onChange={(event) => onChange({ ...filter, type: event.target.value as TypeFilter })}>
             <option value="">Todas</option>
-            <option value="unmatched_delivery">Entrega sin casar</option>
-            <option value="missing_delivery">Ausencia</option>
+            <option value="unmatched_delivery">{TYPE_LABELS.unmatched_delivery}</option>
+            <option value="missing_delivery">{TYPE_LABELS.missing_delivery}</option>
           </select>
         </div>
         <button type="button" disabled={!hasActiveFilter(filter)} onClick={() => onChange(NO_FILTER)}>Limpiar filtros</button>
