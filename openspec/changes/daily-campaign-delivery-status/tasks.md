@@ -161,7 +161,7 @@ The form lets each line have its own dates and shows the monthly split (flights)
 
 - [x] 11A.1 Write failing tests for `scripts/grant_roles.py` against PostgreSQL (creates the user and the requested role rows when missing, is idempotent, assigns several roles, rejects an unknown role and an empty email with exit code 2 without writing, prints no email or other value) and implement it
 - [x] 11A.2 Add `backend/Dockerfile.prod`: `uv sync --frozen --no-dev`, no `tests/`, no `scripts/seed_dev_data.py`, non-root user, `run_ingestion.py` and the migrations kept, migrations never run at start
-- [ ] 11A.3 Add the production nginx template (80 redirects to HTTPS and leaves `/.well-known/acme-challenge/` open; 443 with certificates from a volume and `SERVER_NAME` as variable)
+- [x] 11A.3 Add the production nginx template (80 redirects to HTTPS and leaves `/.well-known/acme-challenge/` open; 443 with certificates from a volume and `SERVER_NAME` as variable)
 - [ ] 11A.4 Add `docker-compose.prod.yml`: only nginx publishes ports, restart policy, health checks, log rotation, `env_file: .env`, named PostgreSQL volume, the frontend build arguments with the public server URL
 - [ ] 11A.5 Ignore certificates and keys in `.gitignore` and verify nothing of the kind is versioned
 - [ ] 11A.6 Write `docs/deploy.md` with the steps that cannot be run here: instance, security group, DNS, Certbot, `.env` with `chmod 600`, Cognito callback and sign-out URLs over HTTPS, the explicit migration step and the first user
