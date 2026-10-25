@@ -3,11 +3,8 @@ from decimal import Decimal
 from typing import Optional
 
 from app.domain.entities.campaign import Campaign, CampaignLine, CampaignLineFlight, CampaignPeriod
-from app.domain.exceptions import VolumeTooSmallForFlightsError
 from app.domain.services.explicit_volumes import validate_explicit_volumes
-from app.domain.services.flight_generation import generate_flights
-from app.domain.services.line_dates import validate_line_dates
-from app.domain.services.volume_distribution import distribute_volume_by_days
+from app.domain.services.flight_planning import resolve_line_windows, split_volume_by_days
 from app.domain.value_objects.flight import MonthlyVolume
 from app.domain.value_objects.contracted_volume import ContractedVolume
 from app.domain.services.period_expansion import PeriodExpansionService
@@ -152,17 +149,15 @@ class CampaignRegistrationService:
     @staticmethod
     def _build_line(line_number: int, line_data: dict, campaign: Campaign) -> CampaignLine:
         """One campaign line with its dates and the flights its volume is split into."""
-        line_start = line_data.get("start_date") or campaign.start_date
-        line_end = line_data.get("end_date") or campaign.end_date
-        validate_line_dates(line_start, line_end, campaign.start_date, campaign.end_date)
-
         total = line_data["contracted_impressions"]
-        windows = generate_flights(line_start, line_end, campaign.periods)
+        plan = resolve_line_windows(
+            line_data.get("start_date"), line_data.get("end_date"), campaign.start_date, campaign.end_date,
+            campaign.periods,
+        )
+        windows = plan.windows
         monthly_volumes = line_data.get("monthly_volumes")
         if monthly_volumes is None:
-            volumes = distribute_volume_by_days(total, windows)
-            if min(volumes) == 0:
-                raise VolumeTooSmallForFlightsError("a flight would carry no impressions")
+            volumes = split_volume_by_days(total, windows)
         else:
             volumes = validate_explicit_volumes(
                 total,
@@ -185,8 +180,8 @@ class CampaignRegistrationService:
             currency="EUR",
             campaign_id=None,
             line_number=line_number,
-            start_date=line_start,
-            end_date=line_end,
+            start_date=plan.start_date,
+            end_date=plan.end_date,
             flights=[
                 CampaignLineFlight(
                     period_year=window.period_year,
