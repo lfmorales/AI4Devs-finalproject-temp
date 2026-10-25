@@ -129,7 +129,7 @@ The form lets each line have its own dates and shows the monthly split (flights)
 - [x] 8A.3 Add the line date control with the inherit box, tests first
 - [x] 8A.4 Add the flight editor: calculate, table, «Suma X de Y», manual mode, reset and invalidation when the inputs change, tests first
 - [x] 8A.5 Submit with the two rules (dates and `monthly_volumes` only when not inherited or manual) and the silent preview of lines that have none, tests first
-- [ ] 8A.6 Map the backend codes to Spanish messages on the exact line (preview) or the candidate lines (registration), and at form level when there is no candidate, tests first
+- [x] 8A.6 Map the backend codes to Spanish messages on the exact line (preview) or the candidate lines (registration), and at form level when there is no candidate, tests first
 
 ## 9. Review and Update Existing Unit Tests (MANDATORY)
 

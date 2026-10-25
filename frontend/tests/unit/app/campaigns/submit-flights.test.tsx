@@ -162,8 +162,8 @@ describe("submitting lines with flights", () => {
 
     submit();
 
-    await within(lineSection(1)).findByText(/No se pudo calcular el reparto/);
-    expect(within(lineSection(0)).queryByText(/No se pudo calcular el reparto/)).not.toBeInTheDocument();
+    await within(lineSection(1)).findByText(/demasiado pequeño para dar impresiones/);
+    expect(within(lineSection(0)).queryByText(/demasiado pequeño/)).not.toBeInTheDocument();
     expect(api.to("POST", "/campaigns")).toHaveLength(0);
   });
 

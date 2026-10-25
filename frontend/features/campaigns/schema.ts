@@ -7,6 +7,8 @@ export const FLIGHT_MESSAGES = {
   lineStartOutside: "La fecha de inicio de la línea debe estar dentro de las fechas de la campaña.",
   lineEndOutside: "La fecha de fin de la línea debe estar dentro de las fechas de la campaña.",
   lineEndBeforeStart: "La fecha de fin de la línea no puede ser anterior a la de inicio.",
+  datesOutside: "Las fechas de la línea deben estar dentro de las fechas de la campaña.",
+  volumeTooSmall: "El volumen de la línea es demasiado pequeño para dar impresiones a todos los meses.",
   incomplete: "El reparto debe cubrir exactamente los meses en los que corre la línea.",
   notPositive: "Cada volumen mensual debe ser positivo.",
   mismatch: "Los volúmenes mensuales deben sumar el total de la línea.",

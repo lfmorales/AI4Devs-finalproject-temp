@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createApiClient, ApiError } from "@/lib/api/client";
 import { previewFlights } from "@/lib/api/flights";
+import { lineErrorMessage, registrationLineErrors } from "./error-messages";
 import { FlightEditor } from "./FlightEditor";
 import { LineDatesControl } from "./LineDatesControl";
 import {
@@ -227,6 +228,14 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
       total: line.contracted_impressions,
     });
 
+  /** What the error mapping needs to know about each line. */
+  const lineKinds = () =>
+    formData.lines.map((line) => ({
+      id: line.id,
+      hasOwnDates: !line.inherit_dates,
+      isManual: Boolean(line.preview?.manual && !isStale(line.preview, requestFor(line))),
+    }));
+
   const calculateSplit = async (lineId: string) => {
     const line = formData.lines.find((l) => l.id === lineId);
     const request = line ? requestFor(line) : null;
@@ -242,12 +251,8 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
       const apiError = err && typeof err === "object" && "kind" in err ? (err as ApiError) : null;
       if (apiError?.kind === "unauthenticated") onAuthError?.("unauthenticated");
       if (apiError?.kind === "forbidden") onAuthError?.("forbidden");
-      updateLine(lineId, (l) => ({
-        ...l,
-        calculating: false,
-        preview: null,
-        previewError: GENERIC_PREVIEW_ERROR,
-      }));
+      const message = lineErrorMessage(apiError?.code) ?? GENERIC_PREVIEW_ERROR;
+      updateLine(lineId, (l) => ({ ...l, calculating: false, preview: null, previewError: message }));
     }
   };
 
@@ -397,7 +402,8 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
           const outcome = outcomes.find((o) => o.id === line.id);
           if (!outcome) return { ...line, previewError: null };
           if (outcome.ok) return { ...line, preview: outcome.preview, previewError: null };
-          return { ...line, previewError: GENERIC_PREVIEW_ERROR };
+          const code = (outcome.error as Partial<ApiError>).code;
+          return { ...line, previewError: lineErrorMessage(code) ?? GENERIC_PREVIEW_ERROR };
         }),
       }));
       if (failures.length > 0) {
@@ -421,6 +427,14 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
           // Access denied - notify parent component
           onAuthError?.("forbidden");
           setSubmitError("No tienes permiso para registrar campañas.");
+        } else if (apiError.status === 422 && registrationLineErrors(apiError.code, lineKinds()) !== null) {
+          // The code names no line: it is shown on the lines that can have caused it, or on the form.
+          const placement = registrationLineErrors(apiError.code, lineKinds())!;
+          setFormData((prev) => ({
+            ...prev,
+            lines: prev.lines.map((line) => ({ ...line, previewError: placement.byLine[line.id] ?? null })),
+          }));
+          setSubmitError(placement.formLevel ?? "Por favor corrige los errores antes de enviar.");
         } else if (apiError.status === 409 && apiError.code === "duplicate_campaign_name") {
           // Duplicate campaign name - set error in the field
           setFieldErrors({
