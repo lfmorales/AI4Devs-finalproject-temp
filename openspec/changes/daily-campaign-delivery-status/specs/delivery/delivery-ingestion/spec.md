@@ -82,12 +82,12 @@ The system SHALL take the channel from the campaign line's configuration, SHALL 
 - **AND** the reported value is stored as contrast data
 - **AND** the row is flagged for review
 
-### Requirement: Lines are ingested when their mapping is validated and their campaign overlaps the window
+### Requirement: Lines are ingested when their mapping is validated and their own dates overlap the window
 
-The system SHALL ingest delivery for every campaign line that runs on the DSP being ingested, carries a validated DSP mapping for that DSP and belongs to a campaign whose dates overlap the ingestion window, whatever the campaign's status, and SHALL NOT fail the run because other such lines lack a validated mapping.
+The system SHALL ingest delivery for every campaign line that runs on the DSP being ingested, carries a validated DSP mapping for that DSP and whose own start and end dates overlap the ingestion window, whatever the campaign's status, and SHALL NOT fail the run because other such lines lack a validated mapping.
 
 #### Scenario: An unmapped line is skipped without failing the run
-- **WHEN** an ingestion run encounters a line of an overlapping campaign with no DSP mapping
+- **WHEN** an ingestion run encounters a line whose dates overlap the window and that has no DSP mapping
 - **THEN** that line is skipped and reported
 - **AND** the run completes for every mapped line
 
@@ -101,15 +101,28 @@ The system SHALL ingest delivery for every campaign line that runs on the DSP be
 - **THEN** the line is not ingested
 - **AND** it is counted among the skipped lines
 
-#### Scenario: A campaign that ended inside the window is still ingested
-- **WHEN** a campaign ended three days before the run and its line has a validated mapping
+#### Scenario: A line that ended inside the window is still ingested
+- **WHEN** a line ended three days before the run and has a validated mapping
 - **THEN** its delivery is ingested, whatever the campaign's status
 - **AND** figures the DSP restates for it are picked up
 
-#### Scenario: A campaign that has not started is neither ingested nor skipped
-- **WHEN** a campaign starts after the last day of the window
-- **THEN** its lines are not ingested
-- **AND** they are not counted among the skipped lines
+#### Scenario: A line that ended before its campaign is judged by its own dates
+- **WHEN** a line ended before the window while its campaign is still running
+- **THEN** the line is neither ingested nor counted among the skipped lines
+
+#### Scenario: A line that starts mid-campaign is ingested from its own start
+- **WHEN** a line starts inside the window while its campaign started earlier
+- **THEN** the line is ingested
+
+#### Scenario: A line that has not started is neither ingested nor skipped
+- **WHEN** a line starts after the last day of the window
+- **THEN** it is not ingested
+- **AND** it is not counted among the skipped lines
+
+#### Scenario: Delivery outside every flight of its line is stored
+- **WHEN** a delivery row of a mapped line is dated outside all the flights of that line
+- **THEN** it is stored all the same
+- **AND** it counts toward a flight only if it lies inside that flight's window
 
 #### Scenario: A line with several external pairs is ingested through all its validated pairs
 - **WHEN** a line holds several validated pairs
