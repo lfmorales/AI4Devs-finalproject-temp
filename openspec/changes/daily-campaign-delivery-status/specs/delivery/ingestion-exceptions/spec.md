@@ -129,6 +129,7 @@ The system SHALL let an operations user resolve an exception, SHALL keep an unre
 - **WHEN** an operations user reads the exception queue
 - **THEN** exceptions are ordered by their last date, most recent first
 - **AND** exceptions with the same last date are ordered by identifier, highest first
+- **AND** exceptions without a last date, such as a missing delivery, come after those that have one, also by identifier, highest first
 
 #### Scenario: The queue shows what was retained without its cost
 - **WHEN** an operations user reads the exception queue

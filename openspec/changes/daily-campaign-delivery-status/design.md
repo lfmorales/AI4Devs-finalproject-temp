@@ -93,7 +93,7 @@ It also introduces the first scheduled work in the product. Until now every writ
 
 **Every route of this change is checked for authentication and role by introspection.** The 401/403 test is parametrized over the routes registered in the application, not over a hand-written list, so a new route that skips authentication or a role requirement fails the suite. Routes outside this change (health, campaigns, masters) are excluded by an explicit allow list of public or out-of-scope paths.
 
-**The exception queue is ordered by recency.** By `last_date` descending, then `id` descending.
+**The exception queue is ordered by recency.** By `last_date` descending, then `id` descending; an exception with no `last_date` (a missing delivery retains no days) comes after those that have one.
 
 **The two flags are different questions.** The missing-data flag asks whether the latest delivery predates D-1, and a row of zero impressions counts as data received. A campaign that keeps sending rows of zeros is stalled, which the pacing deviation flag covers.
 
