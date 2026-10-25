@@ -1,10 +1,11 @@
-const integer = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 });
+import { formatInteger } from "@/lib/format/integer";
+
 const percent = new Intl.NumberFormat("es-ES", { style: "percent", maximumFractionDigits: 1 });
 
 export const NOT_AVAILABLE = "—";
 
 export function formatImpressions(value: number): string {
-  return integer.format(value);
+  return formatInteger(value);
 }
 
 /** The API sends fractions (0.387); the browser only formats them and never recomputes them. */

@@ -5,12 +5,12 @@ import { useEffect, useState } from "react";
 import { createApiClient, type ApiError } from "@/lib/api/client";
 import { listIngestionExceptions, resolveIngestionException, type ExceptionStatus } from "@/lib/api/exceptions";
 import { useApiCall } from "@/lib/api/useApiCall";
+import { formatInteger } from "@/lib/format/integer";
 import { formatDsp, formatExternalPair, leavesTheOpenQueue, RESOLVE_ERROR_MESSAGES, RESOLVE_FAILED_MESSAGE, TYPE_LABELS } from "./labels";
 import { ResolveDialog } from "./ResolveDialog";
 
 const HEADER_STYLE = { textAlign: "left", padding: "0.5rem 1rem", fontWeight: "600" } as const;
 const CELL_STYLE = { padding: "0.5rem 1rem" } as const;
-const integer = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 });
 
 /** The two failures that replace the whole page: the session is gone, or the user lacks the role. */
 export type FatalKind = "unauthenticated" | "forbidden";
@@ -93,8 +93,8 @@ export function ExceptionList({ status, onFatal }: { status: ExceptionStatus; on
                 <td style={CELL_STYLE}>{row.first_date ?? "—"}</td>
                 <td style={CELL_STYLE}>{row.last_date ?? "—"}</td>
                 <td style={CELL_STYLE}>{row.days}</td>
-                <td style={CELL_STYLE}>{integer.format(row.impressions_total)}</td>
-                <td style={CELL_STYLE}>{integer.format(row.clicks_total)}</td>
+                <td style={CELL_STYLE}>{formatInteger(row.impressions_total)}</td>
+                <td style={CELL_STYLE}>{formatInteger(row.clicks_total)}</td>
                 <td style={CELL_STYLE}>
                   {status === "open" ? (
                     <button type="button" aria-label={`Resolver excepción ${row.id}`} onClick={() => setResolvingId(row.id)}>
