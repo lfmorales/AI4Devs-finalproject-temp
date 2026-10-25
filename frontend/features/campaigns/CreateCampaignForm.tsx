@@ -9,12 +9,21 @@ import { LineDatesControl } from "./LineDatesControl";
 import {
   editVolume,
   isStale,
+  manualSplitProblem,
+  monthlyVolumesOf,
   newPreview,
   previewRequestFor,
   resetToProportional,
   type LinePreview,
 } from "./line-flights";
 import { createCampaignSchema, type CampaignCreateRequest } from "./schema";
+
+type PreviewOutcome =
+  | { ok: true; id: string; preview: LinePreview }
+  | { ok: false; id: string; error: unknown };
+
+const STALE_PREVIEW_MESSAGE = "Las fechas o el volumen han cambiado: vuelve a calcular el reparto.";
+const GENERIC_PREVIEW_ERROR = "No se pudo calcular el reparto. Inténtalo de nuevo.";
 
 interface MasterItem {
   id: number;
@@ -237,7 +246,7 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
         ...l,
         calculating: false,
         preview: null,
-        previewError: "No se pudo calcular el reparto. Inténtalo de nuevo.",
+        previewError: GENERIC_PREVIEW_ERROR,
       }));
     }
   };
@@ -287,6 +296,10 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
     setFieldErrors({});
 
     try {
+      // A split is sent only when the user edited it (manual) and it still matches the form.
+      const currentManual = (line: CampaignLine) =>
+        line.preview?.manual && !isStale(line.preview, requestFor(line)) ? line.preview : null;
+
       // Convert form data to API format
       const campaignData = {
         name: formData.name,
@@ -300,44 +313,98 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
         end_date: formData.end_date,
         order_reference: formData.order_reference,
         order_received_on: formData.order_received_on,
-        lines: formData.lines.map((line) => ({
-          dsp_id: Number(line.dsp_id),
-          channel_id: Number(line.channel_id),
-          format_id: Number(line.format_id),
-          scope: line.scope,
-          market_description: line.market_description,
-          contracted_impressions: Number(line.contracted_impressions),
-          sale_cpm: line.sale_cpm,
-          // Own dates only when the line does not inherit the campaign's.
-          ...(line.inherit_dates ? {} : { start_date: line.start_date, end_date: line.end_date }),
-        })),
+        lines: formData.lines.map((line) => {
+          const manual = currentManual(line);
+          return {
+            dsp_id: Number(line.dsp_id),
+            channel_id: Number(line.channel_id),
+            format_id: Number(line.format_id),
+            scope: line.scope,
+            market_description: line.market_description,
+            contracted_impressions: Number(line.contracted_impressions),
+            sale_cpm: line.sale_cpm,
+            // Own dates only when the line does not inherit the campaign's.
+            ...(line.inherit_dates ? {} : { start_date: line.start_date, end_date: line.end_date }),
+            ...(manual ? { monthly_volumes: monthlyVolumesOf(manual) } : {}),
+          };
+        }),
       };
 
       // Validate with schema using safeParse
       const validation = createCampaignSchema.safeParse(campaignData);
+      const fieldErrorsMap: Record<string, string> = {};
       if (!validation.success) {
-        const fieldErrorsMap: Record<string, string> = {};
-
         for (const issue of validation.error.issues) {
-          const fieldPath = issue.path.join(".");
-          fieldErrorsMap[fieldPath] = issue.message;
-        }
-
-        setFieldErrors(fieldErrorsMap);
-        if (Object.keys(fieldErrorsMap).length > 0) {
-          setSubmitError("Por favor corrige los errores antes de enviar.");
-          setSubmitting(false);
-          return;
+          fieldErrorsMap[issue.path.join(".")] = issue.message;
         }
       }
 
-      // Submit to API
+      // A manual split is checked against the months of its own preview; a stale one is never sent.
+      const lineProblems: Record<string, string> = {};
+      for (const line of formData.lines) {
+        if (!line.preview?.manual) continue;
+        lineProblems[line.id] = isStale(line.preview, requestFor(line))
+          ? STALE_PREVIEW_MESSAGE
+          : (manualSplitProblem(line.preview) ?? "");
+      }
+      const blockedLines = Object.entries(lineProblems).filter(([, message]) => message !== "");
+
+      if (Object.keys(fieldErrorsMap).length > 0 || blockedLines.length > 0) {
+        setFieldErrors(fieldErrorsMap);
+        setFormData((prev) => ({
+          ...prev,
+          lines: prev.lines.map((line) => ({ ...line, previewError: lineProblems[line.id] || null })),
+        }));
+        setSubmitError("Por favor corrige los errores antes de enviar.");
+        return;
+      }
+
+      // Every line without a current preview is previewed now, silently. The request is per line, so a
+      // failure belongs to exactly that line. The registration goes out only if all of them pass.
       const baseUrl = process.env.NEXT_PUBLIC_API_URL;
       if (!baseUrl) {
         throw new Error("API URL not configured");
       }
-
       const client = createApiClient({ baseUrl });
+
+      const needPreview = formData.lines.filter(
+        (line) => !line.preview || isStale(line.preview, requestFor(line)),
+      );
+      const outcomes: PreviewOutcome[] = await Promise.all(
+        needPreview.map(async (line) => {
+          const request = requestFor(line);
+          if (!request) return { ok: false, id: line.id, error: new Error("invalid preview inputs") };
+          try {
+            const response = await previewFlights(client, request);
+            return { ok: true, id: line.id, preview: newPreview(request, response.flights) };
+          } catch (error) {
+            return { ok: false, id: line.id, error };
+          }
+        }),
+      );
+
+      const failures = outcomes.filter((outcome) => !outcome.ok);
+      const authFailure = failures
+        .map((outcome) => (outcome.ok ? {} : (outcome.error as Partial<ApiError>)))
+        .find((error) => error.kind === "unauthenticated" || error.kind === "forbidden");
+      if (authFailure) {
+        // The page takes over (session expired / access denied).
+        throw authFailure;
+      }
+      setFormData((prev) => ({
+        ...prev,
+        lines: prev.lines.map((line) => {
+          const outcome = outcomes.find((o) => o.id === line.id);
+          if (!outcome) return { ...line, previewError: null };
+          if (outcome.ok) return { ...line, preview: outcome.preview, previewError: null };
+          return { ...line, previewError: GENERIC_PREVIEW_ERROR };
+        }),
+      }));
+      if (failures.length > 0) {
+        setSubmitError("Por favor corrige los errores antes de enviar.");
+        return;
+      }
+
       await client.post("/campaigns", campaignData);
 
       // On success, redirect to campaigns list
@@ -379,6 +446,8 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
       } else {
         setSubmitError("Error al registrar la campaña. Intenta de nuevo más tarde.");
       }
+    } finally {
+      setSubmitting(false);
     }
   };
 
