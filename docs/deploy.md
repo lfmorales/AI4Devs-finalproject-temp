@@ -132,21 +132,148 @@ Use the email Cognito puts in the token, spelled exactly the same: it is the onl
 
 ## 12. Nightly ingestion
 
-The ingestion is a command for the host scheduler, not a container. It needs the Adform credentials in `.env`:
+The ingestion is a command for the host scheduler, not a container. It needs the Adform credentials in `.env`. Run it once by hand and look at its output before scheduling it:
 
 ```
 docker compose -f docker-compose.prod.yml run --rm backend python -m scripts.run_ingestion
 ```
 
-Run it once by hand and reconcile the figures before scheduling it (for example from the host's crontab, shortly after midnight, Europe/Madrid time). Exit codes: 0 succeeded, 1 failed, 2 another run holds the lock, 3 configuration is missing.
+It prints states and counts only, never an identifier, a name, an amount or a token:
 
-## 13. Checking a deployment
+```
+status: succeeded
+rows_read: ...
+ignored_rows: ...
+zero_unmatched_rows: ...
+new_exceptions: ...
+skipped_lines: ...
+absences: ...
+```
+
+Exit codes: 0 succeeded, 1 failed (the line `error:` names the class of the error), 2 another run holds the lock, 3 configuration is missing. Reconcile the first figures by hand against Adform before scheduling it.
+
+### The schedule: 07:00 Madrid time
+
+Schedule it at **07:00 Europe/Madrid, not shortly after midnight**: Adform restates figures during the early hours, and a run at midnight would store figures that are then superseded. The command ingests the window D-7 to D-1 in the zone set by `APP_TIMEZONE` (Europe/Madrid by default), so the cron zone and that setting should agree.
+
+On the host, as the deploy user (`crontab -e`), with the repository in `/opt/adops360` and the log directory created beforehand (`sudo mkdir -p /var/log/adops360 && sudo chown $USER /var/log/adops360`):
+
+```
+CRON_TZ=Europe/Madrid
+0 7 * * * cd /opt/adops360 && /usr/bin/docker compose -f docker-compose.prod.yml run --rm -T backend python -m scripts.run_ingestion >> /var/log/adops360/ingestion.log 2>&1; echo "$(date -Is) exit=$?" >> /var/log/adops360/ingestion.log
+```
+
+- `CRON_TZ` applies to the lines after it and makes the time Madrid's whatever the clock of the instance is, daylight saving included. The cron on Ubuntu and Debian supports it (`man 5 crontab`); check that yours does before relying on it.
+- `-T` is required, because cron has no terminal; the absolute path to `docker` is required, because cron's `PATH` is minimal.
+- The `echo` after the `;` records the exit code of the run next to its output.
+
+### Checking the exit code
+
+Every morning, or from a monitor, look at the last line the job wrote:
+
+```
+tail -n 9 /var/log/adops360/ingestion.log
+grep 'exit=' /var/log/adops360/ingestion.log | tail -n 3
+```
+
+`exit=0` is a good run. Anything else needs a look: `exit=1` read the `error:` line, `exit=2` find out what held the lock (a manual run left open, or a previous run still going), `exit=3` the configuration of `.env` is incomplete. A day without an `exit=` line means the job did not run (cron stopped, instance down). Re-running a day is safe: the window is idempotent, so `run_ingestion` can be repeated by hand (`--date YYYY-MM-DD` repeats a given day's window).
+
+## 13. Backups
+
+The data lives in the `postgres_data` volume, so losing the instance's disk loses everything. Take a nightly `pg_dump` from inside the database container, keep seven days of them and prove a restore from time to time. This is documentation: none of it is installed by the repository.
+
+### The nightly dump
+
+Save as `/opt/adops360/backup.sh` (`chmod 700`), owned by the deploy user:
+
+```
+#!/bin/sh
+set -eu
+cd /opt/adops360
+BACKUP_DIR=/var/backups/adops360
+mkdir -p "$BACKUP_DIR"
+chmod 700 "$BACKUP_DIR"
+STAMP=$(date +%F)
+
+# Custom format: compressed, and pg_restore can pick what to restore. Written to a temporary name so a
+# failed dump never replaces a good file.
+/usr/bin/docker compose -f docker-compose.prod.yml exec -T db \
+  sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom' > "$BACKUP_DIR/adops360-$STAMP.dump.tmp"
+mv "$BACKUP_DIR/adops360-$STAMP.dump.tmp" "$BACKUP_DIR/adops360-$STAMP.dump"
+
+# Rotation: keep seven days (today and the six before).
+find "$BACKUP_DIR" -name 'adops360-*.dump' -mtime +6 -delete
+```
+
+`$POSTGRES_USER` and `$POSTGRES_DB` are read inside the container, from the `.env` it was started with, so the script holds no credential. In the crontab, before the ingestion (after the `CRON_TZ` line):
+
+```
+30 3 * * * /opt/adops360/backup.sh >> /var/log/adops360/backup.log 2>&1; echo "$(date -Is) exit=$?" >> /var/log/adops360/backup.log
+```
+
+A dump on the same disk does not survive losing that disk. Copy `/var/backups/adops360` off the instance as well (for example to an S3 bucket with lifecycle rules, using an instance role and not keys in `.env`).
+
+### Testing a restore, in a temporary database
+
+Do this after setting up the backup, and then every month. It restores the latest dump into a throwaway database next to the real one and never touches the real one:
+
+```
+LATEST=$(ls -1 /var/backups/adops360/adops360-*.dump | tail -n 1)
+
+docker compose -f docker-compose.prod.yml exec -T db sh -c 'createdb -U "$POSTGRES_USER" restore_test'
+docker compose -f docker-compose.prod.yml exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d restore_test --no-owner' < "$LATEST"
+
+# The restored copy is at the same migration as the real database and has the data.
+docker compose -f docker-compose.prod.yml exec -T db sh -c 'psql -U "$POSTGRES_USER" -d restore_test -tAc "select version_num from alembic_version"'
+docker compose -f docker-compose.prod.yml exec -T db sh -c 'psql -U "$POSTGRES_USER" -d restore_test -tAc "select count(*) from campaigns"'
+
+docker compose -f docker-compose.prod.yml exec -T db sh -c 'dropdb -U "$POSTGRES_USER" restore_test'
+```
+
+The test passes if `pg_restore` ends without errors, the version equals the output of `alembic current` on the real database, and the count is plausible. Always drop `restore_test` afterwards.
+
+To recover for real: stop `backend`, restore into an empty database (never over a live one), start `backend` again and check section 14.
+
+## 14. Checking a deployment
+
+Right after the first deployment and after every release:
 
 - `curl -fsS https://<SERVER_NAME>/api/health` answers 200.
 - `curl -sI http://<SERVER_NAME>/` answers 301 to HTTPS.
 - `docker compose -f docker-compose.prod.yml ps` shows every service as healthy.
 - From outside, `nmap` of the instance shows only 22, 80 and 443.
+- `docker compose -f docker-compose.prod.yml run --rm backend alembic current` ends in `(head)`.
 
-## 14. Logs and restarts
+### An authenticated request
+
+The status endpoint is the end-to-end check: it needs a valid Cognito token, the user's roles in the database and the migrated schema.
+
+Without a token it must answer 401:
+
+```
+curl -s -o /dev/null -w '%{http_code}\n' https://<SERVER_NAME>/api/campaign-status
+```
+
+With a token, sign in to the application with the first user (section 11), open the browser's developer tools, and copy the `Authorization: Bearer ...` value of any request to `/api/`. Read it into a shell variable without echoing it or leaving it in the history, and use it once:
+
+```
+read -rs ID_TOKEN
+curl -fsS -H "Authorization: Bearer $ID_TOKEN" https://<SERVER_NAME>/api/campaign-status
+unset ID_TOKEN
+```
+
+On a fresh database the answer is `200` with `[]` (no campaign is running yet). `401` means the token is not accepted (check the `COGNITO_*` values in `.env` against the pool, and that the token is the ID token), `403` means the email in the token has no user or no `operations` or `business` role (section 11). The same in the browser: the "Estado" page shows "No hay campañas en curso" rather than an error.
+
+### The ingestion
+
+Run the command once by hand (section 12) and check that its output starts with `status: succeeded` and that the exit code is 0:
+
+```
+docker compose -f docker-compose.prod.yml run --rm backend python -m scripts.run_ingestion; echo "exit=$?"
+```
+
+Once campaigns and their DSP mappings exist, the "Excepciones" page lists what a run could not place.
+
+## 15. Logs and restarts
 
 Every service rotates its logs (`json-file`, 10 MB by 5 files) and restarts unless stopped by hand, including after a reboot of the instance.

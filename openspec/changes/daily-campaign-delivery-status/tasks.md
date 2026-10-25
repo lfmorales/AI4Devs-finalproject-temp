@@ -173,7 +173,7 @@ The form lets each line have its own dates and shows the monthly split (flights)
 - [x] 11B.2 Write failing tests for the validation (a name repeated within a section, a missing name, an agency whose group is neither in the file nor stored, a missing `Adform` DSP, an unknown section or key, an unreadable or malformed file) and for `--check` writing nothing, with errors naming the section and position and no content, and implement them
 - [x] 11B.3 Add `deploy/masters.example.json` with fictitious data, ignore `deploy/masters.json`, verify nothing real is versioned, and test that the example loads
 - [x] 11B.4 Add the masters step to `docs/deploy.md`, after the migrations and before `grant_roles`
-- [ ] 11B.5 Document in `docs/deploy.md` the nightly ingestion cron at 07:00 `Europe/Madrid` with its exit-code check, the nightly `pg_dump` backup with seven-day rotation and a restore test in a temporary database, and the post-deployment check with an authenticated `GET /api/campaign-status` and the `run_ingestion` output (documented, not executed)
+- [x] 11B.5 Document in `docs/deploy.md` the nightly ingestion cron at 07:00 `Europe/Madrid` with its exit-code check, the nightly `pg_dump` backup with seven-day rotation and a restore test in a temporary database, and the post-deployment check with an authenticated `GET /api/campaign-status` and the `run_ingestion` output (documented, not executed)
 
 ## 12. E2E Testing with Playwright (MANDATORY - AGENT MUST EXECUTE)
 
