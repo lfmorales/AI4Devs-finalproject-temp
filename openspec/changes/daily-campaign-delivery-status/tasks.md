@@ -88,6 +88,13 @@
 - [ ] 6A.14 Rework absence by flight (task 6.3) over `campaign_line_periods`, keeping the exception identified by line and period
 - [ ] 6A.15 Provide the flight-level aggregate the status endpoint (6.5) reads: contracted per flight and delivery summed inside its window, in one query
 
+## 6B. Backend: Flight Preview
+
+- [ ] 6B.1 Write failing tests and define the request and response schemas of `POST /api/flights/preview`: campaign dates, optional line dates and a positive total in; effective line dates and flights (`period_year`, `period_month`, `flight_start`, `flight_end`, `contracted_impressions`) out
+- [ ] 6B.2 Write failing tests and implement the endpoint for the `operations` role as a plain `def` route that reads and writes no database, moving the line-window planning and the strict split by days into domain functions that the registration service also uses, so the rule exists once
+- [ ] 6B.3 Write API tests for the preview: a line inheriting three months, a line with its own dates, one month, one day, a total too small, dates outside and inverted, a zero or negative total, 401 without a token and 403 without `operations`, and that nothing is stored
+- [ ] 6B.4 Write a consistency test asserting that for the same input the preview's flights are identical to those returned by the registration
+
 ## 7. Backend: Scheduled Run
 
 - [ ] 7.1 Implement the nightly ingestion as a container command invoked by the host scheduler, and verify a manual invocation uses the same code path
