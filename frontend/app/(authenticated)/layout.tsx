@@ -43,7 +43,7 @@ export default function AuthenticatedLayout({ children }: { children: ReactNode 
   const pathname = usePathname();
 
   if (session.status === "loading") {
-    return <div role="status">Cargando…</div>;
+    return <div role="status" className="notice notice-info">Cargando…</div>;
   }
 
   if (session.status === "session_expired") {

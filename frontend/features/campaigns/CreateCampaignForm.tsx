@@ -466,7 +466,7 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
   };
 
   if (loading) {
-    return <div role="status">Cargando formulario…</div>;
+    return <div role="status" className="notice notice-info">Cargando formulario…</div>;
   }
 
   return (

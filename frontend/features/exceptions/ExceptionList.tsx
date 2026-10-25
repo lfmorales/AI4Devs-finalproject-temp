@@ -38,9 +38,9 @@ export function ExceptionList({ status, onFatal }: { status: ExceptionStatus; on
   }, [loadFailure, onFatal]);
 
   if (state.status === "unauthenticated" || state.status === "forbidden") return null;
-  if (state.status === "loading") return <div role="status">Cargando excepciones…</div>;
+  if (state.status === "loading") return <div role="status" className="notice notice-info">Cargando excepciones…</div>;
   if (state.status === "error") {
-    return <div role="alert" style={{ backgroundColor: "#fee2e2", padding: "1rem" }}>No se pudo cargar la cola de excepciones. Inténtalo de nuevo más tarde.</div>;
+    return <div role="alert" className="notice notice-error">No se pudo cargar la cola de excepciones. Inténtalo de nuevo más tarde.</div>;
   }
 
   const rows = state.data;
@@ -99,12 +99,12 @@ export function ExceptionList({ status, onFatal }: { status: ExceptionStatus; on
   return (
     <div>
       {historyWarnings.map((warning) => (
-        <div key={warning} role="alert" style={{ backgroundColor: "#fef3c7", padding: "1rem", marginBottom: "1rem" }}>{warning}</div>
+        <div key={warning} role="alert" className="notice notice-warning">{warning}</div>
       ))}
-      {notice && <div role="status" style={{ backgroundColor: "#dcfce7", padding: "1rem", marginBottom: "1rem" }}>{notice}</div>}
-      {problem && <div role="alert" style={{ backgroundColor: "#fee2e2", padding: "1rem", marginBottom: "1rem" }}>{problem}</div>}
+      {notice && <div role="status" className="notice notice-success">{notice}</div>}
+      {problem && <div role="alert" className="notice notice-error">{problem}</div>}
       {rows.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "3rem", backgroundColor: "#f3f4f6" }}>
+        <div className="empty-state">
           <p>{status === "open" ? "No hay excepciones abiertas" : "No hay excepciones resueltas"}</p>
         </div>
       ) : (

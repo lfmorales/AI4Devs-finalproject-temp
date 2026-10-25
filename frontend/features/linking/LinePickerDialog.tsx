@@ -46,7 +46,7 @@ export function LinePickerDialog({ label, submitting, problem, onConfirm, onCanc
   const chosen = lines.find((line) => line.id === chosenId) ?? null;
 
   function body() {
-    if (state.status === "loading") return <div role="status">Cargando líneas…</div>;
+    if (state.status === "loading") return <div role="status" className="notice notice-info">Cargando líneas…</div>;
     if (state.status === "error") return <p>No se pudieron cargar las líneas. Inténtalo de nuevo más tarde.</p>;
     if (state.status !== "ready") return null;
     if (lines.length === 0) return <p>No hay líneas sin mapeo</p>;
@@ -78,7 +78,7 @@ export function LinePickerDialog({ label, submitting, problem, onConfirm, onCanc
   return (
     <Modal title={label} closable={!submitting} onClose={onCancel}>
       {body()}
-      {problem && <div role="alert" style={{ backgroundColor: "#fee2e2", padding: "0.75rem", margin: "0.5rem 0" }}>{problem}</div>}
+      {problem && <div role="alert" className="notice notice-error">{problem}</div>}
       <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
         <button type="button" className="btn-primary" disabled={submitting || chosen === null} onClick={() => chosen && onConfirm(chosen)}>
           Confirmar vinculación

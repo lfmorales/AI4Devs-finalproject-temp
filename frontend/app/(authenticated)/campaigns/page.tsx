@@ -66,7 +66,7 @@ export default function CampaignsPage() {
   }, [session.status]);
 
   if (loading) {
-    return <div role="status">Cargando campañas…</div>;
+    return <div role="status" className="notice notice-info">Cargando campañas…</div>;
   }
 
   if (pageState === "session-expired") {
@@ -87,15 +87,15 @@ export default function CampaignsPage() {
       </div>
 
       {error && (
-        <div style={{ backgroundColor: "#fee2e2", padding: "1rem", marginBottom: "1rem" }}>
+        <div className="notice notice-error">
           {error}
         </div>
       )}
 
       {campaigns && campaigns.length === 0 && !error && (
-        <div style={{ textAlign: "center", padding: "3rem", backgroundColor: "#f3f4f6" }}>
+        <div className="empty-state">
           <p>Todavía no hay campañas registradas.</p>
-          <p style={{ fontSize: "0.875rem", marginTop: "0.5rem" }}>
+          <p>
             Crea la primera campaña haciendo clic en "Nueva campaña".
           </p>
         </div>

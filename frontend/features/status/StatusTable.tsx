@@ -23,9 +23,9 @@ function SortableHeader({ column, label, sort, onSort }: {
 function Flags({ row }: { row: CampaignStatusRow }) {
   if (!row.missing_data_flag && !row.pacing_flag) return <>{NOT_AVAILABLE}</>;
   return (
-    <ul style={{ margin: 0, paddingLeft: "1rem" }}>
-      {row.missing_data_flag && <li>Sin datos recibidos</li>}
-      {row.pacing_flag && <li>Desviación de ritmo</li>}
+    <ul className="tags">
+      {row.missing_data_flag && <li className="tag tag-info">Sin datos recibidos</li>}
+      {row.pacing_flag && <li className="tag tag-warning">Desviación de ritmo</li>}
     </ul>
   );
 }

@@ -19,14 +19,14 @@ export default function StatusPage() {
   return (
     <div>
       <h1>Estado de las campañas</h1>
-      {state.status === "loading" && <div role="status">Cargando estado…</div>}
+      {state.status === "loading" && <div role="status" className="notice notice-info">Cargando estado…</div>}
       {state.status === "error" && (
-        <div role="alert" style={{ backgroundColor: "#fee2e2", padding: "1rem" }}>
+        <div role="alert" className="notice notice-error">
           No se pudo cargar el estado de las campañas. Inténtalo de nuevo más tarde.
         </div>
       )}
       {state.status === "ready" && state.data.length === 0 && (
-        <div style={{ textAlign: "center", padding: "3rem", backgroundColor: "#f3f4f6" }}>
+        <div className="empty-state">
           <p>No hay campañas en curso</p>
         </div>
       )}

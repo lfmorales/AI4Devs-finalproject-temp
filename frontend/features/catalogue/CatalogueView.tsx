@@ -148,16 +148,16 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
   }
 
   function body() {
-    if (state.status === "loading") return <div role="status">Cargando catálogo…</div>;
+    if (state.status === "loading") return <div role="status" className="notice notice-info">Cargando catálogo…</div>;
     if (state.status === "error") {
-      return <div role="alert" style={{ backgroundColor: "#fee2e2", padding: "1rem" }}>No se pudo cargar el catálogo. Inténtalo de nuevo más tarde.</div>;
+      return <div role="alert" className="notice notice-error">No se pudo cargar el catálogo. Inténtalo de nuevo más tarde.</div>;
     }
     if (state.status !== "ready") return null;
 
     const page = state.data;
     if (page.items.length === 0) {
       return (
-        <div style={{ textAlign: "center", padding: "3rem", backgroundColor: "#f3f4f6" }}>
+        <div className="empty-state">
           <p>No hay parejas que mostrar</p>
         </div>
       );
@@ -266,18 +266,18 @@ export function CatalogueView({ onFatal }: { onFatal: (kind: FatalKind) => void 
         <button type="submit" className="btn-primary">Filtrar</button>
       </form>
       {outcome && (
-        <div role="status" style={{ backgroundColor: "#dcfce7", padding: "1rem", marginBottom: "1rem" }}>
+        <div role="status" className="notice notice-success">
           <p>Pareja vinculada a {outcome.lineName}.</p>
           {outcome.messages.map((message) => <p key={message}>{message}</p>)}
         </div>
       )}
       {unlinkNotice && (
-        <div role="status" style={{ backgroundColor: "#dcfce7", padding: "1rem", marginBottom: "1rem" }}>
+        <div role="status" className="notice notice-success">
           <p>{unlinkNotice}</p>
         </div>
       )}
       {outcome?.needsHistoryLoad && (
-        <div role="alert" style={{ backgroundColor: "#fef3c7", padding: "1rem", marginBottom: "1rem" }}>{HISTORY_LOAD_WARNING}</div>
+        <div role="alert" className="notice notice-warning">{HISTORY_LOAD_WARNING}</div>
       )}
       {body()}
     </div>

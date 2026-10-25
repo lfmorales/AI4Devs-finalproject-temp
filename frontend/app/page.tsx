@@ -17,7 +17,7 @@ export default function HomePage() {
   }, [session.status, router]);
 
   if (session.status === "loading") {
-    return <p role="status">Checking your session…</p>;
+    return <p role="status" className="notice notice-info">Checking your session…</p>;
   }
 
   if (session.status === "authenticated") {
