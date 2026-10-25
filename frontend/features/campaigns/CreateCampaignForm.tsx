@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createApiClient, ApiError } from "@/lib/api/client";
+import { LineDatesControl } from "./LineDatesControl";
 import { createCampaignSchema, type CampaignCreateRequest } from "./schema";
 
 interface MasterItem {
@@ -23,6 +24,10 @@ interface CampaignLine {
   market_description: string;
   contracted_impressions: string;
   sale_cpm: string;
+  /** True: the line runs over the campaign's dates and sends none of its own. */
+  inherit_dates: boolean;
+  start_date: string;
+  end_date: string;
 }
 
 interface FormData {
@@ -94,6 +99,9 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
         market_description: "",
         contracted_impressions: "",
         sale_cpm: "",
+        inherit_dates: true,
+        start_date: "",
+        end_date: "",
       },
     ],
   });
@@ -159,7 +167,7 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
     }
   }, [fieldErrors]);
 
-  const handleLineChange = (lineId: string, field: keyof CampaignLine, value: string | number) => {
+  const handleLineChange = (lineId: string, field: keyof CampaignLine, value: string | number | boolean) => {
     const lineIndex = formData.lines.findIndex((l) => l.id === lineId);
     setFormData((prev) => ({
       ...prev,
@@ -193,6 +201,9 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
           market_description: "",
           contracted_impressions: "",
           sale_cpm: "",
+          inherit_dates: true,
+          start_date: "",
+          end_date: "",
         },
       ],
     }));
@@ -238,6 +249,8 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
           market_description: line.market_description,
           contracted_impressions: Number(line.contracted_impressions),
           sale_cpm: line.sale_cpm,
+          // Own dates only when the line does not inherit the campaign's.
+          ...(line.inherit_dates ? {} : { start_date: line.start_date, end_date: line.end_date }),
         })),
       };
 
@@ -776,6 +789,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                   <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem" }}>{fieldErrors[`lines.${lineIndex}.sale_cpm`]}</p>
                 )}
               </div>
+
+              <LineDatesControl
+                idPrefix={line.id}
+                inherit={line.inherit_dates}
+                startDate={line.start_date}
+                endDate={line.end_date}
+                startError={fieldErrors[`lines.${lineIndex}.start_date`]}
+                endError={fieldErrors[`lines.${lineIndex}.end_date`]}
+                onInheritChange={(inherit) => handleLineChange(line.id, "inherit_dates", inherit)}
+                onDateChange={(field, value) => handleLineChange(line.id, field, value)}
+              />
             </div>
           </div>
         ))}
