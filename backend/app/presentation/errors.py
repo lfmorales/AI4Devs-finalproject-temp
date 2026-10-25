@@ -10,6 +10,8 @@ from fastapi.responses import JSONResponse
 logger = logging.getLogger(__name__)
 
 from app.domain.exceptions import (
+    AmbiguousMappingError,
+    MappingNotFoundError,
     CampaignLineNotFoundError,
     DomainError,
     DspAuthenticationError,
@@ -82,6 +84,10 @@ _ERROR_MAPPINGS: dict[type[DomainError], _ErrorMapping] = {
     MappingPairTakenError: _ErrorMapping(
         409, "mapping_pair_taken", "These DSP identifiers are already mapped to a campaign line"
     ),
+    AmbiguousMappingError: _ErrorMapping(
+        409, "ambiguous_mapping", "The campaign line has several mappings, so its delivery cannot be attributed to one"
+    ),
+    MappingNotFoundError: _ErrorMapping(404, "mapping_not_found", "The campaign line has no DSP mapping"),
     LineNotFoundError: _ErrorMapping(404, "line_not_found", "The campaign line does not exist"),
     LineDspMismatchError: _ErrorMapping(
         422, "line_dsp_mismatch", "The campaign line runs on a different DSP than the identifiers"

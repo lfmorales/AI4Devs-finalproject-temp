@@ -13,3 +13,9 @@ class UnmappedLineResponse(BaseModel):
     end_date: date
     dsp_id: int
     dsp_name: str
+
+
+class UnlinkLineResponse(BaseModel):
+    campaign_line_id: int
+    # Days of ingested delivery removed with the mapping.
+    removed_delivery_days: int

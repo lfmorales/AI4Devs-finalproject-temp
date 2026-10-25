@@ -146,7 +146,7 @@ The form lets each line have its own dates and shows the monthly split (flights)
 - [x] 9A.5 `GET /api/dsp-catalog` with filters, paging, `mapped` and no cost
 - [x] 9A.6 `GET /api/campaign-lines/unmapped`
 - [x] 9A.7 `POST /api/ingestion-exceptions/{id}/link`, atomic, with its errors
-- [ ] 9A.8 `DELETE /api/campaign-lines/{id}/dsp-mappings`
+- [x] 9A.8 `DELETE /api/campaign-lines/{id}/dsp-mappings`
 - [ ] 9A.9 `last_impressions_date` in the mapping response, and `campaign_name` and `line_item_name` in the exception queue
 - [ ] 9A.10 `needs_history_load` in the mapping and link responses, at both edges
 - [ ] 9A.11 `run_ingestion --from --to` with its rules, one request, no absences and an idempotent repetition

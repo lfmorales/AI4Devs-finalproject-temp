@@ -20,6 +20,7 @@ from app.application.services.dsp_catalog_service import DspCatalogService
 from app.application.services.dsp_mapping_service import DspMappingService
 from app.application.services.exception_linking_service import ExceptionLinkingService
 from app.application.services.ingestion_exception_service import IngestionExceptionService
+from app.application.services.line_mapping_removal_service import LineMappingRemovalService
 from app.config import get_settings
 from app.domain.exceptions import DspNotConfiguredError
 from app.domain.services.local_calendar import local_today, utc_now
@@ -44,6 +45,9 @@ from app.infrastructure.persistence.repositories.sqlalchemy_exception_queue_repo
 )
 from app.infrastructure.persistence.repositories.sqlalchemy_dsp_mapping_repository import (
     SqlAlchemyDspMappingRepository,
+)
+from app.infrastructure.persistence.repositories.sqlalchemy_line_mapping_removal_repository import (
+    SqlAlchemyLineMappingRemovalRepository,
 )
 from app.infrastructure.persistence.repositories.sqlalchemy_user_repository import (
     SqlAlchemyUserRepository,
@@ -137,6 +141,12 @@ def get_exception_linking_service(
         queue=SqlAlchemyExceptionQueueRepository(session),
         clock=lambda: datetime.now(UTC).replace(tzinfo=None),
     )
+
+
+def get_line_mapping_removal_service(
+    session: Annotated[Session, Depends(get_db_session)],
+) -> LineMappingRemovalService:
+    return LineMappingRemovalService(SqlAlchemyLineMappingRemovalRepository(session))
 
 
 def get_dsp_catalog_service(session: Annotated[Session, Depends(get_db_session)]) -> DspCatalogService:

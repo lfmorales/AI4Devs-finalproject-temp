@@ -128,3 +128,11 @@ class MappingPairTakenError(DomainError):
 
 class LineDspMismatchError(DomainError):
     """The campaign line runs on a different DSP than the identifier pair."""
+
+
+class MappingNotFoundError(DomainError):
+    """The campaign line has no DSP mapping."""
+
+
+class AmbiguousMappingError(DomainError):
+    """The campaign line has several DSP mappings, so it is not clear which delivery came from which."""
