@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { ExceptionList, type FatalKind } from "@/features/exceptions/ExceptionList";
+import { NO_FILTER, type ExceptionFilter } from "@/features/exceptions/filter";
 import type { ExceptionStatus } from "@/lib/api/exceptions";
 import { useReportForbidden } from "@/lib/auth/ForbiddenPages";
 import { AccessDeniedPage } from "@/lib/components/AccessDeniedPage";
@@ -15,6 +16,8 @@ const TABS: { status: ExceptionStatus; label: string }[] = [
 
 export default function ExceptionsPage() {
   const [active, setActive] = useState<ExceptionStatus>("open");
+  // Held here, above the tabs, so it survives a change of tab. Never in the URL or the browser storage.
+  const [filter, setFilter] = useState<ExceptionFilter>(NO_FILTER);
   const [fatal, setFatal] = useState<FatalKind | null>(null);
   useReportForbidden("/exceptions", fatal === "forbidden");
 
@@ -40,7 +43,7 @@ export default function ExceptionsPage() {
         ))}
       </div>
       <div role="tabpanel" id="exceptions-panel" aria-labelledby={`exceptions-tab-${active}`}>
-        <ExceptionList key={active} status={active} onFatal={setFatal} />
+        <ExceptionList key={active} status={active} filter={filter} onFilterChange={setFilter} onFatal={setFatal} />
       </div>
     </div>
   );

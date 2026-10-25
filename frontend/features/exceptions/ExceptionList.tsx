@@ -11,6 +11,8 @@ import { linkException, listIngestionExceptions, resolveIngestionException, type
 import { useApiCall } from "@/lib/api/useApiCall";
 import { formatInteger } from "@/lib/format/integer";
 import { formatCatalogueName, formatDsp, formatExternalPair, leavesTheOpenQueue, RESOLVE_ERROR_MESSAGES, RESOLVE_FAILED_MESSAGE, TYPE_LABELS } from "./labels";
+import { FilterBar } from "./FilterBar";
+import { filterExceptions, type ExceptionFilter } from "./filter";
 import { ResolveDialog } from "./ResolveDialog";
 
 
@@ -22,7 +24,12 @@ function CatalogueName({ row, name }: { row: IngestionException; name: string | 
 }
 
 /** One tab of the queue: loads its own list, and resolves open exceptions without reloading it. */
-export function ExceptionList({ status, onFatal }: { status: ExceptionStatus; onFatal: (kind: FatalKind) => void }) {
+export function ExceptionList({ status, filter, onFilterChange, onFatal }: {
+  status: ExceptionStatus;
+  filter: ExceptionFilter;
+  onFilterChange: (filter: ExceptionFilter) => void;
+  onFatal: (kind: FatalKind) => void;
+}) {
   const { state, setData } = useApiCall(`exceptions-${status}`, (client) => listIngestionExceptions(client, status));
   const [resolvingId, setResolvingId] = useState<number | null>(null);
   const [linkingId, setLinkingId] = useState<number | null>(null);
@@ -43,8 +50,9 @@ export function ExceptionList({ status, onFatal }: { status: ExceptionStatus; on
     return <div role="alert" className="notice notice-error">No se pudo cargar la cola de excepciones. Inténtalo de nuevo más tarde.</div>;
   }
 
-  const rows = state.data;
-  const without = (id: number) => rows.filter((row) => row.id !== id);
+  const allRows = state.data;
+  const rows = filterExceptions(allRows, filter);
+  const without = (id: number) => allRows.filter((row) => row.id !== id);
 
   async function confirm(exceptionId: number, note: string | null) {
     setSubmitting(true);
@@ -103,9 +111,14 @@ export function ExceptionList({ status, onFatal }: { status: ExceptionStatus; on
       ))}
       {notice && <div role="status" className="notice notice-success">{notice}</div>}
       {problem && <div role="alert" className="notice notice-error">{problem}</div>}
-      {rows.length === 0 ? (
+      {allRows.length > 0 && <FilterBar filter={filter} shown={rows.length} total={allRows.length} onChange={onFilterChange} />}
+      {allRows.length === 0 ? (
         <div className="empty-state">
           <p>{status === "open" ? "No hay excepciones abiertas" : "No hay excepciones resueltas"}</p>
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="empty-state">
+          <p>No hay excepciones que coincidan con la búsqueda</p>
         </div>
       ) : (
         <div className="table-scroll">
