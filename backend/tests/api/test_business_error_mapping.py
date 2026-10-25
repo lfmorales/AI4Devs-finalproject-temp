@@ -4,11 +4,20 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.domain.exceptions import DomainError, LineDatesOutsideCampaignError
+from app.domain.exceptions import (
+    DomainError,
+    FlightVolumeNotPositiveError,
+    FlightVolumesIncompleteError,
+    FlightVolumesMismatchError,
+    LineDatesOutsideCampaignError,
+)
 from app.presentation.errors import register_exception_handlers
 
 CASES = [
     (LineDatesOutsideCampaignError, "line_dates_outside_campaign"),
+    (FlightVolumesIncompleteError, "flight_volumes_incomplete"),
+    (FlightVolumesMismatchError, "flight_volumes_mismatch"),
+    (FlightVolumeNotPositiveError, "flight_volume_not_positive"),
 ]
 
 

@@ -21,6 +21,9 @@ from app.domain.exceptions import (
     DspUnreachableError,
     DuplicateDspMappingError,
     IngestionExceptionAlreadyResolvedError,
+    FlightVolumeNotPositiveError,
+    FlightVolumesIncompleteError,
+    FlightVolumesMismatchError,
     IngestionExceptionNotFoundError,
     LineDatesOutsideCampaignError,
     UnsupportedCurrencyError,
@@ -69,6 +72,15 @@ _ERROR_MAPPINGS: dict[type[DomainError], _ErrorMapping] = {
     ),
     LineDatesOutsideCampaignError: _ErrorMapping(
         422, "line_dates_outside_campaign", "A line's dates must fall within the campaign's dates"
+    ),
+    FlightVolumesIncompleteError: _ErrorMapping(
+        422, "flight_volumes_incomplete", "The monthly volumes must cover exactly the months the line runs in"
+    ),
+    FlightVolumesMismatchError: _ErrorMapping(
+        422, "flight_volumes_mismatch", "The monthly volumes must add up to the line's total"
+    ),
+    FlightVolumeNotPositiveError: _ErrorMapping(
+        422, "flight_volume_not_positive", "Every monthly volume must be positive"
     ),
     CampaignLineNotFoundError: _ErrorMapping(404, "campaign_line_not_found", "The campaign line does not exist"),
     DspNotSupportedError: _ErrorMapping(

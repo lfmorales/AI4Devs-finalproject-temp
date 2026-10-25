@@ -92,3 +92,15 @@ class IngestionExceptionAlreadyResolvedError(DomainError):
 
 class LineDatesOutsideCampaignError(DomainError):
     """A campaign line starts before its campaign or ends after it."""
+
+
+class FlightVolumesIncompleteError(DomainError):
+    """The monthly volumes miss a month the line runs in, name one it does not, or repeat a month."""
+
+
+class FlightVolumesMismatchError(DomainError):
+    """The monthly volumes do not add up to the line's total."""
+
+
+class FlightVolumeNotPositiveError(DomainError):
+    """A monthly volume is zero or negative."""

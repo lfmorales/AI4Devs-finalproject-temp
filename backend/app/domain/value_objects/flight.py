@@ -18,3 +18,12 @@ class FlightWindow:
     @property
     def days(self) -> int:
         return (self.flight_end - self.flight_start).days + 1
+
+
+@dataclass(frozen=True)
+class MonthlyVolume:
+    """A volume the purchase order states for one calendar month of a line."""
+
+    period_year: int
+    period_month: int
+    volume: int
