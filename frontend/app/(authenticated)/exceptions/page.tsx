@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { ExceptionList, type FatalKind } from "@/features/exceptions/ExceptionList";
 import type { ExceptionStatus } from "@/lib/api/exceptions";
+import { useReportForbidden } from "@/lib/auth/ForbiddenPages";
 import { AccessDeniedPage } from "@/lib/components/AccessDeniedPage";
 import { SessionExpiredPage } from "@/lib/components/SessionExpiredPage";
 
@@ -15,6 +16,7 @@ const TABS: { status: ExceptionStatus; label: string }[] = [
 export default function ExceptionsPage() {
   const [active, setActive] = useState<ExceptionStatus>("open");
   const [fatal, setFatal] = useState<FatalKind | null>(null);
+  useReportForbidden("/exceptions", fatal === "forbidden");
 
   if (fatal === "unauthenticated") return <SessionExpiredPage />;
   if (fatal === "forbidden") return <AccessDeniedPage message="No tienes permiso para ver la cola de excepciones." />;

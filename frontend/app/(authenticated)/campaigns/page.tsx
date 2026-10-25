@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { createApiClient, type ApiError } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { getUserManager } from "@/lib/auth/user-manager";
+import { useReportForbidden } from "@/lib/auth/ForbiddenPages";
 import { SessionExpiredPage } from "@/lib/components/SessionExpiredPage";
 import { AccessDeniedPage } from "@/lib/components/AccessDeniedPage";
 
@@ -29,10 +29,7 @@ export default function CampaignsPage() {
   const [loading, setLoading] = useState(true);
   const [pageState, setPageState] = useState<PageState>("list");
 
-  const handleSignOut = async () => {
-    await getUserManager().removeUser();
-    // The session will update through the AuthProvider's userUnloaded listener
-  };
+  useReportForbidden("/campaigns", pageState === "access-denied");
 
   useEffect(() => {
     async function loadCampaigns() {
@@ -86,9 +83,6 @@ export default function CampaignsPage() {
         <h1 style={{ fontSize: "1.875rem", fontWeight: "bold" }}>Campañas</h1>
         <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
           <Link href="/campaigns/new">Nueva campaña</Link>
-          <button type="button" onClick={() => void handleSignOut()}>
-            Cerrar sesión
-          </button>
         </div>
       </div>
 

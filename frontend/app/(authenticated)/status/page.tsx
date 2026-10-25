@@ -3,11 +3,13 @@
 import { StatusTable } from "@/features/status/StatusTable";
 import { getCampaignStatus } from "@/lib/api/status";
 import { useApiCall } from "@/lib/api/useApiCall";
+import { useReportForbidden } from "@/lib/auth/ForbiddenPages";
 import { AccessDeniedPage } from "@/lib/components/AccessDeniedPage";
 import { SessionExpiredPage } from "@/lib/components/SessionExpiredPage";
 
 export default function StatusPage() {
   const { state } = useApiCall("campaign-status", getCampaignStatus);
+  useReportForbidden("/status", state.status === "forbidden");
 
   if (state.status === "unauthenticated") return <SessionExpiredPage />;
   if (state.status === "forbidden") {

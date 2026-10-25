@@ -3,8 +3,38 @@
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
+import Link from "next/link";
+
 import { useAuth } from "@/lib/auth/AuthContext";
+import { ForbiddenPagesProvider, useForbiddenPages } from "@/lib/auth/ForbiddenPages";
+import { getUserManager } from "@/lib/auth/user-manager";
 import { SessionExpiredPage } from "@/lib/components/SessionExpiredPage";
+
+const LINKS = [
+  { href: "/campaigns", label: "Campañas" },
+  { href: "/status", label: "Estado" },
+  { href: "/exceptions", label: "Excepciones" },
+];
+
+function Navigation() {
+  const { hidden } = useForbiddenPages();
+
+  const handleSignOut = async () => {
+    await getUserManager().removeUser();
+    // The session will update through the AuthProvider's userUnloaded listener
+  };
+
+  return (
+    <nav aria-label="Principal" style={{ display: "flex", gap: "1.5rem", alignItems: "center", padding: "0.75rem 2rem", borderBottom: "1px solid #e5e7eb" }}>
+      {LINKS.filter((link) => !hidden.has(link.href)).map((link) => (
+        <Link key={link.href} href={link.href}>{link.label}</Link>
+      ))}
+      <button type="button" onClick={() => void handleSignOut()} style={{ marginLeft: "auto" }}>
+        Cerrar sesión
+      </button>
+    </nav>
+  );
+}
 
 export default function AuthenticatedLayout({ children }: { children: ReactNode }) {
   const { session, signIn } = useAuth();
@@ -37,5 +67,10 @@ export default function AuthenticatedLayout({ children }: { children: ReactNode 
     );
   }
 
-  return <>{children}</>;
+  return (
+    <ForbiddenPagesProvider>
+      <Navigation />
+      {children}
+    </ForbiddenPagesProvider>
+  );
 }
