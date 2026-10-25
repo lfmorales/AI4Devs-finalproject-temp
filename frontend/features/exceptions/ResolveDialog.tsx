@@ -2,6 +2,8 @@
 
 import { useId, useState } from "react";
 
+import { Modal } from "@/lib/components/Modal";
+
 interface ResolveDialogProps {
   exceptionId: number;
   submitting: boolean;
@@ -15,7 +17,7 @@ export function ResolveDialog({ exceptionId, submitting, onConfirm, onCancel }: 
   const noteId = useId();
 
   return (
-    <div role="dialog" aria-label={`Resolver excepción ${exceptionId}`} style={{ border: "1px solid #d1d5db", padding: "1rem", margin: "1rem 0" }}>
+    <Modal title={`Resolver excepción ${exceptionId}`} closable={!submitting} onClose={onCancel}>
       <p>Marcar la excepción {exceptionId} como resuelta. No se reprocesa ninguna entrega.</p>
       <label htmlFor={noteId} style={{ display: "block", fontWeight: "600" }}>Nota (opcional)</label>
       <textarea id={noteId} value={note} onChange={(event) => setNote(event.target.value)} rows={3} style={{ width: "100%" }} />
@@ -25,6 +27,6 @@ export function ResolveDialog({ exceptionId, submitting, onConfirm, onCancel }: 
         </button>
         <button type="button" disabled={submitting} onClick={onCancel}>Cancelar</button>
       </div>
-    </div>
+    </Modal>
   );
 }

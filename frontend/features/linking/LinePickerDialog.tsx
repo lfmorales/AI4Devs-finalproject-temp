@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 
 import { listUnmappedLines, type UnmappedLine } from "@/lib/api/dsp-catalog";
 import { useApiCall } from "@/lib/api/useApiCall";
+import { Modal } from "@/lib/components/Modal";
 
 export type FatalKind = "unauthenticated" | "forbidden";
 
@@ -75,7 +76,7 @@ export function LinePickerDialog({ label, submitting, problem, onConfirm, onCanc
   }
 
   return (
-    <div role="dialog" aria-label={label} style={{ border: "1px solid #d1d5db", padding: "1rem", margin: "1rem 0" }}>
+    <Modal title={label} closable={!submitting} onClose={onCancel}>
       {body()}
       {problem && <div role="alert" style={{ backgroundColor: "#fee2e2", padding: "0.75rem", margin: "0.5rem 0" }}>{problem}</div>}
       <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
@@ -84,6 +85,6 @@ export function LinePickerDialog({ label, submitting, problem, onConfirm, onCanc
         </button>
         <button type="button" disabled={submitting} onClick={onCancel}>Cancelar</button>
       </div>
-    </div>
+    </Modal>
   );
 }

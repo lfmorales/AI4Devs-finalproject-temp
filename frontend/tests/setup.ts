@@ -10,7 +10,7 @@ afterEach(() => {
 // showModal() sets `open` and moves the focus to the first focusable element inside (or the dialog itself);
 // Escape fires a cancelable `cancel` event and, unless it is prevented, closes the dialog; close() removes `open`
 // and fires `close`. The top layer, the backdrop and the focus trap are the browser's and are not simulated.
-const FOCUSABLE = "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])";
+const FOCUSABLE = "button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])";
 const escapeListeners = new WeakMap<HTMLDialogElement, (event: KeyboardEvent) => void>();
 
 HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
