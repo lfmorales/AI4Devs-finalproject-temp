@@ -305,11 +305,15 @@ The system SHALL expose `GET /api/campaign-lines/unmapped` to the `operations` r
 
 ### Requirement: An exception is linked to a campaign line
 
-The system SHALL expose `POST /api/ingestion-exceptions/{id}/link` with `{"campaign_line_id": N}`, which in one transaction creates a validated mapping from the pair of an `unmatched_delivery` exception to that line and resolves the exception with the note `linked to line N`. The mapping is validated because the exception proves the pair exists in Adform; the pair need not be in the catalogue and Adform is not asked. The retained delivery SHALL NOT move to the daily deliveries: the seven-day window will bring it. The errors are 404 `exception_not_found` and `line_not_found`, and 409 `exception_already_resolved`, `mapping_pair_taken` and `exception_not_linkable` (any type other than `unmatched_delivery`). Nothing is stored when any of them occurs.
+The system SHALL expose `POST /api/ingestion-exceptions/{id}/link` with `{"campaign_line_id": N}`, which in one transaction creates a validated mapping from the pair of an `unmatched_delivery` exception to that line and resolves the exception with the note `linked to line N`. The mapping is validated because the exception proves the pair exists in Adform; the pair need not be in the catalogue and Adform is not asked. The retained delivery SHALL NOT move to the daily deliveries: the seven-day window will bring it. The errors are 404 `exception_not_found` and `line_not_found`, and 409 `exception_already_resolved`, `mapping_pair_taken` and `exception_not_linkable` (any type other than `unmatched_delivery`). The line must run on the DSP of the exception's pair; otherwise the answer is 422 `line_dsp_mismatch`, because a mapping to another DSP's line would never be ingested. The response carries the mapping, the resolved exception and `needs_history_load`. Nothing is stored when any error occurs.
 
 #### Scenario: Linking succeeds
 - **WHEN** an open unmatched exception is linked to an existing line
 - **THEN** the mapping exists and is validated, and the exception is resolved with the automatic note
+
+#### Scenario: A line of another DSP is refused
+- **WHEN** the line runs on a different DSP than the exception's pair
+- **THEN** the answer is 422 `line_dsp_mismatch` and nothing is stored
 
 #### Scenario: Linking fails whole
 - **WHEN** the exception is resolved, the pair is taken, the type is not linkable or a line or exception does not exist
