@@ -28,7 +28,8 @@ VALUES = [
 ALLOWED_LINE = re.compile(
     r"^(status: (succeeded|failed|not configured|another run is in progress)"
     r"|error: [A-Za-z]+Error"
-    r"|(rows_read|ignored_rows|zero_unmatched_rows|new_exceptions|mapped_lines|skipped_lines|absences): \d+)$"
+    r"|(rows_read|ignored_rows|zero_unmatched_rows|new_exceptions|mapped_lines|skipped_lines|absences): \d+"
+    r"|absences: skipped, custom range)$"
 )
 
 

@@ -149,7 +149,7 @@ The form lets each line have its own dates and shows the monthly split (flights)
 - [x] 9A.8 `DELETE /api/campaign-lines/{id}/dsp-mappings`
 - [x] 9A.9 `last_impressions_date` in the mapping response, and `campaign_name` and `line_item_name` in the exception queue
 - [x] 9A.10 `needs_history_load` in the mapping and link responses, at both edges
-- [ ] 9A.11 `run_ingestion --from --to` with its rules, one request, no absences and an idempotent repetition
+- [x] 9A.11 `run_ingestion --from --to` with its rules, one request, no absences and an idempotent repetition
 - [ ] 9A.12 The outputs of `run_ingestion` and the smoke script print no names
 
 ## 10. Run Unit Tests and Verify Database State (MANDATORY)
