@@ -51,7 +51,7 @@ Edit it and replace every example value. Besides the usual variables, set:
 - `SERVER_NAME`: the host name, without scheme (`adops.example.com`).
 - `NEXT_PUBLIC_API_URL`: `https://<SERVER_NAME>/api`.
 - `COGNITO_DOMAIN`: the hosted UI domain, without `https://`.
-- `NEXT_PUBLIC_MASK_NAMES` (optional): with the exact value `true`, every Adform campaign and line name is drawn blurred, cannot be selected and does not reveal on hover, which is useful for screenshots and demos. Leave it empty to show names normally. It is a build variable like the other `NEXT_PUBLIC_*` ones.
+- `NEXT_PUBLIC_MASK_NAMES` (optional): with the exact value `true`, every Adform campaign and line name is drawn blurred, cannot be selected and does not reveal on hover, which is useful for screenshots and demos. Leave it empty to show names normally. It is a build variable like the other `NEXT_PUBLIC_*` ones: it is inlined when the frontend image is built, so changing it means rebuilding that image. It only blurs the names visually. The names are still in the page's data and in the API responses, so it is **not a guarantee of confidentiality** on a published page: do not rely on it to keep the names from anyone who can open the application.
 
 `NEXT_PUBLIC_*` values and `COGNITO_DOMAIN` are inlined into the browser bundle when the frontend image is built, so changing them requires rebuilding that image. Only the public settings reach the frontend build; the DSP credentials never do. Never commit `.env`, and do not paste it in tickets or chats.
 
@@ -153,6 +153,8 @@ absences: ...
 
 Exit codes: 0 succeeded, 1 failed (the line `error:` names the class of the error), 2 another run holds the lock, 3 configuration is missing. Reconcile the first figures by hand against Adform before scheduling it.
 
+> **Warning: the first ingestion with no mappings opens many exceptions.** The run always asks Adform for the window, even when no line is mapped yet, and every pair with delivery that matches no mapped line becomes an `unmatched_delivery` exception. On a fresh installation that is one exception per pair with delivery in the whole Adform account, so the "Excepciones" queue fills up at once. Expect it, and work it down by linking each pair to its line (or resolving it) from the queue.
+
 ### The schedule: 07:00 Madrid time
 
 Schedule it at **07:00 Europe/Madrid, not shortly after midnight**: Adform restates figures during the early hours, and a run at midnight would store figures that are then superseded. The command ingests the window D-7 to D-1 in the zone set by `APP_TIMEZONE` (Europe/Madrid by default), so the cron zone and that setting should agree.
@@ -178,6 +180,25 @@ grep 'exit=' /var/log/adops360/ingestion.log | tail -n 3
 ```
 
 `exit=0` is a good run. Anything else needs a look: `exit=1` read the `error:` line, `exit=2` find out what held the lock (a manual run left open, or a previous run still going), `exit=3` the configuration of `.env` is incomplete. A day without an `exit=` line means the job did not run (cron stopped, instance down). Re-running a day is safe: the window is idempotent, so `run_ingestion` can be repeated by hand (`--date YYYY-MM-DD` repeats a given day's window).
+
+### Loading a history range
+
+The nightly run only covers the last seven days (D-7 to D-1). It is needed when a **mapped line began more than seven days ago**: the delivery before the window is not loaded by itself. The "Excepciones" and "Catálogo Adform" pages warn about it when a link or a mapping is made for such a line («Esta línea empezó antes de la ventana de siete días…»), and the browser offers no way to load it. Load it by hand, with a range:
+
+```
+docker compose -f docker-compose.prod.yml run --rm backend python -m scripts.run_ingestion --from YYYY-MM-DD --to YYYY-MM-DD
+```
+
+Rules of the range:
+
+- `--from` and `--to` go together, and not together with `--date`.
+- The range is at most 31 days, both ends included, and `--from` cannot be after `--to`.
+- `--to` cannot be later than D-1 (yesterday, in the zone of `APP_TIMEZONE`).
+- The whole range is asked from Adform in a single request.
+- The absence check is not run for a range: the output says `absences: skipped, custom range`.
+- The output is counts only, as in the nightly run, and an invalid range prints `status: not configured` and exits with 3.
+
+For a longer history, run it once per block of at most 31 days.
 
 ## 13. Backups
 
