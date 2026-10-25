@@ -87,7 +87,7 @@
 - [ ] 6A.13 Write failing tests against PostgreSQL and move the ingestion-target query onto the line's own dates, with no join through periods, covering a line that ended before its campaign, one that starts mid-campaign, one outside the window, one with an unvalidated mapping and one of another DSP; the watched-campaign query depends on the campaign alone
 - [ ] 6A.14 Write failing tests against PostgreSQL and rework absence (task 6.3) by flight: a finished flight whose rows are zeros or missing is flagged, delivery outside its window does not count even inside another flight of the same line, a mapping validated after the flight ended and a flight still running are not evaluated, and two runs do not duplicate the exception, which stays identified by line and period
 - [ ] 6A.15 Provide the flight-level aggregate the status endpoint (6.5) reads: contracted per flight and delivery summed inside its window, in one query
-- [ ] 6A.16 Move the shared test fixtures to the new model: `insert_campaign_line` creates the campaign, a period, the line with `campaign_id`, number and dates, and its flight, and `campaign_id_of` reads it from the line, keeping their signatures
+- [x] 6A.16 Move the shared test fixtures to the new model: `insert_campaign_line` creates the campaign, a period, the line with `campaign_id`, number and dates, and its flight, and `campaign_id_of` reads it from the line, keeping their signatures
 
 ## 6B. Backend: Flight Preview
 

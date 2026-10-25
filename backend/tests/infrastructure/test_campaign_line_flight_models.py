@@ -31,8 +31,10 @@ def _period_id_of(session, line_id: int) -> int:
 
 
 def _second_line_of_the_same_campaign(session, line_id: int) -> int:
+    """A second numbered line of the same campaign, with no flight yet."""
     first = session.get(CampaignLineRecord, line_id)
     second = CampaignLineRecord(
+        campaign_id=first.campaign_id, line_number=2, start_date=first.start_date, end_date=first.end_date,
         campaign_period_id=first.campaign_period_id, dsp_id=first.dsp_id, channel_id=first.channel_id,
         format_id=first.format_id, scope="national", market_description="Nacional",
         contracted_impressions=10, sale_cpm=first.sale_cpm,
@@ -43,11 +45,13 @@ def _second_line_of_the_same_campaign(session, line_id: int) -> int:
 
 
 def test_a_flight_is_stored_with_its_window_and_volume(rolled_back_session):
-    line_id = insert_campaign_line(rolled_back_session)
+    line_id = _second_line_of_the_same_campaign(rolled_back_session, insert_campaign_line(rolled_back_session))
     rolled_back_session.add(_flight(line_id, _period_id_of(rolled_back_session, line_id)))
     rolled_back_session.flush()
 
-    stored = rolled_back_session.scalars(select(CampaignLinePeriodRecord)).one()
+    stored = rolled_back_session.scalars(
+        select(CampaignLinePeriodRecord).where(CampaignLinePeriodRecord.campaign_line_id == line_id)
+    ).one()
 
     assert (stored.flight_start, stored.flight_end, stored.contracted_impressions) == (
         date(2026, 8, 1), date(2026, 8, 31), 1000,
@@ -55,7 +59,7 @@ def test_a_flight_is_stored_with_its_window_and_volume(rolled_back_session):
 
 
 def test_a_line_has_at_most_one_flight_per_period(rolled_back_session):
-    line_id = insert_campaign_line(rolled_back_session)
+    line_id = _second_line_of_the_same_campaign(rolled_back_session, insert_campaign_line(rolled_back_session))
     period_id = _period_id_of(rolled_back_session, line_id)
     rolled_back_session.add(_flight(line_id, period_id))
     rolled_back_session.flush()
@@ -66,16 +70,16 @@ def test_a_line_has_at_most_one_flight_per_period(rolled_back_session):
 
 
 def test_two_lines_can_have_a_flight_in_the_same_period(rolled_back_session):
-    line_id = insert_campaign_line(rolled_back_session)
+    line_id = insert_campaign_line(rolled_back_session)  # its own flight already sits in the period
     period_id = _period_id_of(rolled_back_session, line_id)
     other_line_id = _second_line_of_the_same_campaign(rolled_back_session, line_id)
 
-    rolled_back_session.add_all([_flight(line_id, period_id), _flight(other_line_id, period_id)])
+    rolled_back_session.add(_flight(other_line_id, period_id))
     rolled_back_session.flush()
 
 
 def test_a_flight_cannot_end_before_it_starts(rolled_back_session):
-    line_id = insert_campaign_line(rolled_back_session)
+    line_id = _second_line_of_the_same_campaign(rolled_back_session, insert_campaign_line(rolled_back_session))
     rolled_back_session.add(
         _flight(line_id, _period_id_of(rolled_back_session, line_id),
                 flight_start=date(2026, 8, 10), flight_end=date(2026, 8, 9))
@@ -86,7 +90,7 @@ def test_a_flight_cannot_end_before_it_starts(rolled_back_session):
 
 
 def test_a_flight_of_a_single_day_is_allowed(rolled_back_session):
-    line_id = insert_campaign_line(rolled_back_session)
+    line_id = _second_line_of_the_same_campaign(rolled_back_session, insert_campaign_line(rolled_back_session))
     rolled_back_session.add(
         _flight(line_id, _period_id_of(rolled_back_session, line_id),
                 flight_start=date(2026, 8, 10), flight_end=date(2026, 8, 10))
@@ -111,27 +115,13 @@ def test_a_flight_must_reference_an_existing_period(rolled_back_session):
         rolled_back_session.flush()
 
 
-def test_the_new_line_columns_are_optional_for_now(rolled_back_session):
-    line_id = insert_campaign_line(rolled_back_session)
-
-    line = rolled_back_session.get(CampaignLineRecord, line_id)
-
-    assert (line.campaign_id, line.line_number, line.start_date, line.end_date) == (None, None, None, None)
-
-
 def test_a_campaign_cannot_repeat_a_line_number(rolled_back_session):
-    line_id = insert_campaign_line(rolled_back_session)
-    other_line_id = _second_line_of_the_same_campaign(rolled_back_session, line_id)
-    campaign_id = campaign_id_of(rolled_back_session, line_id)
-    rolled_back_session.execute(
-        update(CampaignLineRecord).where(CampaignLineRecord.id == line_id).values(campaign_id=campaign_id, line_number=1)
-    )
-    rolled_back_session.flush()
+    line_id = insert_campaign_line(rolled_back_session)  # numbered 1
+    other_line_id = _second_line_of_the_same_campaign(rolled_back_session, line_id)  # numbered 2
 
     with pytest.raises(IntegrityError):
         rolled_back_session.execute(
-            update(CampaignLineRecord).where(CampaignLineRecord.id == other_line_id)
-            .values(campaign_id=campaign_id, line_number=1)
+            update(CampaignLineRecord).where(CampaignLineRecord.id == other_line_id).values(line_number=1)
         )
 
 

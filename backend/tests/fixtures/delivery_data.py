@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.infrastructure.persistence.models.campaign import (
+    CampaignLinePeriodRecord,
     CampaignLineRecord,
     CampaignPeriodRecord,
     CampaignRecord,
@@ -50,8 +51,14 @@ def insert_campaign_line(
     end_date: date = date(2026, 8, 31),
     status: str = "active",
     dsp_id: int | None = None,
+    line_start: date | None = None,
+    line_end: date | None = None,
 ) -> int:
-    """Persist a campaign with one period and one line, and return the line id."""
+    """Persist a campaign with one period, one numbered line under it and the line's flight; return the line id.
+
+    The line runs over the campaign's dates unless line_start / line_end narrow it. The period and the
+    flight cover the line, so rules that read a flight window see the same days as the line.
+    """
     holding_group = HoldingGroupRecord(name=f"{campaign_name} group")
     advertiser = AdvertiserRecord(name=f"{campaign_name} advertiser")
     campaign_type = CampaignTypeRecord(name=f"{campaign_name} type")
@@ -89,6 +96,10 @@ def insert_campaign_line(
     session.add(period)
     session.flush()
     line = CampaignLineRecord(
+        campaign_id=campaign.id,
+        line_number=1,
+        start_date=line_start or start_date,
+        end_date=line_end or end_date,
         campaign_period_id=period.id,
         dsp_id=dsp_id if dsp_id is not None else seeded_dsp_id(session),
         channel_id=channel.id,
@@ -99,6 +110,14 @@ def insert_campaign_line(
         sale_cpm=Decimal("5.00"),
     )
     session.add(line)
+    session.flush()
+    session.add(CampaignLinePeriodRecord(
+        campaign_line_id=line.id,
+        campaign_period_id=period.id,
+        flight_start=line.start_date,
+        flight_end=line.end_date,
+        contracted_impressions=CONTRACTED_IMPRESSIONS,
+    ))
     session.flush()
     return line.id
 
@@ -145,12 +164,7 @@ def insert_mapping(
 
 
 def campaign_id_of(session: Session, campaign_line_id: int) -> int:
-    return session.scalars(
-        select(CampaignRecord.id)
-        .join(CampaignPeriodRecord, CampaignPeriodRecord.campaign_id == CampaignRecord.id)
-        .join(CampaignLineRecord, CampaignLineRecord.campaign_period_id == CampaignPeriodRecord.id)
-        .where(CampaignLineRecord.id == campaign_line_id)
-    ).one()
+    return session.scalars(select(CampaignLineRecord.campaign_id).where(CampaignLineRecord.id == campaign_line_id)).one()
 
 
 def insert_user(session: Session, email: str = "resolver@example.com") -> int:
