@@ -17,8 +17,8 @@ export default function StatusPage() {
   }
 
   return (
-    <div style={{ padding: "2rem" }}>
-      <h1 style={{ fontSize: "1.875rem", fontWeight: "bold", marginBottom: "2rem" }}>Estado de las campañas</h1>
+    <div>
+      <h1>Estado de las campañas</h1>
       {state.status === "loading" && <div role="status">Cargando estado…</div>}
       {state.status === "error" && (
         <div role="alert" style={{ backgroundColor: "#fee2e2", padding: "1rem" }}>

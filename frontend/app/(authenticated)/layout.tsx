@@ -16,16 +16,22 @@ const LINKS = [
   { href: "/dsp-catalog", label: "Catálogo Adform" },
 ];
 
+/** The link of the section the path is in: the path itself or anything below it. */
+function isCurrent(pathname: string | null, href: string): boolean {
+  return pathname !== null && (pathname === href || pathname.startsWith(`${href}/`));
+}
+
 function Navigation() {
   const { hidden } = useForbiddenPages();
   const { signOut } = useAuth();
+  const pathname = usePathname();
 
   return (
-    <nav aria-label="Principal" style={{ display: "flex", gap: "1.5rem", alignItems: "center", padding: "0.75rem 2rem", borderBottom: "1px solid #e5e7eb" }}>
+    <nav aria-label="Principal">
       {LINKS.filter((link) => !hidden.has(link.href)).map((link) => (
-        <Link key={link.href} href={link.href}>{link.label}</Link>
+        <Link key={link.href} href={link.href} aria-current={isCurrent(pathname, link.href) ? "page" : undefined}>{link.label}</Link>
       ))}
-      <button type="button" onClick={() => void signOut()} style={{ marginLeft: "auto" }}>
+      <button type="button" onClick={() => void signOut()}>
         Cerrar sesión
       </button>
     </nav>

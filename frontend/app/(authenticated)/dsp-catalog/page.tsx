@@ -16,8 +16,8 @@ export default function DspCatalogPage() {
   if (fatal === "forbidden") return <AccessDeniedPage message="No tienes permiso para ver el catálogo de Adform." />;
 
   return (
-    <div style={{ padding: "2rem" }}>
-      <h1 style={{ fontSize: "1.875rem", fontWeight: "bold", marginBottom: "1rem" }}>Catálogo Adform</h1>
+    <div>
+      <h1>Catálogo Adform</h1>
       <CatalogueView onFatal={setFatal} />
     </div>
   );

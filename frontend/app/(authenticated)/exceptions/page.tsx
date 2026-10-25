@@ -22,9 +22,9 @@ export default function ExceptionsPage() {
   if (fatal === "forbidden") return <AccessDeniedPage message="No tienes permiso para ver la cola de excepciones." />;
 
   return (
-    <div style={{ padding: "2rem" }}>
-      <h1 style={{ fontSize: "1.875rem", fontWeight: "bold", marginBottom: "1rem" }}>Excepciones de ingesta</h1>
-      <div role="tablist" aria-label="Estado de las excepciones" style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
+    <div>
+      <h1>Excepciones de ingesta</h1>
+      <div role="tablist" aria-label="Estado de las excepciones">
         {TABS.map((tab) => (
           <button
             key={tab.status}

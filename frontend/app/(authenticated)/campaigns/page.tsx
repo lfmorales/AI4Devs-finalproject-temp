@@ -78,10 +78,10 @@ export default function CampaignsPage() {
   }
 
   return (
-    <div style={{ padding: "2rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
-        <h1 style={{ fontSize: "1.875rem", fontWeight: "bold" }}>Campañas</h1>
-        <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+    <div>
+      <div className="page-header">
+        <h1>Campañas</h1>
+        <div>
           <Link href="/campaigns/new">Nueva campaña</Link>
         </div>
       </div>
