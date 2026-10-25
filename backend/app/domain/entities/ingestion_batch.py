@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+from app.domain.value_objects.delivery import DeliveryDateRange
+
 
 class IngestionRoute(StrEnum):
     API = "api"
@@ -29,3 +31,5 @@ class IngestionBatch:
     row_count: int
     ignored_row_count: int
     zero_unmatched_row_count: int
+    # The range of delivery dates the run replaced; None for batches recorded before the window was kept.
+    window: DeliveryDateRange | None = None

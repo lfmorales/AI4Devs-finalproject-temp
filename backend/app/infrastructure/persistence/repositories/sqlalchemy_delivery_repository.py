@@ -56,12 +56,17 @@ class SqlAlchemyIngestionBatchRepository(IngestionBatchRepository):
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def start(self, dsp_id: int, route: IngestionRoute, source_file: str | None, started_at: datetime) -> int:
+    def start(
+        self, dsp_id: int, route: IngestionRoute, source_file: str | None, started_at: datetime,
+        window: DeliveryDateRange,
+    ) -> int:
         record = IngestionBatchRecord(
             dsp_id=dsp_id,
             route=route.value,
             source_file=source_file,
             started_at=started_at,
+            window_start=window.start,
+            window_end=window.end,
             status=BatchStatus.RUNNING.value,
             row_count=0,
             ignored_row_count=0,

@@ -109,3 +109,25 @@ def test_the_original_error_reaches_the_caller_after_the_batch_is_recorded():
 
     with pytest.raises(DspDown):
         harness.service.run(DSP_ID, TODAY)
+
+
+def test_every_batch_records_the_window_it_replaces_whether_it_succeeds_or_fails():
+    harness = IngestionHarness(rows=[dsp_row(date(2026, 8, 5), KEY)], mapped_lines=[MappedLine(LINE, KEY)])
+    harness.service.run(DSP_ID, TODAY)
+    failing = IngestionHarness(client=FailingMidReportClient(), mapped_lines=[MappedLine(LINE, KEY)])
+    with pytest.raises(DspDown):
+        failing.service.run(DSP_ID, TODAY)
+
+    expected = DeliveryDateRange(date(2026, 8, 3), date(2026, 8, 9))
+    assert [b.window for b in harness.batches.records.values()] == [expected]
+    assert [b.window for b in failing.batches.records.values()] == [expected]
+
+
+def test_a_run_over_a_given_window_records_that_window_and_asks_for_it():
+    window = DeliveryDateRange(date(2026, 7, 1), date(2026, 7, 20))
+    harness = IngestionHarness(mapped_lines=[MappedLine(LINE, KEY)])
+
+    harness.service.run(DSP_ID, TODAY, window=window)
+
+    assert harness.client.requested_ranges == [window]
+    assert next(iter(harness.batches.records.values())).window == window

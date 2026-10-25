@@ -2,12 +2,16 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 
 from app.domain.entities.ingestion_batch import BatchStatus, IngestionRoute
+from app.domain.value_objects.delivery import DeliveryDateRange
 
 
 class IngestionBatchRepository(ABC):
     @abstractmethod
-    def start(self, dsp_id: int, route: IngestionRoute, source_file: str | None, started_at: datetime) -> int:
-        """Record a run as running and return the id its deliveries will reference."""
+    def start(
+        self, dsp_id: int, route: IngestionRoute, source_file: str | None, started_at: datetime,
+        window: DeliveryDateRange,
+    ) -> int:
+        """Record a run and the window it replaces as running and return the id its deliveries will reference."""
 
     @abstractmethod
     def finish(

@@ -26,6 +26,13 @@ class IngestionBatchRecord(Base):
     """One ingestion run, whatever route it arrived by."""
 
     __tablename__ = "ingestion_batches"
+    __table_args__ = (
+        CheckConstraint(
+            "(window_start IS NULL AND window_end IS NULL) OR (window_start IS NOT NULL AND window_end IS NOT NULL "
+            "AND window_start <= window_end)",
+            name="ck_ingestion_batches_window",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     dsp_id: Mapped[int] = mapped_column(ForeignKey("dsps.id"), nullable=False, index=True)
@@ -33,6 +40,9 @@ class IngestionBatchRecord(Base):
     source_file: Mapped[str | None] = mapped_column(String, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # The delivery dates the run replaced. Null only on batches recorded before the window was kept.
+    window_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    window_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(
         SQLEnum("running", "succeeded", "failed", name="ingestion_batch_status_enum"), nullable=False
     )

@@ -97,7 +97,10 @@ def test_a_batch_is_started_running_and_finished_with_its_counts(rolled_back_ses
     dsp_id = rolled_back_session.get(IngestionBatchRecord, dsp_batch_id).dsp_id
     repository = SqlAlchemyIngestionBatchRepository(rolled_back_session)
 
-    batch_id = repository.start(dsp_id, IngestionRoute.UPLOAD, "export.xlsx", datetime(2026, 8, 10, 2, 0))
+    batch_id = repository.start(
+        dsp_id, IngestionRoute.UPLOAD, "export.xlsx", datetime(2026, 8, 10, 2, 0),
+        DeliveryDateRange(date(2026, 8, 3), date(2026, 8, 9)),
+    )
     started = rolled_back_session.get(IngestionBatchRecord, batch_id)
     assert (started.status, started.route, started.source_file) == ("running", "upload", "export.xlsx")
 
