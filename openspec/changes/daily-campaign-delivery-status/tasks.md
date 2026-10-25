@@ -163,7 +163,7 @@ The form lets each line have its own dates and shows the monthly split (flights)
 - [x] 11A.2 Add `backend/Dockerfile.prod`: `uv sync --frozen --no-dev`, no `tests/`, no `scripts/seed_dev_data.py`, non-root user, `run_ingestion.py` and the migrations kept, migrations never run at start
 - [x] 11A.3 Add the production nginx template (80 redirects to HTTPS and leaves `/.well-known/acme-challenge/` open; 443 with certificates from a volume and `SERVER_NAME` as variable)
 - [x] 11A.4 Add `docker-compose.prod.yml`: only nginx publishes ports, restart policy, health checks, log rotation, `env_file: .env`, named PostgreSQL volume, the frontend build arguments with the public server URL
-- [ ] 11A.5 Ignore certificates and keys in `.gitignore` and verify nothing of the kind is versioned
+- [x] 11A.5 Ignore certificates and keys in `.gitignore` and verify nothing of the kind is versioned
 - [ ] 11A.6 Write `docs/deploy.md` with the steps that cannot be run here: instance, security group, DNS, Certbot, `.env` with `chmod 600`, Cognito callback and sign-out URLs over HTTPS, the explicit migration step and the first user
 - [ ] 11A.7 Write `scripts/verify_prod_images.sh` and run it: builds the images, brings the production composition up with a temporary database and a self-signed certificate, and checks `/api/health` answers 200 over HTTPS, port 80 redirects, the backend image has no pytest, `tests/` or `seed_dev_data.py` but has `run_ingestion.py`, the container is not root, the database publishes no port, and `alembic upgrade head` applies as a separate step; ends with one `OK` or `FALLO` line
 
