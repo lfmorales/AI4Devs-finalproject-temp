@@ -57,7 +57,8 @@ def resolve_rebate_schedule(schedules: Sequence[RebateSchedule], flight: RebateF
                 source_year=matching[0].valid_from.year,
                 zero_reason=None,
             )
+    # A table exists for the date when any group has a schedule in force; without one the hole is the year's.
+    reason = ZeroReason.NO_SCHEDULE if in_force else ZeroReason.NO_SCHEDULE_FOR_YEAR
     return ResolvedRebate(
-        schedule=None, step=LadderStep.EXPLICIT_ZERO, agency_exception=False, source_year=None,
-        zero_reason=ZeroReason.NO_SCHEDULE,
+        schedule=None, step=LadderStep.EXPLICIT_ZERO, agency_exception=False, source_year=None, zero_reason=reason
     )
