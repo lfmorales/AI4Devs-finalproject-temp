@@ -95,10 +95,10 @@ The system SHALL round the revenue, media cost, rebate and platform cost of each
 
 ### Requirement: A running flight is pro-rated by contract days and labelled provisional
 
-The system SHALL pro-rate the revenue and the rebate of a flight that has not ended by the days elapsed between `flight_start` and the reference date, both included, over the total days of the flight's window, both ends included, SHALL NOT use the date of the last delivery, SHALL mark the result as provisional, and SHALL NOT write anything.
+The system SHALL receive a date `as_of`, the last day counted (D-1), and SHALL treat a flight as closed when `flight_end <= as_of`, as not started when `flight_start > as_of` and as running otherwise. It SHALL pro-rate the revenue and the rebate of a running flight by the days elapsed from `flight_start` to `min(as_of, flight_end)`, both included, over the total days of the flight's window, both ends included, SHALL NOT use the date of the last delivery, SHALL mark the result as provisional, and SHALL NOT write anything.
 
 #### Scenario: An open flight is pro-rated by elapsed days
-- **WHEN** a flight from 2026-09-01 to 2026-09-30 has 300,000 contracted impressions at 5.00 € and the reference date is 2026-09-10
+- **WHEN** a flight from 2026-09-01 to 2026-09-30 has 300,000 contracted impressions at 5.00 € and `as_of` is 2026-09-10
 - **THEN** the elapsed days are 10 and the total days are 30
 - **AND** revenue is 1,500.00 € × 10 / 30, which is 500.00 €
 - **AND** with a flat rebate of 20 % the rebate is 100.00 €
@@ -115,8 +115,26 @@ The system SHALL pro-rate the revenue and the rebate of a flight that has not en
 - **AND** the figure is marked provisional
 
 #### Scenario: A closed flight is not pro-rated
-- **WHEN** a flight whose `flight_end` is before the reference date is calculated
+- **WHEN** a flight whose `flight_end` is on or before `as_of` is calculated
 - **THEN** revenue is the full contracted volume times the sale CPM
+
+#### Scenario: The last day of a flight is closed on the day it is counted
+- **WHEN** a flight ends on 2026-09-30 and `as_of` is 2026-09-30
+- **THEN** the flight is closed and not pro-rated
+
+#### Scenario: The day before the end is still running
+- **WHEN** a flight ends on 2026-09-30 and `as_of` is 2026-09-29
+- **THEN** the flight is running, with 29 elapsed days over 30, and provisional
+
+#### Scenario: A flight that has not started has no margin
+- **WHEN** a flight starts on 2026-10-01 and `as_of` is 2026-09-30
+- **THEN** its status is not started and it has no revenue, cost, rebate, platform cost or margin
+- **AND** it contributes to no total, and its line counts it as not started
+
+#### Scenario: A total is provisional when any flight is running
+- **WHEN** a line has a closed flight, a running flight and a not-started flight
+- **THEN** its totals add the closed and the running flights only
+- **AND** the line is marked provisional
 
 #### Scenario: A running flight writes nothing
 - **WHEN** a running flight is read
