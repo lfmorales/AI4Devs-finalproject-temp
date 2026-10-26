@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 
 from app.domain.value_objects.margin import FlightMargin
+from app.domain.value_objects.margin_report import FrozenRates
 from app.domain.value_objects.platform_rate import ResolvedPlatformRate
 from app.domain.value_objects.rebate import FlightRebate
 
@@ -51,3 +52,16 @@ class PricedFlight:
     rebate: FlightRebate
     platform: ResolvedPlatformRate
     margin: FlightMargin
+
+
+@dataclass(frozen=True)
+class ReadFlight:
+    """A flight as the margin read needs it: its facts, where it sits and, if closed, what was frozen."""
+
+    facts: FlightFacts
+    campaign_name: str
+    campaign_status: str
+    line_number: int
+    period_year: int
+    period_month: int
+    frozen: FrozenRates | None

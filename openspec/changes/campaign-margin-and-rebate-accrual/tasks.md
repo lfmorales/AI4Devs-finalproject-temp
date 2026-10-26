@@ -56,8 +56,8 @@
 - [x] 6.1 Implement the SQLAlchemy repositories behind the domain interfaces (schedules, platform rates, applied rates, the margin read) and verify no module under `domain/` imports SQLAlchemy
 - [x] 6.2 Implement `applied_rates` as append-only, one row per closed flight, and verify that closing an already closed month neither adds nor updates a row
 - [ ] 6.3 Write an API test asserting that editing a rebate master after the month was closed leaves the margin of its flights unchanged
-- [ ] 6.4 Implement the margin endpoint aggregating in the database, joining `daily_deliveries` to the flight by date range, reading closed flights from `applied_rates` and calculating the others on the fly, and verify no delivery row reaches the application. The period, agency, advertiser and campaign-type roll-up endpoints are **deferred** with the roll-up view (7.4)
-- [ ] 6.5 Verify the total of `GET /margin` at campaign and report level is the sum of its detail, asserted by a test (the dimension roll-ups are deferred with 6.4)
+- [x] 6.4 Implement the margin endpoint aggregating in the database, joining `daily_deliveries` to the flight by date range, reading closed flights from `applied_rates` and calculating the others on the fly, and verify no delivery row reaches the application. The period, agency, advertiser and campaign-type roll-up endpoints are **deferred** with the roll-up view (7.4)
+- [x] 6.5 Verify the total of `GET /margin` at campaign and report level is the sum of its detail, asserted by a test (the dimension roll-ups are deferred with 6.4)
 - [ ] 6.6 ~~Implement Excel and CSV export and verify the exported figures match those returned by the API~~ **Deferred**: no view consumes an export in this cut and the roll-up view (7.4) is deferred
 - [ ] 6.7 Implement `require_roles("finance")` on every cost and margin endpoint, including the platform rate configuration endpoints
 - [ ] 6.8 Write tests asserting a user holding `business` or `operations` but not `finance` receives 403 on every endpoint of this change, and 401 for a missing or invalid token
@@ -77,7 +77,7 @@
 
 ## 6B. Backend: Margin Read, Masters and Roles
 
-- [ ] 6B.1 Write failing API tests for `GET /margin`: closed, running provisional, pending close, a not-started flight absent, a line with mixed states, the year, month and campaign filters, 404 `campaign_not_found`, inactive campaigns included, decimal-string amounts, no float anywhere, the below-cost counts, and that the read writes nothing; then implement it
+- [x] 6B.1 Write failing API tests for `GET /margin`: closed, running provisional, pending close, a not-started flight absent, a line with mixed states, the year, month and campaign filters, 404 `campaign_not_found`, inactive campaigns included, decimal-string amounts, no float anywhere, the below-cost counts, and that the read writes nothing; then implement it
 - [ ] 6B.2 Write a failing test that changing a rebate schedule or a platform rate after a closing does not move the closed month through `GET /margin`
 - [ ] 6B.3 Implement the `{"code","message"}` handler for validation errors under `/margin` only, with a test that campaign registration keeps `{"detail": ...}`, and map each rebate rule code to its own message
 - [ ] 6B.4 Implement `POST /margin/rebate-schedules` and `POST /margin/platform-rates`, `finance` only, the latter recording its author and time

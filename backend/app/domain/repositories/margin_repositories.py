@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
 
-from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight
+from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight, ReadFlight
 from app.domain.value_objects.rebate import CounterKey, RebateSchedule
 
 
@@ -64,3 +64,22 @@ class MarginClosingTransaction(ABC):
 
     @abstractmethod
     def rollback(self) -> None: ...
+
+
+class MarginReadRepository(ABC):
+    @abstractmethod
+    def list_flights(
+        self,
+        as_of: date,
+        year: int | None = None,
+        month: int | None = None,
+        campaign_id: int | None = None,
+        unfrozen_only: bool = False,
+    ) -> list[ReadFlight]:
+        """Flights that have started by `as_of`, with delivery summed over each window in the database.
+
+        Ordered by `flight_start` and then flight id. A frozen flight carries the rates frozen for it.
+        """
+
+    @abstractmethod
+    def campaign_exists(self, campaign_id: int) -> bool: ...

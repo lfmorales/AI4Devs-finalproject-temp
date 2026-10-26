@@ -157,3 +157,7 @@ class PreviousMonthOpenError(DomainError):
         super().__init__(f"{year}-{month:02d} is still open")
         self.year = year
         self.month = month
+
+
+class CampaignNotFoundError(DomainError):
+    """The campaign named by a request does not exist."""

@@ -11,10 +11,12 @@ from app.domain.repositories.margin_repositories import (
     AppliedRateRepository,
     MarginClosingTransaction,
     MarginFlightRepository,
+    MarginReadRepository,
     PlatformRateRepository,
     RebateScheduleRepository,
 )
-from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight
+from app.domain.value_objects.margin_report import FrozenRates
+from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight, ReadFlight
 from app.domain.value_objects.rebate import Bracket, CounterKey, RebateSchedule
 from app.infrastructure.persistence.models.campaign import (
     CampaignLinePeriodRecord,
@@ -148,6 +150,77 @@ class SqlAlchemyMarginFlightRepository(MarginFlightRepository):
                 self._not_frozen(),
             )
         )
+
+
+class SqlAlchemyMarginReadRepository(MarginReadRepository):
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def campaign_exists(self, campaign_id: int) -> bool:
+        return bool(self._session.scalar(select(exists().where(CampaignRecord.id == campaign_id))))
+
+    def list_flights(
+        self,
+        as_of: date,
+        year: int | None = None,
+        month: int | None = None,
+        campaign_id: int | None = None,
+        unfrozen_only: bool = False,
+    ) -> list[ReadFlight]:
+        flight = CampaignLinePeriodRecord
+        applied = AppliedRateRecord
+        window = (
+            DailyDeliveryRecord.campaign_line_id == flight.campaign_line_id,
+            DailyDeliveryRecord.delivery_date.between(flight.flight_start, flight.flight_end),
+        )
+        # Both aggregates run in the database over the indexed (line, date) pair: no delivery row is fetched.
+        delivered = select(func.coalesce(func.sum(DailyDeliveryRecord.impressions), 0)).where(*window).scalar_subquery()
+        media_cost = select(func.coalesce(func.sum(DailyDeliveryRecord.media_cost), 0)).where(*window).scalar_subquery()
+        query = (
+            select(
+                flight.id, CampaignLineRecord.id, CampaignRecord.id, flight.flight_start, flight.flight_end,
+                AgencyRecord.holding_group_id, AgencyRecord.id, CampaignRecord.campaign_type_id,
+                ChannelRecord.name, ChannelRecord.id, CampaignLineRecord.scope, flight.contracted_impressions,
+                CampaignLineRecord.sale_cpm, delivered, media_cost,
+                CampaignRecord.name, CampaignRecord.status, CampaignLineRecord.line_number,
+                CampaignPeriodRecord.period_year, CampaignPeriodRecord.period_month,
+                applied.id, applied.rebate_amount, applied.platform_rate, applied.effective_rate, applied.ladder_step,
+                applied.agency_exception, applied.zero_reason, applied.source_year, applied.position_before,
+                applied.position_after,
+            )
+            .select_from(flight)
+            .join(CampaignLineRecord, CampaignLineRecord.id == flight.campaign_line_id)
+            .join(CampaignRecord, CampaignRecord.id == CampaignLineRecord.campaign_id)
+            .join(AgencyRecord, AgencyRecord.id == CampaignRecord.agency_id)
+            .join(ChannelRecord, ChannelRecord.id == CampaignLineRecord.channel_id)
+            .join(CampaignPeriodRecord, CampaignPeriodRecord.id == flight.campaign_period_id)
+            .outerjoin(applied, applied.campaign_line_period_id == flight.id)
+            .where(flight.flight_start <= as_of)
+            .order_by(flight.flight_start, flight.id)
+        )
+        if year is not None:
+            query = query.where(func.extract("year", flight.flight_start) == year)
+        if month is not None:
+            query = query.where(func.extract("month", flight.flight_start) == month)
+        if campaign_id is not None:
+            query = query.where(CampaignRecord.id == campaign_id)
+        if unfrozen_only:
+            query = query.where(applied.id.is_(None))
+        results: list[ReadFlight] = []
+        for row in self._session.execute(query).all():
+            facts = FlightFacts(
+                flight_id=row[0], campaign_line_id=row[1], campaign_id=row[2], flight_start=row[3], flight_end=row[4],
+                group_id=row[5], agency_id=row[6], campaign_type_id=row[7], channel=row[8], channel_id=row[9],
+                scope=row[10], contracted_impressions=int(row[11]), sale_cpm=row[12],
+                delivered_impressions=int(row[13]), media_cost=Decimal(row[14]),
+            )
+            frozen = None if row[20] is None else FrozenRates(
+                rebate_amount=row[21], platform_rate=row[22], effective_rate=row[23], ladder_step=int(row[24]),
+                agency_exception=row[25], zero_reason=row[26], source_year=row[27], position_before=row[28],
+                position_after=row[29],
+            )
+            results.append(ReadFlight(facts, row[15], row[16], row[17], row[18], row[19], frozen))
+        return results
 
 
 class SqlAlchemyAppliedRateRepository(AppliedRateRepository):

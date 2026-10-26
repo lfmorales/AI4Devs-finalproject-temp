@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 from app.domain.exceptions import (
     AmbiguousMappingError,
+    CampaignNotFoundError,
     MappingNotFoundError,
     CampaignLineNotFoundError,
     DomainError,
@@ -129,6 +130,7 @@ _ERROR_MAPPINGS: dict[type[DomainError], _ErrorMapping] = {
     UnsupportedCurrencyError: _ErrorMapping(
         502, "dsp_response_unsupported", "The DSP reported data that cannot be processed"
     ),
+    CampaignNotFoundError: _ErrorMapping(404, "campaign_not_found", "The campaign does not exist"),
     SystemPlatformRateMissingError: _ErrorMapping(
         500, "platform_rate_not_configured", "No system platform rate is configured"
     ),
