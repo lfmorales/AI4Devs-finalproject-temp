@@ -136,3 +136,11 @@ class MappingNotFoundError(DomainError):
 
 class AmbiguousMappingError(DomainError):
     """The campaign line has several DSP mappings, so it is not clear which delivery came from which."""
+
+
+class RebateRuleError(DomainError):
+    """A rebate rule was broken: an invalid bracket table, or ambiguous schedules. Carries a stable code."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
