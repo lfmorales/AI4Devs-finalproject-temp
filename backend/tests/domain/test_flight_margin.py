@@ -104,3 +104,17 @@ def test_a_float_input_is_refused():
             rebate_amount=Decimal("0"),
             platform_rate=Decimal("1.00"),
         )
+
+
+def test_under_delivery_does_not_reduce_revenue():
+    result = calculate_flight_margin(_flight(delivered_impressions=700_000), as_of=AFTER_AUGUST)
+
+    assert result.revenue == Decimal("3631.01")
+    assert result.platform_cost == Decimal("700.00")
+
+
+@pytest.mark.parametrize("delivered", [0, 700_000, 726_202, 900_000])
+def test_revenue_is_the_same_whatever_was_delivered(delivered: int):
+    result = calculate_flight_margin(_flight(delivered_impressions=delivered), as_of=AFTER_AUGUST)
+
+    assert result.revenue == Decimal("3631.01")
