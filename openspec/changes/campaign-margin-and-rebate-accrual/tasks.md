@@ -71,7 +71,7 @@
 - [ ] 6A.4 Implement `require_roles("finance")` on the closing endpoint and write tests asserting 403 for `business` or `operations` without `finance` and 401 for a missing or invalid token
 - [ ] 6A.5 Write failing tests that the read of a closed flight returns the frozen row, that the read of a running or pending-close flight writes nothing and does not advance the counter, and that a line with one closed and one running flight returns both
 
-- [ ] 6A.6 Write a failing test with two concurrent closings of the same month and verify each flight ends with exactly one `applied_rates` row and both requests succeed
+- [x] 6A.6 Write a failing test with two concurrent closings of the same month and verify each flight ends with exactly one `applied_rates` row and both requests succeed
 - [x] 6A.7 Write failing tests for `opening_positions` on the rebate engine: empty gives results identical to the engine without it, and an opening of 90,000 € shifts a following flight of 30,000 € to a rebate of 5,500 €
 - [ ] 6A.8 Write a failing test with three flights of one counter asserting that the pending-close margin equals the margin frozen by closing the month, to the cent, and that closing and reading call the same domain function
 
