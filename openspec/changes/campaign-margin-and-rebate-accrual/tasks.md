@@ -48,8 +48,8 @@
 
 ## 5. Domain: Platform Rate
 
-- [ ] 5.1 Write failing tests for most-specific-first resolution across line, then agency, then campaign type, then system default (1.00 €/CPM read from data), and implement it
-- [ ] 5.2 Write a failing test asserting the resolved rate is frozen in the flight's `applied_rates` row at closing and that changing the default afterwards does not move a closed flight
+- [x] 5.1 Write failing tests for most-specific-first resolution across line, then agency, then campaign type, then system default (1.00 €/CPM read from data), and implement it
+- [ ] 5.2 Write a failing test asserting the resolved rate is frozen in the flight's `applied_rates` row at closing and that changing the default afterwards does not move a closed flight *(partial: the pure part is covered in `test_platform_rate.py` — resolution is a function over received values and its result is a frozen value; freezing in `applied_rates` at closing and the closed-flight check wait for 6A, so this stays unmarked)*
 
 ## 6. Backend: Persistence, Freezing and API
 

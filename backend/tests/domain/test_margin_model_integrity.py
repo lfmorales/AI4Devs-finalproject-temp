@@ -8,13 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.services import flight_margin, margin_totals
+from app.domain.services import flight_delivery, flight_margin, margin_totals, platform_rate
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.margin_totals import total_flights, total_lines
 from app.domain.value_objects import margin
 from app.domain.value_objects.margin import FlightEconomics
 
-MARGIN_MODULES = (margin, flight_margin, margin_totals)
+MARGIN_MODULES = (margin, flight_margin, margin_totals, flight_delivery, platform_rate)
 AS_OF = date(2026, 9, 10)
 
 
