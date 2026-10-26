@@ -118,3 +118,127 @@ def test_revenue_is_the_same_whatever_was_delivered(delivered: int):
     result = calculate_flight_margin(_flight(delivered_impressions=delivered), as_of=AFTER_AUGUST)
 
     assert result.revenue == Decimal("3631.01")
+
+
+SEPTEMBER_START = date(2026, 9, 1)
+SEPTEMBER_END = date(2026, 9, 30)
+
+
+def _september_flight(**overrides: object) -> FlightEconomics:
+    """A 30-day flight: 300,000 contracted at 5.00 € is 1,500.00 € in full, with a flat 20 % rebate of 300.00 €."""
+    values: dict[str, object] = {
+        "contracted_impressions": 300_000,
+        "sale_cpm": "5.00",
+        "delivered_impressions": 90_000,
+        "media_cost": "150.00",
+        "rebate_amount": "300.00",
+        "platform_rate": "1.00",
+        "flight_start": SEPTEMBER_START,
+        "flight_end": SEPTEMBER_END,
+    }
+    values.update(overrides)
+    return _flight(**values)  # type: ignore[arg-type]
+
+
+def test_a_running_flight_is_pro_rated_by_elapsed_days_of_its_window():
+    # Ten of thirty days have elapsed on September 10th:
+    #   revenue  1,500.00 x 10 / 30 = 500.00
+    #   rebate     300.00 x 10 / 30 = 100.00
+    #   media cost and platform cost come from what was delivered, so they are not pro-rated:
+    #   media cost 150.00; platform cost 90,000 / 1000 x 1.00 = 90.00
+    #   margin 500.00 - 150.00 - 100.00 - 90.00 = 160.00
+    result = calculate_flight_margin(_september_flight(), as_of=date(2026, 9, 10))
+
+    assert result.status is FlightStatus.RUNNING
+    assert result.revenue == Decimal("500.00")
+    assert result.rebate == Decimal("100.00")
+    assert result.media_cost == Decimal("150.00")
+    assert result.platform_cost == Decimal("90.00")
+    assert result.margin == Decimal("160.00")
+    assert result.provisional is True
+
+
+def test_a_running_flight_with_no_delivery_still_accrues_revenue():
+    result = calculate_flight_margin(
+        _september_flight(delivered_impressions=0, media_cost="0.00"), as_of=date(2026, 9, 10)
+    )
+
+    assert result.status is FlightStatus.RUNNING
+    assert result.revenue == Decimal("500.00")
+    assert result.platform_cost == Decimal("0.00")
+    assert result.margin == Decimal("400.00")
+    assert result.provisional is True
+
+
+@pytest.mark.parametrize("delivered", [0, 90_000, 400_000])
+def test_pro_rating_does_not_depend_on_what_was_delivered(delivered: int):
+    result = calculate_flight_margin(_september_flight(delivered_impressions=delivered), as_of=date(2026, 9, 10))
+
+    assert result.revenue == Decimal("500.00")
+    assert result.rebate == Decimal("100.00")
+
+
+def test_the_flight_is_closed_on_the_day_its_last_day_is_counted():
+    result = calculate_flight_margin(_september_flight(), as_of=SEPTEMBER_END)
+
+    assert result.status is FlightStatus.CLOSED
+    assert result.revenue == Decimal("1500.00")
+    assert result.provisional is False
+
+
+def test_the_day_before_the_end_is_still_running():
+    result = calculate_flight_margin(_september_flight(), as_of=date(2026, 9, 29))
+
+    assert result.status is FlightStatus.RUNNING
+    assert result.revenue == Decimal("1450.00")  # 1,500.00 x 29 / 30
+    assert result.provisional is True
+
+
+def test_the_first_day_of_a_flight_is_one_elapsed_day():
+    result = calculate_flight_margin(_september_flight(), as_of=SEPTEMBER_START)
+
+    assert result.status is FlightStatus.RUNNING
+    assert result.revenue == Decimal("50.00")  # 1,500.00 x 1 / 30
+
+
+def test_a_flight_that_has_not_started_has_no_margin():
+    result = calculate_flight_margin(
+        _september_flight(flight_start=date(2026, 10, 1), flight_end=date(2026, 10, 31)), as_of=SEPTEMBER_END
+    )
+
+    assert result.status is FlightStatus.NOT_STARTED
+    assert result.revenue is None
+    assert result.media_cost is None
+    assert result.rebate is None
+    assert result.platform_cost is None
+    assert result.margin is None
+    assert result.provisional is False
+    assert result.below_cost is False
+
+
+def test_a_pro_rated_amount_is_rounded_once_after_pro_rating():
+    # 1,001 impressions at 5.00 € is exactly 5.005 €. Over two days, one elapsed, the exact figure is 2.5025,
+    # which rounds to 2.50; rounding the full amount first (5.01) and halving it would give 2.51.
+    flight = _flight(
+        contracted_impressions=1001,
+        rebate_amount="5.005",
+        flight_start=date(2026, 9, 1),
+        flight_end=date(2026, 9, 2),
+        delivered_impressions=0,
+        media_cost="0.00",
+    )
+
+    result = calculate_flight_margin(flight, as_of=date(2026, 9, 1))
+
+    assert result.revenue == Decimal("2.50")
+    assert result.rebate == Decimal("2.50")
+
+
+def test_a_running_flight_also_rounds_each_amount_exactly_once(monkeypatch: pytest.MonkeyPatch):
+    calls: list[Decimal] = []
+    original = flight_margin.round_amount
+    monkeypatch.setattr(flight_margin, "round_amount", lambda amount: calls.append(amount) or original(amount))
+
+    calculate_flight_margin(_september_flight(), as_of=date(2026, 9, 10))
+
+    assert len(calls) == 4
