@@ -3,6 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import exists, func, select, text
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
 from app.domain.exceptions import SystemPlatformRateMissingError
@@ -162,10 +163,10 @@ class SqlAlchemyAppliedRateRepository(AppliedRateRepository):
             .join(CampaignLinePeriodRecord, CampaignLinePeriodRecord.id == AppliedRateRecord.campaign_line_period_id)
             .join(ChannelRecord, ChannelRecord.id == AppliedRateRecord.counter_channel_id)
             .where(AppliedRateRecord.counter_year == year)
-            .distinct(
+            .ext(postgresql.distinct_on(
                 AppliedRateRecord.counter_group_id, AppliedRateRecord.counter_agency_id,
                 AppliedRateRecord.counter_channel_id,
-            )
+            ))
             .order_by(
                 AppliedRateRecord.counter_group_id, AppliedRateRecord.counter_agency_id,
                 AppliedRateRecord.counter_channel_id,
