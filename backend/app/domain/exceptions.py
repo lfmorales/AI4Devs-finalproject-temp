@@ -144,3 +144,16 @@ class RebateRuleError(DomainError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+class SystemPlatformRateMissingError(DomainError):
+    """No system platform rate is stored, so a flight with no more specific rate cannot be priced."""
+
+
+class PreviousMonthOpenError(DomainError):
+    """A month cannot be closed while an earlier month of the same year has ended flights without frozen rates."""
+
+    def __init__(self, year: int, month: int) -> None:
+        super().__init__(f"{year}-{month:02d} is still open")
+        self.year = year
+        self.month = month
