@@ -116,3 +116,31 @@ class BracketBreakdown:
     charges: tuple[BracketCharge, ...]
     rebate: Decimal
     effective_rate: Decimal
+
+
+@dataclass(frozen=True)
+class CounterKey:
+    """The annual counter a flight accrues on. The agency is set only when an agency exception priced it."""
+
+    group_id: int
+    agency_id: int | None
+    channel: str
+    year: int
+
+
+@dataclass(frozen=True)
+class FlightRebate:
+    """The rebate of one flight, with the data `applied_rates` will freeze. Nothing is persisted here."""
+
+    flight_id: int
+    counter: CounterKey
+    step: LadderStep
+    agency_exception: bool
+    source_year: int | None
+    zero_reason: ZeroReason | None
+    schedule_id: int | None
+    effective_rate: Decimal
+    position_before: Decimal
+    position_after: Decimal
+    charges: tuple[BracketCharge, ...]
+    rebate: Decimal
