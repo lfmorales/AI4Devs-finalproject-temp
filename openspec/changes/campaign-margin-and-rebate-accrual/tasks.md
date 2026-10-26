@@ -81,7 +81,7 @@
 - [x] 6B.2 Write a failing test that changing a rebate schedule or a platform rate after a closing does not move the closed month through `GET /margin`
 - [x] 6B.3 Implement the `{"code","message"}` handler for validation errors under `/margin` only, with a test that campaign registration keeps `{"detail": ...}`, and map each rebate rule code to its own message (an empty table has its own code, `bracket_table_empty`)
 - [x] 6B.4 Implement `POST /margin/rebate-schedules` and `POST /margin/platform-rates`, `finance` only, the latter recording its author and time
-- [ ] 6B.5 Make the development seed give the test user `finance` in addition to `operations`, remove nothing, and seed one fictitious schedule and one fictitious rate (deferred: the loading of real schedules, 8.1)
+- [x] 6B.5 Make the development seed give the test user `finance` in addition to `operations`, remove nothing, and seed one fictitious schedule and one fictitious rate (deferred: the loading of real schedules, 8.1)
 - [x] 6B.6 Verify the route protection test, built from the registered routes, covers every route of this change with 401 and 403, and that an `operations` user receives no margin field
 - [ ] 6B.7 Write an end-to-end calculation test with the spec's examples: a closed month of 3,631.01 € revenue, 1,200.00 € media cost, 907.75 € rebate and 700.00 € platform cost gives a margin of 823.26 €
 
