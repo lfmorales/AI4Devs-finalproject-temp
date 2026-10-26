@@ -75,3 +75,11 @@ class MarginTotals:
     flights_counted: int
     below_cost_count: int
     not_started_count: int
+
+
+@dataclass(frozen=True)
+class WindowDelivery:
+    """What a line delivered inside one flight's window: the inputs of its media cost and platform cost."""
+
+    impressions: int
+    media_cost: Decimal

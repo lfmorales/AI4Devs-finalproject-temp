@@ -21,7 +21,7 @@
 - [x] 2.5 Write a failing test asserting a `Deal` line uses the identical model to a `Directo` line, and verify no channel-specific revenue branch exists
 - [x] 2.6 Write a failing test asserting exact decimal arithmetic across an accumulated year, then verify no float appears in the calculation path
 - [x] 2.8 Write failing tests that a flight never crosses a year (a line from 2026-12-15 to 2027-01-20 yields two flights, one per year, and none spans two months) and that a line with a closed flight and a running one sums both and is provisional; then verify they pass
-- [ ] 2.9 Write failing tests for the media cost of a flight as the sum of the line's deliveries between `flight_start` and `flight_end`, and for a delivery outside every flight counting nowhere; then implement it
+- [x] 2.9 Write failing tests for the media cost of a flight as the sum of the line's deliveries between `flight_start` and `flight_end`, and for a delivery outside every flight counting nowhere; then implement it
 - [x] 2.7 Write a failing test for a flight whose media cost exceeds its revenue, asserting the flight is flagged, its line and campaign count it, and no total changes, and implement the below-cost flag
 
 ## 3. Domain: Rebate Resolution Ladder
