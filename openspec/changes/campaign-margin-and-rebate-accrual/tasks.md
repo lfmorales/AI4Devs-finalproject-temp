@@ -83,7 +83,7 @@
 - [x] 6B.4 Implement `POST /margin/rebate-schedules` and `POST /margin/platform-rates`, `finance` only, the latter recording its author and time
 - [x] 6B.5 Make the development seed give the test user `finance` in addition to `operations`, remove nothing, and seed one fictitious schedule and one fictitious rate (deferred: the loading of real schedules, 8.1)
 - [x] 6B.6 Verify the route protection test, built from the registered routes, covers every route of this change with 401 and 403, and that an `operations` user receives no margin field
-- [ ] 6B.7 Write an end-to-end calculation test with the spec's examples: a closed month of 3,631.01 € revenue, 1,200.00 € media cost, 907.75 € rebate and 700.00 € platform cost gives a margin of 823.26 €
+- [x] 6B.7 Write an end-to-end calculation test with the spec's examples: a closed month of 3,631.01 € revenue, 1,200.00 € media cost, 907.75 € rebate and 700.00 € platform cost gives a margin of 823.26 €
 
 ## 7. Frontend: Margin and Roll-up Views
 
@@ -98,7 +98,7 @@
 ## 8. Data: Rebate Migration and Reconciliation
 
 - [ ] 8.1 ~~Normalise `extraprimas 2023/2024/2026.xlsx` into `rebate_schedules` with validity ranges, each rate as a single open bracket, and verify 2025 resolves through the ladder rather than a hardcoded label~~ **Deferred**: 2025 resolves through ladder step 7, which is deferred with 3.6; schedules are created through the application and the tests
-- [ ] 8.2 Seed the platform rate at the system default of 1.00 €/CPM as a `platform_rate_settings` row and verify no rate is hardcoded anywhere
+- [x] 8.2 Seed the platform rate at the system default of 1.00 €/CPM as a `platform_rate_settings` row and verify no rate is hardcoded anywhere
 - [ ] 8.3 ~~Recalculate a set of closed months and reconcile line by line against Qlik Sense~~ **Deferred**: the reconciliation needs the rebate tables loaded (8.1) and a recalculation of closed months, which is itself deferred
 - [ ] 8.4 ~~Classify every difference as a named known defect or an implementation error, and verify none is accepted as merely close enough~~ **Deferred**: the reconciliation needs the rebate tables loaded (8.1) and a recalculation of closed months, which is itself deferred
 - [ ] 8.5 ~~Produce the reconciliation summary for Finance and Business before any figure is published~~ **Deferred**: the reconciliation needs the rebate tables loaded (8.1) and a recalculation of closed months, which is itself deferred
