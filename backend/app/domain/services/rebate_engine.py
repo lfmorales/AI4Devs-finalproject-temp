@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date
 from decimal import Decimal
 
@@ -40,7 +40,10 @@ def _price(
 
 
 def calculate_rebates(
-    schedules: Sequence[RebateSchedule], flights: Sequence[RebateFlight], as_of: date
+    schedules: Sequence[RebateSchedule],
+    flights: Sequence[RebateFlight],
+    as_of: date,
+    opening_positions: Mapping[CounterKey, Decimal] | None = None,
 ) -> tuple[FlightRebate, ...]:
     """Price every started flight against its annual counter and return the results in application order.
 
@@ -49,6 +52,9 @@ def calculate_rebates(
     ties broken by flight id, so the result does not depend on the order of the input. A running flight reads
     the position after every closed flight of its counter, charges its full revenue from there, and does not
     advance the counter; the margin calculation pro-rates the rebate.
+
+    `opening_positions` is where a counter already stands, for a closing that must not price frozen flights
+    again; a counter absent from it opens at zero, and empty or None changes no result.
     """
     if len({flight.flight_id for flight in flights}) != len(flights):
         raise RebateRuleError("duplicate_flight_id", "a flight id appears twice")
@@ -57,7 +63,7 @@ def calculate_rebates(
     resolutions = {flight.flight_id: resolve_rebate_schedule(schedules, flight) for flight in started}
     counters = {flight.flight_id: _counter_key(flight, resolutions[flight.flight_id]) for flight in started}
 
-    positions: dict[CounterKey, Decimal] = {}
+    positions: dict[CounterKey, Decimal] = dict(opening_positions or {})
     results: dict[int, FlightRebate] = {}
     for flight in (f for f in started if f.flight_end <= as_of):
         counter = counters[flight.flight_id]
