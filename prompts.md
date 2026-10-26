@@ -1378,9 +1378,6 @@ Pruebas, test primero cuando sea posible: como jsdom no calcula diseño, añade 
 
 Commits pequeños con git add de rutas concretas: (1) variables, reinicio y tipografía; (2) estructura y navegación; (3) tablas; (4) formularios y botones; (5) etiquetas y avisos; (6) diálogos; (7) pantallas de inicio y de acceso; (8) los tests de la hoja. Un bloque se da por terminado solo cuando pasan npm run typecheck, vitest dos veces seguidas con la línea de resultado completa y docker compose build frontend. Pega la salida real, el git show --stat de todos los commits, la lista de componentes a los que hayas añadido una clase o un atributo y por qué, y una lista de qué comprobar a mano en el navegador.
 
-**Prompt 11**
-**Herramienta** Claude Code
-**Prompt**
 
 
 ### Ajustes humanos de los bloques siguientes (pendientes de colocar bajo su prompt)
@@ -1456,3 +1453,10 @@ Al recorrer la cola de excepciones con datos reales vi que, con unas 80 filas y 
 El informe de Claude Code daba 211 tests antes de un bloque de frontend, pero mi última cifra era 192 y no había habido trabajo de frontend entre medias. Un `git log` vacío de ese tramo confirmó que el 211 era un error de su informe, y los tests nuevos eran 108 y no 89. Desde entonces comparo cada cifra con la anterior.
 
 **Patrón común (ampliación).** En tres ocasiones el frontend dio un bloque por terminado con los tests en verde y un fallo visible en el navegador: el botón de acceso perdido, el diálogo que no era modal y la aplicación sin estilos. En los tres casos lo detecté yo probando con datos reales. Conclusión de diseño: los tests con `fetch` simulado y `jsdom` verifican la lógica, no el diseño ni el comportamiento del navegador.
+
+## Entrega 3 — Proyecto final
+### Change: campaign-margin-and-rebate-accrual
+**Prompt 1**
+**Herramienta** Claude Code
+**Prompt**
+
