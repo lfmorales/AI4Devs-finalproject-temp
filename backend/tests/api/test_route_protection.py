@@ -87,6 +87,7 @@ def test_the_routes_of_this_change_are_among_those_checked():
     assert ("/campaign-lines/unmapped", "GET") in checked
     assert ("/campaign-lines/{campaign_line_id}/dsp-mappings", "DELETE") in checked
     assert ("/ingestion-exceptions/{exception_id}/link", "POST") in checked
+    assert ("/margin/closings", "POST") in checked
 
 
 def test_there_are_routes_to_check():

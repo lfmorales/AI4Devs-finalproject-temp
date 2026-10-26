@@ -21,6 +21,7 @@ from app.application.services.dsp_mapping_service import DspMappingService
 from app.application.services.exception_linking_service import ExceptionLinkingService
 from app.application.services.ingestion_exception_service import IngestionExceptionService
 from app.application.services.line_mapping_removal_service import LineMappingRemovalService
+from app.application.services.margin_closing_service import MarginClosingService
 from app.config import get_settings
 from app.domain.exceptions import DspNotConfiguredError
 from app.domain.services.local_calendar import local_today, utc_now
@@ -48,6 +49,9 @@ from app.infrastructure.persistence.repositories.sqlalchemy_dsp_mapping_reposito
 )
 from app.infrastructure.persistence.repositories.sqlalchemy_line_mapping_removal_repository import (
     SqlAlchemyLineMappingRemovalRepository,
+)
+from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories import (
+    SqlAlchemyMarginClosingTransaction,
 )
 from app.infrastructure.persistence.repositories.sqlalchemy_user_repository import (
     SqlAlchemyUserRepository,
@@ -176,3 +180,14 @@ def get_campaign_status_service(
     today: Annotated[date, Depends(get_today)],
 ) -> CampaignStatusService:
     return CampaignStatusService(repository=SqlAlchemyCampaignStatusRepository(session), today=lambda: today)
+
+
+def get_margin_closing_service(
+    session: Annotated[Session, Depends(get_db_session)],
+    today: Annotated[date, Depends(get_today)],
+) -> MarginClosingService:
+    return MarginClosingService(
+        SqlAlchemyMarginClosingTransaction(session),
+        today=lambda: today,
+        now=lambda: datetime.now(UTC).replace(tzinfo=None),
+    )

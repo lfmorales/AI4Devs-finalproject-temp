@@ -5,7 +5,10 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from fastapi import FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +44,8 @@ from app.domain.exceptions import (
     InactiveUserError,
     InvalidIdentityTokenError,
     MissingRoleError,
+    PreviousMonthOpenError,
+    SystemPlatformRateMissingError,
     UnregisteredUserError,
 )
 from app.presentation.schemas.errors import ErrorResponse
@@ -124,6 +129,9 @@ _ERROR_MAPPINGS: dict[type[DomainError], _ErrorMapping] = {
     UnsupportedCurrencyError: _ErrorMapping(
         502, "dsp_response_unsupported", "The DSP reported data that cannot be processed"
     ),
+    SystemPlatformRateMissingError: _ErrorMapping(
+        500, "platform_rate_not_configured", "No system platform rate is configured"
+    ),
 }
 
 
@@ -149,7 +157,51 @@ async def _generic_error_handler(request: Request, exc: Exception) -> JSONRespon
     return JSONResponse(status_code=500, content=body.model_dump())
 
 
+async def _previous_month_open_handler(request: Request, error: Exception) -> JSONResponse:
+    """The one message that names a value: the month that blocks the closing, which is not sensitive."""
+    assert isinstance(error, PreviousMonthOpenError)
+    body = ErrorResponse(
+        code="previous_month_open",
+        message=f"An earlier month is still open: {error.year}-{error.month:02d}. Close it first.",
+    )
+    return JSONResponse(status_code=409, content=body.model_dump())
+
+
+def _is_margin_route(request: Request) -> bool:
+    """Whether the request is for a route under /margin, whatever prefix a proxy adds in front."""
+    path = request.scope["path"]
+    root_path = request.scope.get("root_path", "")
+    if root_path and path.startswith(root_path):
+        path = path[len(root_path):]
+    return path == "/margin" or path.startswith("/margin/")
+
+
+_HTTP_ERROR_CODES = {404: "not_found", 405: "method_not_allowed"}
+
+
+async def _validation_error_handler(request: Request, error: Exception) -> JSONResponse:
+    """Margin routes answer {"code","message"}; the older routes keep FastAPI's {"detail": ...}."""
+    assert isinstance(error, RequestValidationError)
+    if not _is_margin_route(request):
+        return await request_validation_exception_handler(request, error)
+    fields = sorted({".".join(str(part) for part in item["loc"][1:]) or str(item["loc"][0]) for item in error.errors()})
+    body = ErrorResponse(code="validation_error", message=f"The request is not valid: {', '.join(fields)}")
+    return JSONResponse(status_code=422, content=body.model_dump())
+
+
+async def _http_error_handler(request: Request, error: Exception) -> JSONResponse:
+    assert isinstance(error, StarletteHTTPException)
+    if not _is_margin_route(request):
+        return await http_exception_handler(request, error)
+    code = _HTTP_ERROR_CODES.get(error.status_code, "http_error")
+    body = ErrorResponse(code=code, message="The request cannot be served")
+    return JSONResponse(status_code=error.status_code, content=body.model_dump(), headers=error.headers)
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     for exception_type, mapping in _ERROR_MAPPINGS.items():
         app.add_exception_handler(exception_type, _handler_for(mapping))
+    app.add_exception_handler(PreviousMonthOpenError, _previous_month_open_handler)
+    app.add_exception_handler(RequestValidationError, _validation_error_handler)
+    app.add_exception_handler(StarletteHTTPException, _http_error_handler)
     app.add_exception_handler(Exception, _generic_error_handler)

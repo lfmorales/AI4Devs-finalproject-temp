@@ -305,3 +305,18 @@ def test_pending_close_figures_are_the_figures_closing_freezes(rolled_back_sessi
         assert margin_from_frozen == item.margin
         assert margin_from_frozen.margin == item.margin.margin
         assert row.position_before == item.rebate.position_before
+
+
+def test_changing_the_system_rate_after_closing_does_not_move_the_frozen_flight(rolled_back_session, user_id):
+    _august_lines(rolled_back_session, count=1)
+    _service(rolled_back_session).close_month(2026, 8, user_id)
+    frozen = _rows(rolled_back_session)[0]
+    assert frozen.platform_rate == Decimal("1.000000")
+
+    rolled_back_session.add(PlatformRateSettingRecord(level="system", rate_per_thousand=Decimal("2.50"), created_by=user_id))
+    rolled_back_session.flush()
+    _service(rolled_back_session, today=date(2026, 9, 30)).close_month(2026, 8, user_id)
+
+    rolled_back_session.refresh(frozen)
+    assert frozen.platform_rate == Decimal("1.000000")
+    assert len(_rows(rolled_back_session)) == 1

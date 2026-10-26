@@ -49,12 +49,12 @@
 ## 5. Domain: Platform Rate
 
 - [x] 5.1 Write failing tests for most-specific-first resolution across line, then agency, then campaign type, then system default (1.00 €/CPM read from data), and implement it
-- [ ] 5.2 Write a failing test asserting the resolved rate is frozen in the flight's `applied_rates` row at closing and that changing the default afterwards does not move a closed flight *(partial: the pure part is covered in `test_platform_rate.py` — resolution is a function over received values and its result is a frozen value; freezing in `applied_rates` at closing and the closed-flight check wait for 6A, so this stays unmarked)*
+- [x] 5.2 Write a failing test asserting the resolved rate is frozen in the flight's `applied_rates` row at closing and that changing the default afterwards does not move a closed flight *(partial: the pure part is covered in `test_platform_rate.py` — resolution is a function over received values and its result is a frozen value; freezing in `applied_rates` at closing and the closed-flight check wait for 6A, so this stays unmarked)*
 
 ## 6. Backend: Persistence, Freezing and API
 
 - [x] 6.1 Implement the SQLAlchemy repositories behind the domain interfaces (schedules, platform rates, applied rates, the margin read) and verify no module under `domain/` imports SQLAlchemy
-- [ ] 6.2 Implement `applied_rates` as append-only, one row per closed flight, and verify that closing an already closed month neither adds nor updates a row
+- [x] 6.2 Implement `applied_rates` as append-only, one row per closed flight, and verify that closing an already closed month neither adds nor updates a row
 - [ ] 6.3 Write an API test asserting that editing a rebate master after the month was closed leaves the margin of its flights unchanged
 - [ ] 6.4 Implement the margin endpoint aggregating in the database, joining `daily_deliveries` to the flight by date range, reading closed flights from `applied_rates` and calculating the others on the fly, and verify no delivery row reaches the application. The period, agency, advertiser and campaign-type roll-up endpoints are **deferred** with the roll-up view (7.4)
 - [ ] 6.5 Verify the total of `GET /margin` at campaign and report level is the sum of its detail, asserted by a test (the dimension roll-ups are deferred with 6.4)
@@ -65,10 +65,10 @@
 
 ## 6A. Backend: Monthly Closing
 
-- [ ] 6A.1 Write failing API tests for `POST /margin/closings` (year and month): it creates one `applied_rates` row per flight that ended in the month, a flight still running gets none, a month with no ended flights answers 200 with zero closed, and the response reports created and already-closed counts
-- [ ] 6A.2 Write failing tests that closing the same month twice neither creates nor updates a row, that closing while an earlier month of the same year has ended flights without a row is rejected with 409 `previous_month_open` naming the blocking month and writes nothing, and that a failure forced halfway through a closing leaves no row
-- [ ] 6A.3 Implement the closing: pass the month's flights to the engine ordered by `flight_start` then id, with opening positions from the latest frozen rows, resolve the platform rate and write the rows in one transaction under an advisory lock; verify 6A.1 and 6A.2 pass
-- [ ] 6A.4 Implement `require_roles("finance")` on the closing endpoint and write tests asserting 403 for `business` or `operations` without `finance` and 401 for a missing or invalid token
+- [x] 6A.1 Write failing API tests for `POST /margin/closings` (year and month): it creates one `applied_rates` row per flight that ended in the month, a flight still running gets none, a month with no ended flights answers 200 with zero closed, and the response reports created and already-closed counts
+- [x] 6A.2 Write failing tests that closing the same month twice neither creates nor updates a row, that closing while an earlier month of the same year has ended flights without a row is rejected with 409 `previous_month_open` naming the blocking month and writes nothing, and that a failure forced halfway through a closing leaves no row
+- [x] 6A.3 Implement the closing: pass the month's flights to the engine ordered by `flight_start` then id, with opening positions from the latest frozen rows, resolve the platform rate and write the rows in one transaction under an advisory lock; verify 6A.1 and 6A.2 pass
+- [x] 6A.4 Implement `require_roles("finance")` on the closing endpoint and write tests asserting 403 for `business` or `operations` without `finance` and 401 for a missing or invalid token
 - [ ] 6A.5 Write failing tests that the read of a closed flight returns the frozen row, that the read of a running or pending-close flight writes nothing and does not advance the counter, and that a line with one closed and one running flight returns both
 
 - [x] 6A.6 Write a failing test with two concurrent closings of the same month and verify each flight ends with exactly one `applied_rates` row and both requests succeed
