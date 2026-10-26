@@ -8,13 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.services import flight_delivery, flight_margin, margin_totals, platform_rate
+from app.domain.services import flight_delivery, flight_margin, margin_totals, platform_rate, priced_flights
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.margin_totals import total_flights, total_lines
 from app.domain.value_objects import margin
 from app.domain.value_objects.margin import FlightEconomics
 
 MARGIN_MODULES = (margin, flight_margin, margin_totals, flight_delivery, platform_rate)
+# The pricing function carries the channel as data for the rebate rules; it never branches on it.
+FLOAT_FREE_MODULES = (*MARGIN_MODULES, priced_flights)
 AS_OF = date(2026, 9, 10)
 
 
@@ -72,7 +74,7 @@ def test_a_deal_flight_and_a_directo_flight_with_the_same_numbers_have_the_same_
     assert deal.revenue == Decimal("3631.01")
 
 
-@pytest.mark.parametrize("module", MARGIN_MODULES)
+@pytest.mark.parametrize("module", FLOAT_FREE_MODULES)
 def test_no_margin_module_uses_float(module: object):
     tree = ast.parse(_source(module))
 

@@ -12,6 +12,11 @@ def round_amount(amount: Decimal) -> Decimal:
     return amount.quantize(_CENT, rounding=ROUND_HALF_UP)
 
 
+def flight_revenue(contracted_impressions: int, sale_cpm: Decimal) -> Decimal:
+    """The revenue of a whole flight: contracted volume times the line's CPM, rounded once."""
+    return round_amount(Decimal(contracted_impressions) / _THOUSAND * sale_cpm)
+
+
 def flight_status(flight: FlightEconomics, as_of: date) -> FlightStatus:
     """`as_of` is D-1, the last day counted: a flight ending on it is closed, one starting after it has not begun."""
     if flight.flight_start > as_of:
