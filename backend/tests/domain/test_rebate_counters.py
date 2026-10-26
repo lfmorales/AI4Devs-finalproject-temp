@@ -201,3 +201,19 @@ def test_a_flight_on_the_last_day_of_the_year_belongs_to_the_old_year():
     (result,) = calculate_rebates([group_schedule()], [last_day], date(2027, 1, 5))
 
     assert result.counter.year == 2026
+
+
+def test_a_flight_without_a_schedule_still_advances_its_groups_counter():
+    # No schedule is in force in March; one starts on 1 April. Both flights are in the same group counter.
+    starts_in_april = RebateSchedule(1, GROUP, None, None, None, date(2026, 4, 1), None, TWO_BRACKETS)
+    without_schedule = month_flight(1, 3, "90000")
+    with_schedule = month_flight(2, 4, "30000")
+
+    first, second = calculate_rebates([starts_in_april], [without_schedule, with_schedule], AS_OF)
+
+    assert first.step is LadderStep.EXPLICIT_ZERO
+    assert first.rebate == Decimal(0)
+    assert first.counter == second.counter == CounterKey(GROUP, None, "Directo", 2026)
+    assert first.position_after == Decimal(90_000)
+    assert second.position_before == Decimal(90_000)
+    assert second.rebate == Decimal(5_500)  # 10,000 at 15 % and 20,000 at 20 %
