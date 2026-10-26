@@ -3,6 +3,8 @@ from datetime import date
 from decimal import Decimal
 from enum import IntEnum, StrEnum
 
+from app.domain.exceptions import RebateRuleError
+
 
 class LadderStep(IntEnum):
     """The step of the resolution ladder that produced a schedule. Step 7, the previous table, is deferred."""
@@ -31,6 +33,26 @@ class Bracket:
     upper: Decimal | None
     rate: Decimal
 
+    def __post_init__(self) -> None:
+        for name in ("lower", "upper", "rate"):
+            value = getattr(self, name)
+            if value is not None and not isinstance(value, Decimal):
+                raise TypeError(f"{name} must be a Decimal, not {type(value).__name__}")
+
+
+def validate_bracket_table(brackets: tuple[Bracket, ...]) -> None:
+    """A table starts at 0, each bracket begins where the previous ends, and only the last is open."""
+    if not brackets or brackets[0].lower != 0:
+        raise RebateRuleError("bracket_table_must_start_at_zero", "the first bracket must start at 0")
+    for previous, bracket in zip(brackets, brackets[1:]):
+        if previous.upper is None or previous.upper != bracket.lower:
+            raise RebateRuleError("bracket_table_not_contiguous", "each bracket must begin where the previous one ends")
+    for bracket in brackets:
+        if bracket.upper is not None and bracket.upper <= bracket.lower:
+            raise RebateRuleError("bracket_table_not_contiguous", "a bracket's upper threshold must exceed its lower")
+    if brackets[-1].upper is not None:
+        raise RebateRuleError("last_bracket_must_be_open", "the last bracket must have no upper threshold")
+
 
 @dataclass(frozen=True)
 class RebateSchedule:
@@ -45,6 +67,9 @@ class RebateSchedule:
     valid_from: date
     valid_to: date | None
     brackets: tuple[Bracket, ...]
+
+    def __post_init__(self) -> None:
+        validate_bracket_table(self.brackets)
 
     def in_force_on(self, day: date) -> bool:
         return self.valid_from <= day and (self.valid_to is None or day <= self.valid_to)
@@ -71,3 +96,23 @@ class ResolvedRebate:
     agency_exception: bool
     source_year: int | None
     zero_reason: ZeroReason | None
+
+
+@dataclass(frozen=True)
+class BracketCharge:
+    """The part of a flight's revenue that fell in one bracket, and the rebate it accrued."""
+
+    lower: Decimal
+    upper: Decimal | None
+    rate: Decimal
+    amount: Decimal
+    rebate: Decimal
+
+
+@dataclass(frozen=True)
+class BracketBreakdown:
+    """The exact rebate of a flight, with the charge of each bracket it touched. Nothing is rounded."""
+
+    charges: tuple[BracketCharge, ...]
+    rebate: Decimal
+    effective_rate: Decimal
