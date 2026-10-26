@@ -28,7 +28,7 @@
 
 - [x] 3.1 Write failing tests for each implemented ladder step (1 to 6 and 8, with the reference date `flight_start`), asserting the step that produced the rate is recorded and that the source year is the `valid_from` year of the matched schedule
 - [x] 3.2 Implement the ladder as an ordered table of match keys rather than a conditional chain, and verify the tests from 3.1 pass
-- [ ] 3.3 Write failing tests asserting an agency exception wins over its group's schedule, and that scope narrows before it widens
+- [x] 3.3 Write failing tests asserting an agency exception wins over its group's schedule, and that scope narrows before it widens
 - [ ] 3.4 Write failing tests asserting that a flight whose group has no schedule resolves to an explicit zero at step 8 carrying its reason (`no_schedule`, or `no_schedule_for_year` when no schedule of any group is in force on `flight_start`), distinguishable from a negotiated zero that resolves at steps 1 to 6
 - [ ] 3.5 ~~Write a failing test asserting two scopes priced differently never resolve to the mean of the two~~ **Deferred**: the rebate tables are not loaded in this cut; the ladder keys on scope at steps 1 and 4 and never blends
 - [ ] 3.6 ~~Write a failing test asserting a year with no schedule inherits the previous one and the result records it as inherited~~ **Deferred**: it implements ladder step 7 (the most recent earlier table), which waits for the migration of the rebate tables (8.1); until then a missing schedule falls from step 6 to the explicit 0 % of step 8
