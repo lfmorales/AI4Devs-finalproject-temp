@@ -42,7 +42,9 @@ class Bracket:
 
 def validate_bracket_table(brackets: tuple[Bracket, ...]) -> None:
     """A table starts at 0, each bracket begins where the previous ends, and only the last is open."""
-    if not brackets or brackets[0].lower != 0:
+    if not brackets:
+        raise RebateRuleError("bracket_table_empty", "a bracket table needs at least one bracket")
+    if brackets[0].lower != 0:
         raise RebateRuleError("bracket_table_must_start_at_zero", "the first bracket must start at 0")
     for previous, bracket in zip(brackets, brackets[1:]):
         if previous.upper is None or previous.upper != bracket.lower:

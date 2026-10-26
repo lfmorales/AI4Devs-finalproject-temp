@@ -79,7 +79,7 @@
 
 - [x] 6B.1 Write failing API tests for `GET /margin`: closed, running provisional, pending close, a not-started flight absent, a line with mixed states, the year, month and campaign filters, 404 `campaign_not_found`, inactive campaigns included, decimal-string amounts, no float anywhere, the below-cost counts, and that the read writes nothing; then implement it
 - [x] 6B.2 Write a failing test that changing a rebate schedule or a platform rate after a closing does not move the closed month through `GET /margin`
-- [ ] 6B.3 Implement the `{"code","message"}` handler for validation errors under `/margin` only, with a test that campaign registration keeps `{"detail": ...}`, and map each rebate rule code to its own message (an empty table has its own code, `bracket_table_empty`)
+- [x] 6B.3 Implement the `{"code","message"}` handler for validation errors under `/margin` only, with a test that campaign registration keeps `{"detail": ...}`, and map each rebate rule code to its own message (an empty table has its own code, `bracket_table_empty`)
 - [ ] 6B.4 Implement `POST /margin/rebate-schedules` and `POST /margin/platform-rates`, `finance` only, the latter recording its author and time
 - [ ] 6B.5 Make the development seed give the test user `finance` in addition to `operations`, remove nothing, and seed one fictitious schedule and one fictitious rate (deferred: the loading of real schedules, 8.1)
 - [ ] 6B.6 Verify the route protection test, built from the registered routes, covers every route of this change with 401 and 403, and that an `operations` user receives no margin field

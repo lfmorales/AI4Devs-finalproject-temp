@@ -72,8 +72,8 @@ def test_an_open_bracket_in_the_middle_is_rejected():
     assert code == "bracket_table_not_contiguous"
 
 
-def test_an_empty_table_is_rejected():
-    assert _rejected() == "bracket_table_must_start_at_zero"
+def test_an_empty_table_is_rejected_with_its_own_code():
+    assert _rejected() == "bracket_table_empty"
 
 
 def test_a_bracket_with_an_upper_not_above_its_lower_is_rejected():

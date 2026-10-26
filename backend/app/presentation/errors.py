@@ -46,6 +46,7 @@ from app.domain.exceptions import (
     InvalidIdentityTokenError,
     MissingRoleError,
     PreviousMonthOpenError,
+    RebateRuleError,
     SystemPlatformRateMissingError,
     UnregisteredUserError,
 )
@@ -169,6 +170,26 @@ async def _previous_month_open_handler(request: Request, error: Exception) -> JS
     return JSONResponse(status_code=409, content=body.model_dump())
 
 
+# Each rebate rule has its own status and message; the message never carries the detail of the failure.
+_REBATE_RULE_ERRORS: dict[str, tuple[int, str]] = {
+    "bracket_table_empty": (422, "A bracket table needs at least one bracket"),
+    "bracket_table_must_start_at_zero": (422, "The first bracket of a table must start at 0"),
+    "bracket_table_not_contiguous": (422, "Each bracket must begin exactly where the previous one ends"),
+    "last_bracket_must_be_open": (422, "The last bracket of a table must have no upper threshold"),
+    "overlapping_schedules": (409, "More than one schedule matches the flight at the same step on its start date"),
+    "schedule_overlaps_existing": (409, "Another schedule with the same key is in force during part of this validity"),
+    "reference_not_found": (422, "The group, agency or channel of the request does not exist"),
+    "revenue_must_not_be_negative": (422, "Revenue and counter positions must not be negative"),
+    "duplicate_flight_id": (422, "A flight appears more than once in the request"),
+}
+
+
+async def _rebate_rule_handler(request: Request, error: Exception) -> JSONResponse:
+    assert isinstance(error, RebateRuleError)
+    status_code, message = _REBATE_RULE_ERRORS.get(error.code, (422, "A rebate rule was broken"))
+    return JSONResponse(status_code=status_code, content=ErrorResponse(code=error.code, message=message).model_dump())
+
+
 def _is_margin_route(request: Request) -> bool:
     """Whether the request is for a route under /margin, whatever prefix a proxy adds in front."""
     path = request.scope["path"]
@@ -204,6 +225,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     for exception_type, mapping in _ERROR_MAPPINGS.items():
         app.add_exception_handler(exception_type, _handler_for(mapping))
     app.add_exception_handler(PreviousMonthOpenError, _previous_month_open_handler)
+    app.add_exception_handler(RebateRuleError, _rebate_rule_handler)
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
     app.add_exception_handler(StarletteHTTPException, _http_error_handler)
     app.add_exception_handler(Exception, _generic_error_handler)
