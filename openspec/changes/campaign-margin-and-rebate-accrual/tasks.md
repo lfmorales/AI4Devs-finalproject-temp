@@ -55,7 +55,7 @@
 
 - [x] 6.1 Implement the SQLAlchemy repositories behind the domain interfaces (schedules, platform rates, applied rates, the margin read) and verify no module under `domain/` imports SQLAlchemy
 - [x] 6.2 Implement `applied_rates` as append-only, one row per closed flight, and verify that closing an already closed month neither adds nor updates a row
-- [ ] 6.3 Write an API test asserting that editing a rebate master after the month was closed leaves the margin of its flights unchanged
+- [x] 6.3 Write an API test asserting that editing a rebate master after the month was closed leaves the margin of its flights unchanged
 - [x] 6.4 Implement the margin endpoint aggregating in the database, joining `daily_deliveries` to the flight by date range, reading closed flights from `applied_rates` and calculating the others on the fly, and verify no delivery row reaches the application. The period, agency, advertiser and campaign-type roll-up endpoints are **deferred** with the roll-up view (7.4)
 - [x] 6.5 Verify the total of `GET /margin` at campaign and report level is the sum of its detail, asserted by a test (the dimension roll-ups are deferred with 6.4)
 - [ ] 6.6 ~~Implement Excel and CSV export and verify the exported figures match those returned by the API~~ **Deferred**: no view consumes an export in this cut and the roll-up view (7.4) is deferred
@@ -69,16 +69,16 @@
 - [x] 6A.2 Write failing tests that closing the same month twice neither creates nor updates a row, that closing while an earlier month of the same year has ended flights without a row is rejected with 409 `previous_month_open` naming the blocking month and writes nothing, and that a failure forced halfway through a closing leaves no row
 - [x] 6A.3 Implement the closing: pass the month's flights to the engine ordered by `flight_start` then id, with opening positions from the latest frozen rows, resolve the platform rate and write the rows in one transaction under an advisory lock; verify 6A.1 and 6A.2 pass
 - [x] 6A.4 Implement `require_roles("finance")` on the closing endpoint and write tests asserting 403 for `business` or `operations` without `finance` and 401 for a missing or invalid token
-- [ ] 6A.5 Write failing tests that the read of a closed flight returns the frozen row, that the read of a running or pending-close flight writes nothing and does not advance the counter, and that a line with one closed and one running flight returns both
+- [x] 6A.5 Write failing tests that the read of a closed flight returns the frozen row, that the read of a running or pending-close flight writes nothing and does not advance the counter, and that a line with one closed and one running flight returns both
 
 - [x] 6A.6 Write a failing test with two concurrent closings of the same month and verify each flight ends with exactly one `applied_rates` row and both requests succeed
 - [x] 6A.7 Write failing tests for `opening_positions` on the rebate engine: empty gives results identical to the engine without it, and an opening of 90,000 € shifts a following flight of 30,000 € to a rebate of 5,500 €
-- [ ] 6A.8 Write a failing test with three flights of one counter asserting that the pending-close margin equals the margin frozen by closing the month, to the cent, and that closing and reading call the same domain function
+- [x] 6A.8 Write a failing test with three flights of one counter asserting that the pending-close margin equals the margin frozen by closing the month, to the cent, and that closing and reading call the same domain function
 
 ## 6B. Backend: Margin Read, Masters and Roles
 
 - [x] 6B.1 Write failing API tests for `GET /margin`: closed, running provisional, pending close, a not-started flight absent, a line with mixed states, the year, month and campaign filters, 404 `campaign_not_found`, inactive campaigns included, decimal-string amounts, no float anywhere, the below-cost counts, and that the read writes nothing; then implement it
-- [ ] 6B.2 Write a failing test that changing a rebate schedule or a platform rate after a closing does not move the closed month through `GET /margin`
+- [x] 6B.2 Write a failing test that changing a rebate schedule or a platform rate after a closing does not move the closed month through `GET /margin`
 - [ ] 6B.3 Implement the `{"code","message"}` handler for validation errors under `/margin` only, with a test that campaign registration keeps `{"detail": ...}`, and map each rebate rule code to its own message
 - [ ] 6B.4 Implement `POST /margin/rebate-schedules` and `POST /margin/platform-rates`, `finance` only, the latter recording its author and time
 - [ ] 6B.5 Make the development seed give the test user `finance` in addition to `operations`, remove nothing, and seed one fictitious schedule and one fictitious rate (deferred: the loading of real schedules, 8.1)
