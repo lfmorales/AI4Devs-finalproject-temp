@@ -4,9 +4,11 @@ The annual accumulation the brackets are measured against: which counter a fligh
 
 ## ADDED Requirements
 
-### Requirement: Volume accumulates per group, channel and year
+### Requirement: Volume accumulates per counter, channel and year
 
-The system SHALL accumulate annual revenue against the holding group, per channel, per the calendar year of `flight_start`, and SHALL keep each channel's counter independent.
+The system SHALL accumulate annual revenue against a counter keyed on holding group, agency or none, channel and the calendar year of `flight_start`, and SHALL keep each channel's counter independent. The agency slot is filled only when the schedule that priced the flight is an agency exception, so that a flight accrues on the counter of the schedule that priced it. The key is derived from the resolved schedule; no state outside the inputs is read.
+
+Platform type, as `rebate-schedule` calls the key of a schedule, and channel are the same value: the channel of the campaign line.
 
 #### Scenario: Channels do not help each other reach a bracket
 - **WHEN** an agency group spends in two channels
@@ -16,6 +18,15 @@ The system SHALL accumulate annual revenue against the holding group, per channe
 #### Scenario: One group can sit in several brackets at once
 - **WHEN** a group's channels have accumulated different revenue
 - **THEN** each channel resolves to its own bracket independently
+
+#### Scenario: An agency exception accrues on the agency's own counter
+- **WHEN** a flight is priced by an agency exception
+- **THEN** its revenue advances the counter of that agency, channel and year
+- **AND** it does not advance the counter of the agency's group
+
+#### Scenario: An exception without a channel has one counter per channel
+- **WHEN** an agency exception covers every channel and the agency has flights in two channels
+- **THEN** each channel advances its own counter of that agency
 
 #### Scenario: Flights never cross years
 - **WHEN** a flight is assigned to a counter
@@ -36,9 +47,25 @@ The system SHALL apply the closed flights of a counter in chronological order of
 - **THEN** each portion accrues at its own bracket's rate
 - **AND** the flight's effective rate is the blend
 
+#### Scenario: The order of the input does not matter
+- **WHEN** the same closed flights are given in any order
+- **THEN** the positions and rebates are identical
+
 #### Scenario: Ties are broken by id
 - **WHEN** two flights of the same counter have the same `flight_start`
 - **THEN** the one with the lower id is applied first
+
+### Requirement: A running flight reads the counter without advancing it
+
+The system SHALL compute the rebate of a running flight on its full revenue, starting from the position given by all the closed flights of its counter, and SHALL NOT advance the counter; the margin calculation then pro-rates that rebate by elapsed days. A closed flight read before the month is closed takes its position from the closed flights only, which can differ from the position it will be frozen with when a running flight of the same counter started earlier; this is a documented limitation.
+
+#### Scenario: A running flight does not advance the counter
+- **WHEN** a running flight and a later closed flight belong to the same counter
+- **THEN** the closed flight's position does not include the running flight's revenue
+
+#### Scenario: The pro-rated rebate is the fraction of the full rebate
+- **WHEN** a running flight's full rebate is 300.00 € and 10 of its 30 days have elapsed
+- **THEN** the margin calculation pro-rates it to 100.00 €, the same fraction of the full rebate
 
 ### Requirement: Closing a month freezes the rates of its flights
 
@@ -97,7 +124,7 @@ The system SHALL mark any running flight, and any total that includes one, as an
 
 ### Requirement: Restatement and replay are not part of this cut
 
-The system SHALL, in this cut, leave a closed flight untouched when a schedule changes, when a campaign is added, revised or removed with an earlier date, or when an agency exception is created or removed. Restating the year, replaying a counter and recalculating a closed month on purpose are **deferred** (tasks 4.6 to 4.10).
+The system SHALL, in this cut, leave a closed flight untouched when a schedule changes, when a campaign is added, revised or removed with an earlier date, or when an agency exception is created or removed. Restating the year, replaying a counter and recalculating a closed month on purpose are **deferred** (tasks 4.6 to 4.10), and so are the restatement of counters already frozen when an exception is created or removed mid-year and the tests of sibling agencies (tasks 4.4 and 4.8).
 
 #### Scenario: A schedule change after closing does not restate
 - **WHEN** a schedule changes in May after January to April were closed
