@@ -50,5 +50,5 @@ def calculate_flight_margin(flight: FlightEconomics, as_of: date) -> FlightMargi
         platform_cost=platform_cost,
         margin=revenue - media_cost - rebate - platform_cost,
         provisional=status is FlightStatus.RUNNING,
-        below_cost=False,
+        below_cost=media_cost > revenue,
     )

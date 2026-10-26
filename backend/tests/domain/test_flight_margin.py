@@ -242,3 +242,37 @@ def test_a_running_flight_also_rounds_each_amount_exactly_once(monkeypatch: pyte
     calculate_flight_margin(_september_flight(), as_of=date(2026, 9, 10))
 
     assert len(calls) == 4
+
+
+def test_a_flight_whose_media_cost_exceeds_its_revenue_is_below_cost():
+    result = calculate_flight_margin(_flight(media_cost="4000.00", rebate_amount="0"), as_of=AFTER_AUGUST)
+
+    assert result.below_cost is True
+    assert result.margin == Decimal("3631.01") - Decimal("4000.00") - Decimal("700.00")
+
+
+def test_media_cost_equal_to_revenue_is_not_below_cost():
+    result = calculate_flight_margin(_flight(media_cost="3631.01"), as_of=AFTER_AUGUST)
+
+    assert result.below_cost is False
+
+
+def test_below_cost_compares_the_rounded_amounts():
+    # Revenue 3,631.01; a media cost of 3,631.014 rounds to 3,631.01, so it does not exceed it.
+    result = calculate_flight_margin(_flight(media_cost="3631.014"), as_of=AFTER_AUGUST)
+
+    assert result.below_cost is False
+
+
+def test_a_flight_can_be_loss_making_without_being_below_cost():
+    # Media cost under revenue, but the rebate and the platform cost take the margin negative.
+    result = calculate_flight_margin(_flight(media_cost="2100.00"), as_of=AFTER_AUGUST)
+
+    assert result.margin < 0
+    assert result.below_cost is False
+
+
+def test_a_running_flight_can_be_below_cost():
+    result = calculate_flight_margin(_september_flight(media_cost="900.00"), as_of=date(2026, 9, 10))
+
+    assert result.below_cost is True
