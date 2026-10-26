@@ -303,6 +303,18 @@ The system SHALL expose `GET /api/dsp-catalog` to the `operations` role, with th
 
 The system SHALL expose `GET /api/campaign-lines/unmapped` to the `operations` role, listing the lines with no DSP mapping with their id, campaign name, line number, dates and DSP.
 
+#### Scenario: A line without a mapping is listed
+- **WHEN** operations requests the unmapped lines and a line has no DSP mapping
+- **THEN** the line appears with its campaign name, line number, dates and DSP
+
+#### Scenario: A mapped line is not listed
+- **WHEN** a line has a DSP mapping, validated or not
+- **THEN** it does not appear in the list
+
+#### Scenario: Listing requires the operations role
+- **WHEN** a user without the `operations` role requests the unmapped lines
+- **THEN** the request is rejected as forbidden
+
 ### Requirement: An exception is linked to a campaign line
 
 The system SHALL expose `POST /api/ingestion-exceptions/{id}/link` with `{"campaign_line_id": N}`, which in one transaction creates a validated mapping from the pair of an `unmatched_delivery` exception to that line and resolves the exception with the note `linked to line N`. The mapping is validated because the exception proves the pair exists in Adform; the pair need not be in the catalogue and Adform is not asked. The retained delivery SHALL NOT move to the daily deliveries: the seven-day window will bring it. The errors are 404 `exception_not_found` and `line_not_found`, and 409 `exception_already_resolved`, `mapping_pair_taken` and `exception_not_linkable` (any type other than `unmatched_delivery`). The line must run on the DSP of the exception's pair; otherwise the answer is 422 `line_dsp_mismatch`, because a mapping to another DSP's line would never be ingested. The response carries the mapping, the resolved exception and `needs_history_load`. Nothing is stored when any error occurs.
@@ -323,9 +335,38 @@ The system SHALL expose `POST /api/ingestion-exceptions/{id}/link` with `{"campa
 
 The system SHALL expose `DELETE /api/campaign-lines/{id}/dsp-mappings`. When the line has exactly one mapping, it deletes the mapping and the line's ingested delivery in one transaction and returns how many days of delivery it removes; with several mappings it answers 409 `ambiguous_mapping`; with none, 404. The delivery of a line only comes from its mapping while the API is the only ingestion route; this assumption must be revisited when the manual upload exists. Reopening the exception is out of scope: the delivery reappears as unmatched at the next ingestion.
 
+#### Scenario: The only mapping is removed with its delivery
+- **WHEN** a line with exactly one mapping is unlinked
+- **THEN** the mapping and the line's ingested delivery are deleted in one transaction
+- **AND** the response carries the number of days of delivery removed
+
+#### Scenario: Several mappings are ambiguous
+- **WHEN** a line with several mappings is unlinked
+- **THEN** the answer is 409 `ambiguous_mapping` and nothing is deleted
+
+#### Scenario: A line without a mapping is not found
+- **WHEN** a line with no mapping is unlinked
+- **THEN** the answer is 404 `mapping_not_found`
+
+#### Scenario: An unknown line is not found
+- **WHEN** a line that does not exist is unlinked
+- **THEN** the answer is 404 `line_not_found`
+
 ### Requirement: Mapping responses warn about idle pairs and missing history
 
 The response of the mapping creation SHALL include `last_impressions_date` (optional, null when the pair is not in the catalogue) and, with that of the link, `needs_history_load`: true when the mapped line started before the start of the normal window (today minus 7 days, in the Madrid zone). A line starting exactly on that day does not need it.
+
+#### Scenario: A catalogue pair without impressions has no impressions date
+- **WHEN** a mapping is created for a pair that is in the catalogue and never delivered impressions
+- **THEN** `last_impressions_date` is null
+
+#### Scenario: A line that started before the start of the window needs a history load
+- **WHEN** a mapped line started before today minus 7 days
+- **THEN** `needs_history_load` is true
+
+#### Scenario: A line that started exactly at the limit does not
+- **WHEN** a mapped line started exactly on today minus 7 days
+- **THEN** `needs_history_load` is false
 
 ### Requirement: A custom range can be loaded
 
