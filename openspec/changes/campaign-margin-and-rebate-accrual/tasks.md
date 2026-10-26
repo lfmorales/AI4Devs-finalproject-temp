@@ -14,8 +14,8 @@
 
 ## 2. Domain: Margin Calculation (no database, no HTTP)
 
-- [ ] 2.1 Write failing tests for the closed-flight margin using the worked example — 726,202 contracted impressions at 5.00 € giving revenue 3,631.01 €, media cost 1,200.00 € (a placeholder), rebate 907.75 € (25 % of revenue, from 907.7525 rounded half up), platform cost 700.00 € (700,000 delivered), margin 823.26 € — and verify it fails
-- [ ] 2.2 Implement the flight margin in the domain layer, with each amount rounded to 2 decimals half up before the subtraction and line and campaign totals as exact sums of their flights, and verify the tests from 2.1 pass with no database involved
+- [x] 2.1 Write failing tests for the closed-flight margin using the worked example — 726,202 contracted impressions at 5.00 € giving revenue 3,631.01 €, media cost 1,200.00 € (a placeholder), rebate 907.75 € (25 % of revenue, from 907.7525 rounded half up), platform cost 700.00 € (700,000 delivered), margin 823.26 € — and verify it fails
+- [x] 2.2 Implement the flight margin in the domain layer, with each amount rounded to 2 decimals half up before the subtraction and line and campaign totals as exact sums of their flights, and verify the tests from 2.1 pass with no database involved
 - [ ] 2.3 Write a failing test asserting a flight's revenue uses its contracted volume when delivery falls short (726,202 contracted, 700,000 delivered, revenue still 3,631.01 €), then verify the implementation satisfies it
 - [ ] 2.4 Write failing tests for the running-flight pro-rating on the flight's own window — the 30-day flight with 10 elapsed days (revenue 500.00 €, rebate 100.00 €, platform 90.00 €, margin 160.00 €), a flight with zero delivery still accruing revenue, and the date of the last delivery having no effect — and implement it, asserting the result is provisional and nothing is written
 - [ ] 2.5 Write a failing test asserting a `Deal` line uses the identical model to a `Directo` line, and verify no channel-specific revenue branch exists
