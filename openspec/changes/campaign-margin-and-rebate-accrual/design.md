@@ -44,7 +44,7 @@ Two facts shape the design. The rebate is a **tiered annual accrual attributed c
 
 **Platform type and channel are one value.** `rebate-schedule` keys a schedule on "platform type" (`docs/product-description.md` §5.9) and `rebate-accrual` keys a counter on "channel"; both are the channel of the campaign line (§5.10). The domain uses the word `channel` in both keys.
 
-**Bracket tables are validated, half-open and end open.** The first bracket starts at 0, brackets are contiguous and the last has no upper threshold; each bracket covers its lower threshold and every euro below its upper one. A table breaking this is a domain error with a code (`bracket_table_must_start_at_zero`, `bracket_table_not_contiguous`, `last_bracket_must_be_open`). Two schedules matching at the same step on `flight_start` is the domain error `overlapping_schedules`.
+**Bracket tables are validated, half-open and end open.** The first bracket starts at 0, brackets are contiguous and the last has no upper threshold; each bracket covers its lower threshold and every euro below its upper one. A table breaking this is a domain error with a code (`bracket_table_empty`, `bracket_table_must_start_at_zero`, `bracket_table_not_contiguous`, `last_bracket_must_be_open`). Two schedules matching at the same step on `flight_start` is the domain error `overlapping_schedules`.
 
 **The rebate engine is a pure function over received values.** It takes the schedules, the closed flights of a counter-year and the flight to price (group, agency, channel, scope, `flight_start`, id, revenue) and returns, per flight, the resolved rate (the effective rate: rebate over revenue, zero when revenue is zero), the step, the agency-exception flag, the source year (`valid_from.year` of the matched schedule, none at step 8), the counter position before and after, the amount charged in each bracket and the exact rebate, unrounded. The revenue is given by the caller, who passes the flight's rounded revenue so the counter equals the roll-up. The zero reason is `no_schedule_for_year` when no schedule of any group is in force on `flight_start` and `no_schedule` otherwise.
 
@@ -74,7 +74,7 @@ Two facts shape the design. The rebate is a **tiered annual accrual attributed c
 
 **Errors.** A handler returns `{"code","message"}` for validation errors on routes under `/margin` only, because the campaign registration tests and clients rely on `detail`. Domain rule codes (`bracket_table_must_start_at_zero`, `bracket_table_not_contiguous`, `last_bracket_must_be_open`, `overlapping_schedules`, ...) each map to their own message.
 
-**Masters.** `POST /margin/rebate-schedules` and `POST /margin/platform-rates`, both `finance` only. A platform rate setting records its author and time.
+**Masters.** `POST /margin/rebate-schedules` and `POST /margin/platform-rates`, both `finance` only, answering 201. Every amount is a decimal string; a JSON number is refused. A schedule that overlaps another of its key is 409 `schedule_overlaps_existing` (the database's exclusion constraint, translated), a missing group, agency or channel is 422 `reference_not_found`, and a bad bracket table is 422 with the code of its rule. A platform rate setting records its author and time. The development seed leaves one fictitious schedule and one fictitious rate.
 
 **Deferred in this cut.** The period, agency, advertiser and campaign-type roll-ups (their endpoints and 6.5 beyond the sum of `GET /margin`'s own detail) wait for the roll-up view. The frontend (section 7) is not touched.
 

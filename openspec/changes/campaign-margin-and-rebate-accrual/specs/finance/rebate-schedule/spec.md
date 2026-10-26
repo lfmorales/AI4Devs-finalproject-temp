@@ -6,7 +6,7 @@ The agency rebate as a bracket schedule with temporal validity, resolved by date
 
 ### Requirement: A schedule is a set of marginal brackets, not a single rate
 
-The system SHALL express a rebate schedule as an ordered set of brackets, each with a lower threshold, an optional upper threshold and a rate, applied to the slice of volume falling within it. Brackets are half-open: a bracket covers its lower threshold and every euro below its upper threshold. The system SHALL reject, with a domain error carrying a code, a schedule whose first bracket does not start at 0 (`bracket_table_must_start_at_zero`), whose brackets leave a gap or overlap (`bracket_table_not_contiguous`), or whose last bracket has an upper threshold (`last_bracket_must_be_open`).
+The system SHALL express a rebate schedule as an ordered set of brackets, each with a lower threshold, an optional upper threshold and a rate, applied to the slice of volume falling within it. Brackets are half-open: a bracket covers its lower threshold and every euro below its upper threshold. The system SHALL reject, with a domain error carrying a code, a schedule with no brackets at all (`bracket_table_empty`), whose first bracket does not start at 0 (`bracket_table_must_start_at_zero`), whose brackets leave a gap or overlap (`bracket_table_not_contiguous`), or whose last bracket has an upper threshold (`last_bracket_must_be_open`).
 
 #### Scenario: Brackets apply to the slice, not the total
 - **WHEN** a counter standing at 90,000 € receives a flight of 30,000 € of revenue, with brackets of 15 % up to 100,000 € and 20 % from 100,000 € upward
@@ -27,6 +27,10 @@ The system SHALL express a rebate schedule as an ordered set of brackets, each w
 #### Scenario: A counter exactly on a threshold starts the next bracket
 - **WHEN** a counter standing at exactly 100,000 € receives a flight of 1,000 €
 - **THEN** all of it accrues at the rate of the bracket starting at 100,000 €
+
+#### Scenario: A table with no brackets is rejected
+- **WHEN** a schedule has no brackets
+- **THEN** it is rejected with `bracket_table_empty`, a code and a message different from the ones of a table that does not start at 0
 
 #### Scenario: A table that does not start at zero is rejected
 - **WHEN** a schedule's first bracket starts at 1,000 €
@@ -157,3 +161,31 @@ The system SHALL guarantee in the database that two schedules of the same key (g
 #### Scenario: Different keys never conflict
 - **WHEN** two schedules differ in channel, scope or agency
 - **THEN** their validity may overlap
+
+### Requirement: Schedules and platform rates are created by finance through the API
+
+The system SHALL let a user with the `finance` role create a rebate schedule with its brackets (`POST /margin/rebate-schedules`) and set a platform rate at any level (`POST /margin/platform-rates`), SHALL take every amount as a decimal string and refuse a JSON number, SHALL answer a schedule that overlaps another of its key with 409 `schedule_overlaps_existing` and a reference to something that does not exist with 422 `reference_not_found`, and SHALL stamp each platform rate with its author and time.
+
+#### Scenario: A schedule is created with its brackets
+- **WHEN** finance posts a schedule with a valid bracket table
+- **THEN** the response is 201 and the schedule and its brackets are stored
+
+#### Scenario: An invalid table is refused with its own message
+- **WHEN** a schedule is posted with an empty table, a table that does not start at zero, a table with a gap or a table whose last bracket is bounded
+- **THEN** each is refused with a different code and a different message
+
+#### Scenario: An overlapping schedule is a conflict
+- **WHEN** a schedule is posted whose validity overlaps another of the same key
+- **THEN** the response is 409 `schedule_overlaps_existing` and nothing is stored
+
+#### Scenario: A number instead of a string is refused
+- **WHEN** a rate is posted as the JSON number 0.15
+- **THEN** the response is 422 `validation_error`
+
+#### Scenario: A platform rate records who set it
+- **WHEN** finance sets a platform rate
+- **THEN** the response is 201 and the row holds the author and the time
+
+#### Scenario: Only finance may create them
+- **WHEN** a user without `finance` posts either
+- **THEN** the response is 403 and nothing is stored
