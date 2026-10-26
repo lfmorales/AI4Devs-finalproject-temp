@@ -30,6 +30,7 @@ def test_migration_schema_matches_models(test_db_session):
         'purchase_orders', 'purchase_order_versions',
         'dsp_mappings', 'dsp_catalog_lines',
         'daily_deliveries', 'ingestion_batches', 'ingestion_exceptions', 'ingestion_exception_deliveries',
+        'rebate_schedules', 'rebate_brackets', 'platform_rate_settings', 'applied_rates', 'applied_rate_brackets',
     }
 
     # Actual tables in database
