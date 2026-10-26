@@ -88,6 +88,9 @@ def test_the_routes_of_this_change_are_among_those_checked():
     assert ("/campaign-lines/{campaign_line_id}/dsp-mappings", "DELETE") in checked
     assert ("/ingestion-exceptions/{exception_id}/link", "POST") in checked
     assert ("/margin/closings", "POST") in checked
+    assert ("/margin", "GET") in checked
+    assert ("/margin/rebate-schedules", "POST") in checked
+    assert ("/margin/platform-rates", "POST") in checked
 
 
 def test_there_are_routes_to_check():
@@ -118,3 +121,31 @@ def test_a_user_holding_only_the_other_roles_is_forbidden(client_for_roles, path
 
     assert response.status_code == 403
     assert set(response.json()) == {"code", "message"}
+
+
+def _margin_cases() -> list:
+    return [case for case in _cases() if case.values[0] == "/margin" or case.values[0].startswith("/margin/")]
+
+
+def test_the_margin_routes_are_the_four_of_this_change():
+    assert {(case.values[0], case.values[3]) for case in _margin_cases()} == {
+        ("/margin", "GET"),
+        ("/margin/closings", "POST"),
+        ("/margin/rebate-schedules", "POST"),
+        ("/margin/platform-rates", "POST"),
+    }
+
+
+@pytest.mark.parametrize(("path", "route", "inherited", "method"), _margin_cases())
+def test_a_margin_route_accepts_finance_and_only_finance(path, route, inherited, method):
+    assert _accepted_roles(route, inherited) == frozenset({RoleName.FINANCE})
+
+
+@pytest.mark.parametrize(("path", "route", "inherited", "method"), _margin_cases())
+@pytest.mark.parametrize("roles", [("operations",), ("business",), ("operations", "business"), ()])
+def test_a_user_without_finance_gets_no_margin_field_from_a_margin_route(client_for_roles, path, route, inherited, method, roles):
+    response = _call(client_for_roles(*roles), path, route, method)
+
+    assert response.status_code == 403
+    assert set(response.json()) == {"code", "message"}
+    assert not any(word in response.text.lower() for word in ("revenue", "rebate", "margin", "cost", "platform"))

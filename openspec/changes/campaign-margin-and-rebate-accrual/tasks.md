@@ -59,8 +59,8 @@
 - [x] 6.4 Implement the margin endpoint aggregating in the database, joining `daily_deliveries` to the flight by date range, reading closed flights from `applied_rates` and calculating the others on the fly, and verify no delivery row reaches the application. The period, agency, advertiser and campaign-type roll-up endpoints are **deferred** with the roll-up view (7.4)
 - [x] 6.5 Verify the total of `GET /margin` at campaign and report level is the sum of its detail, asserted by a test (the dimension roll-ups are deferred with 6.4)
 - [ ] 6.6 ~~Implement Excel and CSV export and verify the exported figures match those returned by the API~~ **Deferred**: no view consumes an export in this cut and the roll-up view (7.4) is deferred
-- [ ] 6.7 Implement `require_roles("finance")` on every cost and margin endpoint, including the platform rate configuration endpoints
-- [ ] 6.8 Write tests asserting a user holding `business` or `operations` but not `finance` receives 403 on every endpoint of this change, and 401 for a missing or invalid token
+- [x] 6.7 Implement `require_roles("finance")` on every cost and margin endpoint, including the platform rate configuration endpoints
+- [x] 6.8 Write tests asserting a user holding `business` or `operations` but not `finance` receives 403 on every endpoint of this change, and 401 for a missing or invalid token
 - [ ] 6.9 ~~Implement the `CuratorMargin` figure as computed on demand for Deal lines, and verify it is never stored and never enters the margin~~ **Deferred**: it serves Equativ billing, not the margin Finance reads
 
 ## 6A. Backend: Monthly Closing
@@ -80,9 +80,9 @@
 - [x] 6B.1 Write failing API tests for `GET /margin`: closed, running provisional, pending close, a not-started flight absent, a line with mixed states, the year, month and campaign filters, 404 `campaign_not_found`, inactive campaigns included, decimal-string amounts, no float anywhere, the below-cost counts, and that the read writes nothing; then implement it
 - [x] 6B.2 Write a failing test that changing a rebate schedule or a platform rate after a closing does not move the closed month through `GET /margin`
 - [x] 6B.3 Implement the `{"code","message"}` handler for validation errors under `/margin` only, with a test that campaign registration keeps `{"detail": ...}`, and map each rebate rule code to its own message (an empty table has its own code, `bracket_table_empty`)
-- [ ] 6B.4 Implement `POST /margin/rebate-schedules` and `POST /margin/platform-rates`, `finance` only, the latter recording its author and time
+- [x] 6B.4 Implement `POST /margin/rebate-schedules` and `POST /margin/platform-rates`, `finance` only, the latter recording its author and time
 - [ ] 6B.5 Make the development seed give the test user `finance` in addition to `operations`, remove nothing, and seed one fictitious schedule and one fictitious rate (deferred: the loading of real schedules, 8.1)
-- [ ] 6B.6 Verify the route protection test, built from the registered routes, covers every route of this change with 401 and 403, and that an `operations` user receives no margin field
+- [x] 6B.6 Verify the route protection test, built from the registered routes, covers every route of this change with 401 and 403, and that an `operations` user receives no margin field
 - [ ] 6B.7 Write an end-to-end calculation test with the spec's examples: a closed month of 3,631.01 € revenue, 1,200.00 € media cost, 907.75 € rebate and 700.00 € platform cost gives a margin of 823.26 €
 
 ## 7. Frontend: Margin and Roll-up Views

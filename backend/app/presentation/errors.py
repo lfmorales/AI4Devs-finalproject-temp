@@ -181,6 +181,7 @@ _REBATE_RULE_ERRORS: dict[str, tuple[int, str]] = {
     "reference_not_found": (422, "The group, agency or channel of the request does not exist"),
     "revenue_must_not_be_negative": (422, "Revenue and counter positions must not be negative"),
     "duplicate_flight_id": (422, "A flight appears more than once in the request"),
+    "validity_ends_before_it_starts": (422, "A schedule cannot end before it starts"),
 }
 
 

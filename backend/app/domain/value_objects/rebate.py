@@ -146,3 +146,21 @@ class FlightRebate:
     position_after: Decimal
     charges: tuple[BracketCharge, ...]
     rebate: Decimal
+
+
+@dataclass(frozen=True)
+class NewRebateSchedule:
+    """A schedule to store, referring to its group, agency and channel by id. Its table is validated on creation."""
+
+    holding_group_id: int
+    agency_id: int | None
+    channel_id: int | None
+    scope: str | None
+    valid_from: date
+    valid_to: date | None
+    brackets: tuple[Bracket, ...]
+
+    def __post_init__(self) -> None:
+        validate_bracket_table(self.brackets)
+        if self.valid_to is not None and self.valid_to < self.valid_from:
+            raise RebateRuleError("validity_ends_before_it_starts", "valid_to must not be before valid_from")

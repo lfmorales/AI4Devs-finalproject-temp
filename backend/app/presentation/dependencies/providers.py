@@ -22,6 +22,7 @@ from app.application.services.exception_linking_service import ExceptionLinkingS
 from app.application.services.ingestion_exception_service import IngestionExceptionService
 from app.application.services.line_mapping_removal_service import LineMappingRemovalService
 from app.application.services.margin_closing_service import MarginClosingService
+from app.application.services.margin_masters_service import MarginMastersService
 from app.application.services.margin_query_service import MarginQueryService
 from app.config import get_settings
 from app.domain.exceptions import DspNotConfiguredError
@@ -54,6 +55,7 @@ from app.infrastructure.persistence.repositories.sqlalchemy_line_mapping_removal
 from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories import (
     SqlAlchemyAppliedRateRepository,
     SqlAlchemyMarginClosingTransaction,
+    SqlAlchemyMarginMastersTransaction,
     SqlAlchemyMarginReadRepository,
     SqlAlchemyPlatformRateRepository,
     SqlAlchemyRebateScheduleRepository,
@@ -209,3 +211,7 @@ def get_margin_query_service(
         applied_rates=SqlAlchemyAppliedRateRepository(session),
         today=lambda: today,
     )
+
+
+def get_margin_masters_service(session: Annotated[Session, Depends(get_db_session)]) -> MarginMastersService:
+    return MarginMastersService(SqlAlchemyMarginMastersTransaction(session))

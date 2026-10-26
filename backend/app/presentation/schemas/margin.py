@@ -1,11 +1,12 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, PlainSerializer
+from pydantic import BaseModel, BeforeValidator, Field, PlainSerializer, model_validator
 
 from app.domain.value_objects.margin import MarginTotals
 from app.domain.value_objects.margin_report import FlightReport, FlightState, MarginReport
+from app.domain.value_objects.platform_rate import PlatformRateLevel
 
 
 class ClosingRequest(BaseModel):
@@ -132,3 +133,84 @@ class MarginResponse(BaseModel):
             ],
             totals=TotalsResponse.from_totals(report.totals),
         )
+
+
+def _refuse_json_numbers(value: object) -> object:
+    """Amounts and rates are decimal strings: a JSON number may already have lost precision."""
+    if isinstance(value, float):
+        raise ValueError("send amounts as decimal strings, not as numbers")
+    return value
+
+
+StrictDecimal = Annotated[Decimal, BeforeValidator(_refuse_json_numbers)]
+
+
+class BracketRequest(BaseModel):
+    lower: StrictDecimal = Field(ge=0)
+    upper: StrictDecimal | None = None
+    rate: StrictDecimal = Field(ge=0)
+
+
+class RebateScheduleRequest(BaseModel):
+    holding_group_id: int = Field(ge=1)
+    agency_id: int | None = Field(default=None, ge=1)
+    channel_id: int | None = Field(default=None, ge=1)
+    scope: Literal["national", "international"] | None = None
+    valid_from: date
+    valid_to: date | None = None
+    brackets: list[BracketRequest]
+
+    @model_validator(mode="after")
+    def _validity_is_ordered(self) -> "RebateScheduleRequest":
+        if self.valid_to is not None and self.valid_to < self.valid_from:
+            raise ValueError("valid_to must not be before valid_from")
+        return self
+
+
+class BracketResponse(BaseModel):
+    lower: DecimalString
+    upper: DecimalString | None
+    rate: DecimalString
+
+
+class RebateScheduleResponse(BaseModel):
+    id: int
+    holding_group_id: int
+    agency_id: int | None
+    channel_id: int | None
+    scope: str | None
+    valid_from: date
+    valid_to: date | None
+    brackets: list[BracketResponse]
+
+
+class PlatformRateRequest(BaseModel):
+    level: PlatformRateLevel
+    rate_per_thousand: StrictDecimal = Field(ge=0)
+    campaign_line_id: int | None = Field(default=None, ge=1)
+    agency_id: int | None = Field(default=None, ge=1)
+    campaign_type_id: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def _only_the_key_of_the_level(self) -> "PlatformRateRequest":
+        given = {name for name, value in (
+            ("campaign_line_id", self.campaign_line_id), ("agency_id", self.agency_id),
+            ("campaign_type_id", self.campaign_type_id)) if value is not None}
+        expected = {
+            PlatformRateLevel.LINE: {"campaign_line_id"}, PlatformRateLevel.AGENCY: {"agency_id"},
+            PlatformRateLevel.CAMPAIGN_TYPE: {"campaign_type_id"}, PlatformRateLevel.SYSTEM: set(),
+        }[self.level]
+        if given != expected:
+            raise ValueError(f"level {self.level.value} takes exactly {sorted(expected) or 'no key'}")
+        return self
+
+
+class PlatformRateResponse(BaseModel):
+    id: int
+    level: PlatformRateLevel
+    rate_per_thousand: DecimalString
+    campaign_line_id: int | None
+    agency_id: int | None
+    campaign_type_id: int | None
+    created_by: int | None
+    created_at: datetime

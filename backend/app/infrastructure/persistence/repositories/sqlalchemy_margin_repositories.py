@@ -4,20 +4,23 @@ from decimal import Decimal
 
 from sqlalchemy import exists, func, select, text
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.exceptions import SystemPlatformRateMissingError
+from app.domain.exceptions import RebateRuleError, SystemPlatformRateMissingError
 from app.domain.repositories.margin_repositories import (
     AppliedRateRepository,
     MarginClosingTransaction,
     MarginFlightRepository,
+    MarginMastersTransaction,
     MarginReadRepository,
     PlatformRateRepository,
     RebateScheduleRepository,
 )
 from app.domain.value_objects.margin_report import FrozenRates
+from app.domain.value_objects.platform_rate import NewPlatformRateSetting, PlatformRateLevel, PlatformRateSetting
 from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight, ReadFlight
-from app.domain.value_objects.rebate import Bracket, CounterKey, RebateSchedule
+from app.domain.value_objects.rebate import Bracket, CounterKey, NewRebateSchedule, RebateSchedule
 from app.infrastructure.persistence.models.campaign import (
     CampaignLinePeriodRecord,
     CampaignLineRecord,
@@ -36,6 +39,20 @@ from app.infrastructure.persistence.models.masters import AgencyRecord, ChannelR
 
 # The first key of the advisory locks that serialise the closing of a month; the second is year * 100 + month.
 _CLOSING_LOCK_NAMESPACE = 4242
+
+
+_EXCLUSION_VIOLATION = "23P01"
+_FOREIGN_KEY_VIOLATION = "23503"
+
+
+def _translate_integrity_error(error: IntegrityError) -> RebateRuleError:
+    """The database's refusals that a client can cause, as rules of the domain."""
+    sqlstate = getattr(error.orig, "sqlstate", None)
+    if sqlstate == _EXCLUSION_VIOLATION:
+        return RebateRuleError("schedule_overlaps_existing", "another schedule of the same key overlaps this validity")
+    if sqlstate == _FOREIGN_KEY_VIOLATION:
+        return RebateRuleError("reference_not_found", "a referenced group, agency, channel, line or campaign type is missing")
+    raise error
 
 
 class SqlAlchemyRebateScheduleRepository(RebateScheduleRepository):
@@ -65,6 +82,25 @@ class SqlAlchemyRebateScheduleRepository(RebateScheduleRepository):
         ]
 
 
+    def add_schedule(self, new: NewRebateSchedule) -> int:
+        record = RebateScheduleRecord(
+            holding_group_id=new.holding_group_id, agency_id=new.agency_id, channel_id=new.channel_id,
+            scope=new.scope, valid_from=new.valid_from, valid_to=new.valid_to,
+        )
+        try:
+            self._session.add(record)
+            self._session.flush()
+            for position, bracket in enumerate(new.brackets, start=1):
+                self._session.add(RebateBracketRecord(
+                    rebate_schedule_id=record.id, position=position, lower=bracket.lower, upper=bracket.upper,
+                    rate=bracket.rate,
+                ))
+            self._session.flush()
+        except IntegrityError as error:
+            raise _translate_integrity_error(error) from None
+        return record.id
+
+
 class SqlAlchemyPlatformRateRepository(PlatformRateRepository):
     def __init__(self, session: Session) -> None:
         self._session = session
@@ -87,6 +123,24 @@ class SqlAlchemyPlatformRateRepository(PlatformRateRepository):
         if system is None:
             raise SystemPlatformRateMissingError("no system platform rate is stored")
         return PlatformRates(system=system, by_campaign_type=by_campaign_type, by_agency=by_agency, by_line=by_line)
+
+
+    def add_setting(self, new: NewPlatformRateSetting) -> PlatformRateSetting:
+        record = PlatformRateSettingRecord(
+            level=new.level.value, rate_per_thousand=new.rate_per_thousand, created_by=new.created_by,
+            campaign_line_id=new.campaign_line_id, agency_id=new.agency_id, campaign_type_id=new.campaign_type_id,
+        )
+        try:
+            self._session.add(record)
+            self._session.flush()
+            self._session.refresh(record)
+        except IntegrityError as error:
+            raise _translate_integrity_error(error) from None
+        return PlatformRateSetting(
+            setting_id=record.id, level=PlatformRateLevel(record.level), rate_per_thousand=record.rate_per_thousand,
+            created_by=record.created_by, created_at=record.created_at, campaign_line_id=record.campaign_line_id,
+            agency_id=record.agency_id, campaign_type_id=record.campaign_type_id,
+        )
 
 
 class SqlAlchemyMarginFlightRepository(MarginFlightRepository):
@@ -307,6 +361,21 @@ class SqlAlchemyMarginClosingTransaction(MarginClosingTransaction):
             text("SELECT pg_advisory_xact_lock(:namespace, :key)"),
             {"namespace": _CLOSING_LOCK_NAMESPACE, "key": year * 100 + month},
         )
+
+    def commit(self) -> None:
+        self._session.commit()
+
+    def rollback(self) -> None:
+        self._session.rollback()
+
+
+class SqlAlchemyMarginMastersTransaction(MarginMastersTransaction):
+    """One database transaction on the caller's session for creating schedules and platform rates."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+        self.schedules = SqlAlchemyRebateScheduleRepository(session)
+        self.platform_rates = SqlAlchemyPlatformRateRepository(session)
 
     def commit(self) -> None:
         self._session.commit()
