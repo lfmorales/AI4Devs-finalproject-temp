@@ -56,3 +56,22 @@ class FlightMargin:
     margin: Decimal | None
     provisional: bool
     below_cost: bool
+
+
+@dataclass(frozen=True)
+class MarginTotals:
+    """The exact sum of the amounts of a set of flights (a line) or of lines (a campaign).
+
+    A below-cost flight stays in every amount; it is only counted. A flight that has not started is not
+    added, only counted.
+    """
+
+    revenue: Decimal
+    media_cost: Decimal
+    rebate: Decimal
+    platform_cost: Decimal
+    margin: Decimal
+    provisional: bool
+    flights_counted: int
+    below_cost_count: int
+    not_started_count: int

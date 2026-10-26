@@ -15,14 +15,14 @@
 ## 2. Domain: Margin Calculation (no database, no HTTP)
 
 - [x] 2.1 Write failing tests for the closed-flight margin using the worked example — 726,202 contracted impressions at 5.00 € giving revenue 3,631.01 €, media cost 1,200.00 € (a placeholder), rebate 907.75 € (25 % of revenue, from 907.7525 rounded half up), platform cost 700.00 € (700,000 delivered), margin 823.26 € — and verify it fails
-- [ ] 2.2 Implement the flight margin in the domain layer, with each amount rounded to 2 decimals half up before the subtraction and line and campaign totals as exact sums of their flights, and verify the tests from 2.1 pass with no database involved
+- [x] 2.2 Implement the flight margin in the domain layer, with each amount rounded to 2 decimals half up before the subtraction and line and campaign totals as exact sums of their flights, and verify the tests from 2.1 pass with no database involved
 - [x] 2.3 Write a failing test asserting a flight's revenue uses its contracted volume when delivery falls short (726,202 contracted, 700,000 delivered, revenue still 3,631.01 €), then verify the implementation satisfies it
 - [x] 2.4 Write failing tests for the running-flight pro-rating on the flight's own window — the 30-day flight with 10 elapsed days (revenue 500.00 €, rebate 100.00 €, platform 90.00 €, margin 160.00 €), a flight with zero delivery still accruing revenue, and the date of the last delivery having no effect — and implement it, asserting the result is provisional and nothing is written
 - [ ] 2.5 Write a failing test asserting a `Deal` line uses the identical model to a `Directo` line, and verify no channel-specific revenue branch exists
 - [ ] 2.6 Write a failing test asserting exact decimal arithmetic across an accumulated year, then verify no float appears in the calculation path
 - [ ] 2.8 Write failing tests that a flight never crosses a year (a line from 2026-12-15 to 2027-01-20 yields two flights, one per year, and none spans two months) and that a line with a closed flight and a running one sums both and is provisional; then verify they pass
 - [ ] 2.9 Write failing tests for the media cost of a flight as the sum of the line's deliveries between `flight_start` and `flight_end`, and for a delivery outside every flight counting nowhere; then implement it
-- [ ] 2.7 Write a failing test for a flight whose media cost exceeds its revenue, asserting the flight is flagged, its line and campaign count it, and no total changes, and implement the below-cost flag
+- [x] 2.7 Write a failing test for a flight whose media cost exceeds its revenue, asserting the flight is flagged, its line and campaign count it, and no total changes, and implement the below-cost flag
 
 ## 3. Domain: Rebate Resolution Ladder
 
