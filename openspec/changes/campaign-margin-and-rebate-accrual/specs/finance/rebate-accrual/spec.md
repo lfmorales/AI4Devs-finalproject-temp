@@ -86,12 +86,35 @@ The system SHALL expose `POST /margin/closings`, restricted to the `finance` rol
 
 #### Scenario: Months close in order
 - **WHEN** a month is closed while an earlier month of the same year has ended flights without a row
-- **THEN** the request is rejected with 409 and nothing is written
+- **THEN** the request is rejected with 409 `previous_month_open` and nothing is written
+- **AND** the message names the earliest month that blocks it
+
+#### Scenario: A month with no ended flights closes nothing
+- **WHEN** a month with no flight that has ended is closed
+- **THEN** the response is 200 with zero flights closed and nothing is written
+
+#### Scenario: The month's flights reach the engine in order
+- **WHEN** a month is closed
+- **THEN** its flights are passed to the rebate engine ordered by `flight_start` and then by flight id
+
+#### Scenario: A closing is all or nothing
+- **WHEN** a failure occurs after some rows of a closing were written
+- **THEN** none of that closing's rows remains
+
+#### Scenario: Two concurrent closings of one month do not duplicate
+- **WHEN** two requests close the same month at the same time
+- **THEN** each flight ends with exactly one `applied_rates` row and both requests succeed
+
+#### Scenario: The opening position comes from the frozen rows
+- **WHEN** flights are closed after earlier flights of the same counter were frozen
+- **THEN** the counter's position before the first new flight is the `position_after` of the latest frozen flight of that counter
+- **AND** the frozen flights are not priced again
 
 #### Scenario: Only finance may close
 - **WHEN** a user without the `finance` role requests a closing
 - **THEN** the request is rejected as forbidden
 - **AND** a request without a valid token is rejected as unauthenticated
+
 
 ### Requirement: A closed month does not move
 
@@ -129,3 +152,15 @@ The system SHALL, in this cut, leave a closed flight untouched when a schedule c
 #### Scenario: A schedule change after closing does not restate
 - **WHEN** a schedule changes in May after January to April were closed
 - **THEN** the frozen rows of January to April are unchanged
+
+### Requirement: The engine accepts opening positions
+
+The system SHALL let the rebate engine take, as an optional input that is empty by default, the opening position of each counter, and SHALL return exactly the same results as before when it is empty.
+
+#### Scenario: An empty opening is the previous behaviour
+- **WHEN** the engine is called with no opening positions
+- **THEN** every result is identical to the result of the engine without the parameter
+
+#### Scenario: An opening position shifts the counter
+- **WHEN** a counter opens at 90,000 € and a flight of 30,000 € follows, with brackets of 15 % up to 100,000 € and 20 % above
+- **THEN** the flight's position before is 90,000 € and its rebate is 5,500 €

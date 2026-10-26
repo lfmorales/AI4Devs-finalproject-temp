@@ -56,6 +56,28 @@ Two facts shape the design. The rebate is a **tiered annual accrual attributed c
 
 **`CuratorMargin` is computed, never ingested.** Verified as `OC revenue − purchase cost` on 404 of 408 rows of the supplied reports. It never enters the margin; its own `% Margin` excludes the platform cost. Implementation deferred (6.9).
 
+## Backend decisions of the closing and reading cut
+
+**Roles.** Margin is for `finance` only. `operations` and `business` get 403 on every margin route. The development seed gives the test user `finance` in addition to `operations` and removes nothing.
+
+**Schema.** `rebate_schedules` and `rebate_brackets` (with `valid_from`, `valid_to` inclusive and nullable, group, optional agency, optional channel, optional scope), `platform_rate_settings`, `applied_rates` and its child `applied_rate_brackets`. Money and rates are `Numeric(18,6)` or wider, never float. The overlap rule is a PostgreSQL exclusion constraint over the key, with `COALESCE` for the optional columns, and `daterange(valid_from, valid_to, '[]')`; it needs the `btree_gist` extension. The migration fails with a clear message if it cannot create the extension, and its downgrade drops the extension only if the migration created it. The requirement is written in `docs/deploy.md`.
+
+**`applied_rates`** holds one row per closed flight, with a unique foreign key to `campaign_line_periods`: schedule and step, source year, agency flag, zero reason, effective rate, the counter key (group, agency or none, channel, year), the position before and after, the exact unrounded rebate, the platform rate and the closing time. Its per-bracket breakdown is `applied_rate_brackets` (lower, upper, rate, amount, rebate, all `Numeric`), not JSON, so no precision is lost; a test round-trips a breakdown.
+
+**Platform rate.** Overrides are rows that are only added; the latest by id wins. The system value is a row inserted by the migration with no author; a check constraint allows an absent author only at the system level.
+
+**Closing.** `POST /margin/closings` takes a year and month, is a plain `def`, runs in one transaction and takes a transaction-level advisory lock for the year and month, so two concurrent closings of one month produce one row per flight. It closes the flights of that month with `flight_end <= as_of`, `as_of` being D-1 from the configured zone. The flights go to the rebate engine ordered by `flight_start` and then by id, with the opening position of each counter taken from the latest frozen row of that counter; the frozen flights are not priced again. `previous_month_open` (409) names the earliest earlier month of the same year with ended flights and no frozen row. A month with no ended flights answers 200 with zero closed.
+
+**One function for closing and reading.** A single domain function takes the schedules, the platform rates, the flights, the opening positions and `as_of`, and returns the per-flight rebate, platform rate and margin. The closing writes its output; the read of a pending-close or running flight only returns it. They cannot diverge, and a test with three flights proves the pending-close margin equals the frozen one to the cent. `calculate_rebates` gains an optional `opening_positions`, empty by default; a test proves an empty value changes no result.
+
+**Reading.** `GET /margin` returns campaigns, lines and flights with totals at each level and the count of below-cost flights. States: `closed` (frozen, read from `applied_rates`), `pending_close` and `running` (calculated on the fly, provisional, writing nothing); a flight that has not started does not appear. Every campaign is included, `inactive` too; the campaign filter is by id and answers 404 `campaign_not_found`. Aggregation is done in the database; no delivery row reaches the application. Amounts are decimal strings.
+
+**Errors.** A handler returns `{"code","message"}` for validation errors on routes under `/margin` only, because the campaign registration tests and clients rely on `detail`. Domain rule codes (`bracket_table_must_start_at_zero`, `bracket_table_not_contiguous`, `last_bracket_must_be_open`, `overlapping_schedules`, ...) each map to their own message.
+
+**Masters.** `POST /margin/rebate-schedules` and `POST /margin/platform-rates`, both `finance` only. A platform rate setting records its author and time.
+
+**Deferred in this cut.** The period, agency, advertiser and campaign-type roll-ups (their endpoints and 6.5 beyond the sum of `GET /margin`'s own detail) wait for the roll-up view. The frontend (section 7) is not touched.
+
 ## Cut
 
 Deferred, each with its reason in `tasks.md`:

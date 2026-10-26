@@ -60,3 +60,23 @@ The system SHALL record the platform rate actually applied in the `applied_rates
 #### Scenario: A running flight uses the rate in force
 - **WHEN** a running flight is read after the default changed
 - **THEN** it is calculated with the new rate and nothing is written
+
+### Requirement: Overrides are append-only and the latest wins
+
+The system SHALL store each platform rate setting as a new row and SHALL resolve a level by its most recent row, so that the history of a rate stays in the data.
+
+#### Scenario: A second setting does not erase the first
+- **WHEN** a rate is set twice for the same agency
+- **THEN** both rows exist and the later one is the one resolved
+
+### Requirement: The system rate is data inserted by the migration
+
+The system SHALL hold the system rate as a row inserted by the migration with no author, and SHALL allow an absent author only at the system level.
+
+#### Scenario: The system rate changes without touching code
+- **WHEN** a new system row is stored with the value 1.25
+- **THEN** a flight with no other configured level is calculated with 1.25
+
+#### Scenario: Only the system level may have no author
+- **WHEN** a row at the agency level is stored without an author
+- **THEN** it is rejected

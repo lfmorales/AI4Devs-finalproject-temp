@@ -137,3 +137,23 @@ The system SHALL resolve the rebate against the campaign line's validated scope,
 - **WHEN** a group is priced at one rate nationally and another internationally
 - **THEN** a national line resolves to the national rate and an international line to the international rate
 - **AND** neither receives the mean of the two
+
+### Requirement: The database refuses overlapping schedules
+
+The system SHALL guarantee in the database that two schedules of the same key (group, agency or none, channel or none, scope or none) never have overlapping validity, SHALL treat `valid_to` as inclusive and an absent `valid_to` as open-ended, and SHALL create schedules only through an endpoint restricted to the `finance` role.
+
+#### Scenario: Overlapping validity of one key is refused by the database
+- **WHEN** a schedule is stored whose validity overlaps another of the same key
+- **THEN** the database rejects it
+
+#### Scenario: Back-to-back validity is accepted
+- **WHEN** one schedule ends on 2026-04-30 and the next of the same key starts on 2026-05-01
+- **THEN** both are accepted
+
+#### Scenario: An open-ended schedule overlaps a later one
+- **WHEN** a schedule with no `valid_to` exists and another of the same key starts later
+- **THEN** the second is rejected
+
+#### Scenario: Different keys never conflict
+- **WHEN** two schedules differ in channel, scope or agency
+- **THEN** their validity may overlap

@@ -179,3 +179,20 @@ The system SHALL restrict every cost and margin figure to users holding the `fin
 #### Scenario: The restriction holds against direct API access
 - **WHEN** a margin endpoint is called directly rather than through the interface
 - **THEN** the same restriction applies
+
+### Requirement: A flight that has ended but is not closed is pending close
+
+The system SHALL treat a flight whose `flight_end` is on or before `as_of` and which has no frozen rates as **pending close**: calculated on the fly with the rates in force, marked provisional, writing nothing, and using the same opening counter positions and the same domain function that closing the month will use.
+
+#### Scenario: A pending-close flight is calculated without being written
+- **WHEN** a flight ended on 2026-08-31, `as_of` is 2026-09-05 and August has not been closed
+- **THEN** its state is `pending_close` and it is marked provisional
+- **AND** no `applied_rates` row exists afterwards
+
+#### Scenario: The pending-close figure is the figure that closing freezes
+- **WHEN** three flights of one counter are read as pending close and the month is then closed
+- **THEN** the margin read afterwards from the frozen rows equals the pending-close margin to the cent, for every flight
+
+#### Scenario: Closing and reading call the same function
+- **WHEN** the closing and the pending-close read compute a flight's rebate
+- **THEN** both go through one domain function over the same inputs, so they cannot diverge

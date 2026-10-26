@@ -6,7 +6,7 @@ How the calculated figures reach Finance: aggregated along the dimensions the bu
 
 ### Requirement: Figures roll up along the business dimensions
 
-The system SHALL aggregate margin and its component figures from flights by period, agency, advertiser and campaign type, where the period of a flight is the campaign period of its month.
+The system SHALL aggregate margin and its component figures from flights by period, agency, advertiser and campaign type, where the period of a flight is the campaign period of its month. **Deferred**: in this cut only the roll-up by campaign and line inside `GET /margin` exists; the period, agency, advertiser and campaign-type roll-ups wait for the roll-up view (task 7.4).
 
 #### Scenario: A period roll-up aggregates its flights
 - **WHEN** a period roll-up is requested
@@ -70,3 +70,67 @@ The system SHALL restrict margin reporting to users holding the `finance` role.
 #### Scenario: A user without the role is forbidden
 - **WHEN** a user without `finance` requests a roll-up
 - **THEN** the request is rejected as forbidden
+
+### Requirement: The margin is read per campaign, line and flight
+
+The system SHALL expose `GET /margin`, restricted to the `finance` role, returning campaigns, their lines and their flights with totals at every level, filtered by year, month and campaign, and SHALL include every campaign whatever its status.
+
+#### Scenario: A closed flight reads what was frozen
+- **WHEN** a flight with an `applied_rates` row is read
+- **THEN** its state is `closed` and its rebate and platform rate are the frozen ones
+
+#### Scenario: A running flight is calculated and provisional
+- **WHEN** a flight that has started and not ended is read
+- **THEN** its state is `running` and it is provisional
+
+#### Scenario: A flight that has ended and is not frozen is pending close
+- **WHEN** a flight that has ended but has no frozen rates is read
+- **THEN** its state is `pending_close` and it is provisional
+
+#### Scenario: A flight that has not started is absent
+- **WHEN** a flight starts after `as_of`
+- **THEN** it does not appear
+
+#### Scenario: A line with flights in different states
+- **WHEN** a line has a closed flight and a running one
+- **THEN** both appear, the line total is their sum and the line is provisional
+
+#### Scenario: Filters narrow the result
+- **WHEN** a year, a month or a campaign is given
+- **THEN** only the matching flights appear
+
+#### Scenario: An unknown campaign is not found
+- **WHEN** the campaign filter names a campaign that does not exist
+- **THEN** the response is 404 `campaign_not_found`
+
+#### Scenario: Inactive campaigns are included
+- **WHEN** a campaign is `inactive`
+- **THEN** its flights appear
+
+#### Scenario: Amounts are decimal strings
+- **WHEN** any amount is serialised
+- **THEN** it is a string such as `"3631.01"`, never a floating-point number
+
+#### Scenario: Reading writes nothing
+- **WHEN** `GET /margin` is called
+- **THEN** no row of any table is created or changed
+
+#### Scenario: Below-cost flights are counted at every level
+- **WHEN** a line or the totals include a flight below cost
+- **THEN** the count of flights below cost is present at that level
+
+### Requirement: Errors under the margin routes are code and message
+
+The system SHALL answer every error of a route under `/margin`, including a validation error, with a body of exactly `code` and `message`, and SHALL leave the error format of the other routes unchanged.
+
+#### Scenario: A validation error under /margin
+- **WHEN** a margin route receives an invalid month
+- **THEN** the body has only `code` and `message`
+
+#### Scenario: Other routes keep their format
+- **WHEN** campaign registration receives an invalid body
+- **THEN** the body still has `detail`
+
+#### Scenario: Domain rule codes have distinct messages
+- **WHEN** a bracket table is rejected for being empty and another for not starting at zero
+- **THEN** the two messages differ
