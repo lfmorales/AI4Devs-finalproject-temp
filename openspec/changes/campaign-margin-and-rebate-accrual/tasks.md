@@ -95,8 +95,8 @@
 
 ## 6C. Acceptance with the private closed-month sheet
 
-- [ ] 6C.1 Write the acceptance test of a closed month from `tests/private/mes_cerrado_directo.csv` (skipped with a clear reason if the file is absent), one line and one whole-month flight per row in its own holding group, using the same domain functions as the closing and the reads, with the per-row, aggregate and negative-margin assertions
-- [ ] 6C.2 Write a test that the rows left out of the comparison are exactly those with no contracted volume, and that computes their cost from the sheet's own columns to make the difference with the sheet explicit
+- [x] 6C.1 Write the acceptance test of a closed month from `tests/private/mes_cerrado_directo.csv` (skipped with a clear reason if the file is absent), one line and one whole-month flight per row in its own holding group, using the same domain functions as the closing and the reads, with the per-row, aggregate and negative-margin assertions
+- [x] 6C.2 Write a test that the rows left out of the comparison are exactly those with no contracted volume, and that computes their cost from the sheet's own columns to make the difference with the sheet explicit
 - [ ] 6C.3 Write the database case: four real rows and the synthetic line without a price are created in the test database, the month is closed with `POST /margin/closings` and `GET /margin` returns the same amounts as decimal strings, with `zero_sale` and a null `margin_pct` for the synthetic line
 
 ## 7. Frontend: Margin and Roll-up Views
