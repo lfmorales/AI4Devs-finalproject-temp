@@ -40,7 +40,7 @@ class CampaignLineCreateRequest(LineDatesRequest):
     scope: str = Field(..., description="national | international")
     market_description: str
     contracted_impressions: int = Field(..., gt=0)
-    sale_cpm: Decimal = Field(..., decimal_places=2)
+    sale_cpm: Decimal = Field(..., ge=0, decimal_places=2)
     # Absent: the volume is split by days. Present: it must cover exactly the months the line runs in.
     monthly_volumes: Optional[list[MonthlyVolumeRequest]] = None
 

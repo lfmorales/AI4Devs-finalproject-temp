@@ -27,7 +27,7 @@
 ## 2A. Domain: Negative Margin, Zero Sale and Margin Percentage
 
 - [x] 2A.1 Write failing tests for `below_cost` as a negative final margin (rounded amounts, a media cost under revenue that the rebate and the platform cost push below zero, a margin of exactly zero not flagged), adapt the tests of 2.7 that assumed media cost above revenue, and implement it in the flight and in the totals
-- [ ] 2A.2 Write failing tests that registration accepts a sale CPM of 0.00 with positive contracted impressions, rejects a negative CPM, and keeps rejecting contracted impressions of 0, and implement the validation
+- [x] 2A.2 Write failing tests that registration accepts a sale CPM of 0.00 with positive contracted impressions, rejects a negative CPM, and keeps rejecting contracted impressions of 0, and implement the validation
 - [ ] 2A.3 Write failing tests for a flight with revenue 0 (a synthetic line without a price with volume and cost: margin minus the cost, no rebate, no counter advance, `zero_sale` at flight, line and campaign, counted in the totals) and implement it
 - [ ] 2A.4 Write failing tests for `margin_pct` (two decimals half up, in points, null with revenue 0, at flight, line, campaign and totals, no division by zero) and implement it in the domain and the API
 - [ ] 2A.5 ~~A campaign with contracted volume 0 (a zero sale with no purchase order) and delivery with no purchase cost (pixels) in the margin~~ **Deferred**: they have no contracted volume to hang a flight from; registration still refuses a volume of 0 and their delivery stays as unmatched delivery in the exception queue
