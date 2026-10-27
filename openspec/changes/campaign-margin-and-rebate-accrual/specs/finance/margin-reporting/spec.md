@@ -45,14 +45,30 @@ The system SHALL label a running flight, and any line, campaign or roll-up that 
 - **WHEN** a line has one closed flight and one running flight
 - **THEN** the line is labelled provisional and the closed flight within it is not
 
-### Requirement: Below-cost flights are flagged without altering totals
+### Requirement: Negative-margin and zero-sale flights are flagged without altering totals
 
-The system SHALL show a flagged flight as below cost, SHALL show on its line and its campaign the number of their flights below cost, and SHALL keep the flagged flight's true value in every total.
+The system SHALL show a flight with a negative final margin as "Margen negativo" (`below_cost`) and a flight without a price as "Sin venta" (`zero_sale`), SHALL show on its line and its campaign how many of their flights are each, and SHALL keep the true value of every flagged flight in every total.
 
 #### Scenario: A flagged flight is not blended away
-- **WHEN** a line has one flight below cost
-- **THEN** the line shows one flight below cost
+- **WHEN** a line has one flight with a negative margin
+- **THEN** the line shows one flight with "Margen negativo"
 - **AND** its total includes that flight's negative margin
+
+#### Scenario: Zero-sale flights are counted
+- **WHEN** a line has one flight without a price
+- **THEN** the line, its campaign and the totals each count one `zero_sale` flight
+
+### Requirement: Every level carries the margin percentage
+
+The system SHALL return `margin_pct` on every flight, line, campaign and on the totals, as a decimal string with two decimals or null when revenue is 0.
+
+#### Scenario: The percentage is present at every level
+- **WHEN** the margin is read
+- **THEN** each flight, line, campaign and the totals carry `margin_pct`
+
+#### Scenario: A level without revenue has none
+- **WHEN** a level has revenue 0.00
+- **THEN** its `margin_pct` is null
 
 ### Requirement: Divergence from the legacy application is classified
 
@@ -115,9 +131,9 @@ The system SHALL expose `GET /margin`, restricted to the `finance` role, returni
 - **WHEN** `GET /margin` is called
 - **THEN** no row of any table is created or changed
 
-#### Scenario: Below-cost flights are counted at every level
-- **WHEN** a line or the totals include a flight below cost
-- **THEN** the count of flights below cost is present at that level
+#### Scenario: Negative-margin flights are counted at every level
+- **WHEN** a line or the totals include a flight with a negative final margin
+- **THEN** the count of such flights is present at that level as `below_cost_count`
 
 ### Requirement: Errors under the margin routes are code and message
 

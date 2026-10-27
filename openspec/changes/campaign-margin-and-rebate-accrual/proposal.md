@@ -38,7 +38,7 @@ The first cut implements the closed-month and running-month margin, the ladder, 
 
 ### Modified Capabilities
 
-None in this change.
+- `campaign/campaign-registration`: a line may carry a sale CPM of 0.00 when its contracted impressions are above zero, and never a negative one (delta in this change).
 
 ### Dependencies
 

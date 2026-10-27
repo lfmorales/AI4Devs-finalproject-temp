@@ -22,7 +22,15 @@
 - [x] 2.6 Write a failing test asserting exact decimal arithmetic across an accumulated year, then verify no float appears in the calculation path
 - [x] 2.8 Write failing tests that a flight never crosses a year (a line from 2026-12-15 to 2027-01-20 yields two flights, one per year, and none spans two months) and that a line with a closed flight and a running one sums both and is provisional; then verify they pass
 - [x] 2.9 Write failing tests for the media cost of a flight as the sum of the line's deliveries between `flight_start` and `flight_end`, and for a delivery outside every flight counting nowhere; then implement it
-- [x] 2.7 Write a failing test for a flight whose media cost exceeds its revenue, asserting the flight is flagged, its line and campaign count it, and no total changes, and implement the below-cost flag
+- [x] 2.7 Write a failing test for a flight whose media cost exceeds its revenue, asserting the flight is flagged, its line and campaign count it, and no total changes, and implement the below-cost flag *(superseded by 2A.1: the flag now means a negative final margin)*
+
+## 2A. Domain: Negative Margin, Zero Sale and Margin Percentage
+
+- [ ] 2A.1 Write failing tests for `below_cost` as a negative final margin (rounded amounts, a media cost under revenue that the rebate and the platform cost push below zero, a margin of exactly zero not flagged), adapt the tests of 2.7 that assumed media cost above revenue, and implement it in the flight and in the totals
+- [ ] 2A.2 Write failing tests that registration accepts a sale CPM of 0.00 with positive contracted impressions, rejects a negative CPM, and keeps rejecting contracted impressions of 0, and implement the validation
+- [ ] 2A.3 Write failing tests for a flight with revenue 0 (a synthetic line without a price with volume and cost: margin minus the cost, no rebate, no counter advance, `zero_sale` at flight, line and campaign, counted in the totals) and implement it
+- [ ] 2A.4 Write failing tests for `margin_pct` (two decimals half up, in points, null with revenue 0, at flight, line, campaign and totals, no division by zero) and implement it in the domain and the API
+- [ ] 2A.5 ~~A campaign with contracted volume 0 (a zero sale with no purchase order) and delivery with no purchase cost (pixels) in the margin~~ **Deferred**: they have no contracted volume to hang a flight from; registration still refuses a volume of 0 and their delivery stays as unmatched delivery in the exception queue
 
 ## 3. Domain: Rebate Resolution Ladder
 
@@ -85,6 +93,12 @@
 - [x] 6B.6 Verify the route protection test, built from the registered routes, covers every route of this change with 401 and 403, and that an `operations` user receives no margin field
 - [x] 6B.7 Write an end-to-end calculation test with the spec's examples: a closed month of 3,631.01 € revenue, 1,200.00 € media cost, 907.75 € rebate and 700.00 € platform cost gives a margin of 823.26 €
 
+## 6C. Acceptance with the private closed-month sheet
+
+- [ ] 6C.1 Write the acceptance test of a closed month from `tests/private/mes_cerrado_directo.csv` (skipped with a clear reason if the file is absent), one line and one whole-month flight per row in its own holding group, using the same domain functions as the closing and the reads, with the per-row, aggregate and negative-margin assertions
+- [ ] 6C.2 Write a test that the rows left out of the comparison are exactly those with no contracted volume, and that computes their cost from the sheet's own columns to make the difference with the sheet explicit
+- [ ] 6C.3 Write the database case: four real rows and the synthetic line without a price are created in the test database, the month is closed with `POST /margin/closings` and `GET /margin` returns the same amounts as decimal strings, with `zero_sale` and a null `margin_pct` for the synthetic line
+
 ## 7. Frontend: Margin and Roll-up Views
 
 - [ ] 7.1 Implement the typed API client for margin and roll-ups in `lib/api/` and verify no component calls `fetch` directly
@@ -92,7 +106,7 @@
 - [ ] 7.3 Implement the margin view and verify the tests from 7.2 pass, with no monetary value recomputed client-side
 - [ ] 7.4 ~~Implement the roll-up view with filtering by period, agency, advertiser and campaign type, and verify sorting and filtering work on each~~ **Deferred**: the margin view is the only view of this cut; the roll-up endpoints stay available through the API (6.4)
 - [ ] 7.5 Implement the `finance` route guard and write a test asserting what a user without the role sees
-- [ ] 7.6 Verify a below-cost flight renders flagged, that its line and campaign show the count of their flights below cost, and that the totals still include its true value, asserted by a test
+- [ ] 7.6 Verify a flight with a negative margin renders as "Margen negativo" and a flight without a price as "Sin venta", that its line and campaign show the counts, and that the totals still include their true value, asserted by a test
 - [ ] 7.7 ~~Verify the masters view distinguishes a group negotiated at zero from one whose rate was never loaded~~ **Deferred**: there is no masters view in this cut; the distinction is recorded in `applied_rates` (step 8 with its reason) and read from there
 
 ## 8. Data: Rebate Migration and Reconciliation

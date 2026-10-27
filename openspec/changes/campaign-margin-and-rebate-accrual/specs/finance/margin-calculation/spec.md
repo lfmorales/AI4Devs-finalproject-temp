@@ -154,15 +154,75 @@ The system SHALL perform every monetary and rate calculation in exact decimal ar
 - **WHEN** rebate amounts are accumulated across a year of flights
 - **THEN** the total equals the sum of the individual amounts exactly
 
-### Requirement: A flight sold below cost is flagged
+### Requirement: A flight with a negative margin is flagged
 
-The system SHALL flag a flight whose media cost exceeds its revenue as "below cost", SHALL report on its line and its campaign how many of their flights are below cost, and SHALL NOT alter any total because of the flag.
+The system SHALL flag as `below_cost`, labelled "Margen negativo", a flight whose final margin is below zero, that is revenue less media cost, less rebate, less platform cost, each amount rounded before it is subtracted. It SHALL report on its line and its campaign how many of their flights are flagged, and SHALL NOT alter any total because of the flag.
 
-#### Scenario: A negative margin is surfaced
-- **WHEN** a flight's media cost exceeds its revenue
-- **THEN** the flight is flagged "below cost"
-- **AND** its line and its campaign indicate it
+#### Scenario: A negative final margin is surfaced
+- **WHEN** a flight's revenue less media cost, rebate and platform cost, each rounded, is below zero
+- **THEN** the flight is flagged `below_cost`
+- **AND** its line and its campaign count it
 - **AND** it still contributes its true value to every total
+
+#### Scenario: A media cost above revenue is not the test
+- **WHEN** a flight's media cost is below its revenue but the rebate and the platform cost take the final margin below zero
+- **THEN** the flight is flagged `below_cost`
+
+#### Scenario: A media cost above revenue is always flagged
+- **WHEN** a flight's media cost exceeds its revenue
+- **THEN** its final margin is negative, because the rebate and the platform cost are never negative
+- **AND** the flight is flagged `below_cost`
+
+#### Scenario: A margin of exactly zero is not flagged
+- **WHEN** a flight's final margin is 0.00
+- **THEN** it is not flagged
+
+### Requirement: A line without a price has no revenue and no rebate
+
+The system SHALL accept a line whose sale CPM is 0.00 when its contracted impressions are above zero and SHALL never accept a negative CPM. For such a flight revenue SHALL be 0, the rebate SHALL be 0 and the margin SHALL be minus the sum of the media cost and the platform cost. Flights, the split of the volume and the pacing do not change, because the volume is still positive. The flight, its line and its campaign SHALL carry `zero_sale`, labelled "Sin venta", and every total SHALL count how many flights are `zero_sale`.
+
+#### Scenario: A line without a price still has cost
+- **WHEN** a flight with contracted impressions above zero, a CPM of 0.00, a media cost of 120.00 € and a platform cost of 30.00 € is calculated
+- **THEN** revenue is 0.00 € and the rebate is 0.00 €
+- **AND** the margin is -150.00 €
+- **AND** the flight is `zero_sale` and `below_cost`
+
+#### Scenario: Zero sale reaches the line and the campaign
+- **WHEN** a campaign has one line without a price and one with a price
+- **THEN** the flight and the line without a price carry `zero_sale`, and so does the campaign
+- **AND** each total counts one `zero_sale` flight
+
+#### Scenario: Zero sale advances no counter
+- **WHEN** a flight has `zero_sale`
+- **THEN** its revenue adds 0 to its rebate counter
+
+### Requirement: The margin percentage is over revenue and never divides by zero
+
+The system SHALL express `margin_pct` of a flight, a line, a campaign and the totals as a decimal string with two decimals, half up, in percentage points of revenue, and SHALL give it as null when revenue is 0. No calculation divides by revenue without checking it.
+
+#### Scenario: The percentage of the worked example
+- **WHEN** a flight has revenue 3,631.01 € and margin 823.26 €
+- **THEN** `margin_pct` is "22.67"
+
+#### Scenario: A negative margin has a negative percentage
+- **WHEN** a flight has revenue 1,000.00 € and margin -50.00 €
+- **THEN** `margin_pct` is "-5.00"
+
+#### Scenario: Revenue of zero has no percentage
+- **WHEN** revenue is 0.00 €
+- **THEN** `margin_pct` is null, at the flight and at every level above
+
+#### Scenario: A half rounds up
+- **WHEN** margin over revenue is exactly 12.345 percentage points
+- **THEN** `margin_pct` is "12.35"
+
+### Requirement: Contracted volume of zero is outside this cut
+
+The system SHALL keep rejecting a line whose contracted impressions are 0 at registration, and a campaign with zero contracted volume (a zero sale with no purchase order) and delivery with no purchase cost (pixels) are **not part of the margin in this cut**: their delivery remains unmatched delivery in the exception queue.
+
+#### Scenario: Registration refuses a volume of zero
+- **WHEN** a line is registered with contracted impressions of 0
+- **THEN** the request is rejected
 
 ### Requirement: Margin access is restricted to finance
 

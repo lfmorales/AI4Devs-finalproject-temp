@@ -52,7 +52,13 @@ Two facts shape the design. The rebate is a **tiered annual accrual attributed c
 
 **A missing schedule resolves to an explicit zero, written to the flight's `applied_rates` with its reason.** Never a null, and never an error. A group negotiated at zero and a group whose rate was never loaded produce the same number but different provenance, and Finance must be able to tell them apart.
 
-**A flight sold below cost is flagged, not blended away.** A flight whose rounded media cost exceeds its rounded revenue is flagged "below cost". The line and the campaign report how many of their flights are below cost. The flagged flight still contributes its true value to every total.
+**A flight with a negative margin is flagged, not blended away.** `below_cost` means the final margin is below zero: rounded revenue less rounded media cost, rebate and platform cost. It supersedes the earlier test of media cost above revenue, which missed a flight that only the rebate and the platform cost pushed under zero. The view labels it "Margen negativo". The line and the campaign count their flagged flights, and a flagged flight still contributes its true value to every total.
+
+**A line without a price is a case of the model, not an error.** A sale CPM of 0.00 is accepted when the contracted impressions are above zero and a negative CPM never is, so a price exception (a line sold at no charge that still costs money) is represented. Revenue and rebate are 0, the margin is minus the media cost and the platform cost, and the flights, the split of the volume and the pacing do not change because the volume stays positive. The flight carries `zero_sale` ("Sin venta"); a line carries it when it has a flight that does, and a campaign when it has a line that does; every total counts the flights. Its revenue adds 0 to the counter.
+
+**The margin percentage is points of revenue, guarded.** `margin_pct` is margin over revenue times 100, two decimals, half up, as a string, at flight, line, campaign and totals, and null when revenue is 0. Rounding is applied once, to the final ratio.
+
+**Limitation: zero contracted volume and cost-free delivery are outside this cut.** A campaign with contracted volume 0 (a zero sale with no purchase order) and pixels with no purchase cost do not enter the margin. Registration keeps refusing `contracted_impressions` of 0, so their delivery stays as unmatched delivery in the exception queue.
 
 **`CuratorMargin` is computed, never ingested.** Verified as `OC revenue − purchase cost` on 404 of 408 rows of the supplied reports. It never enters the margin; its own `% Margin` excludes the platform cost. Implementation deferred (6.9).
 
