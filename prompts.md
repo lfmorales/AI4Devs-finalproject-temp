@@ -1476,3 +1476,132 @@ La tasa de plataforma se resuelve de más específica a más general: línea, ag
 Tests, escritos antes y vistos fallar, con estos ejemplos: (1) mes cerrado: ingreso 3.631,01 € (726.202 impresiones a 5,00 € de CPM), rebate 907,75 € (exacto 907,7525), coste de medios 1.200,00 €, plataforma 700,00 € (700.000 entregadas), margen 823,26 €; (2) infraentrega: 700.000 entregadas sobre 726.202 contratadas, el ingreso sigue siendo sobre 726.202; (3) un flight en curso de 30 días con 10 transcurridos, con sus cuentas calculadas a mano en el propio test, y uno en curso sin entrega alguna; (4) un flight no iniciado; (5) coste de medios mayor que el ingreso; (6) tres flights de una línea cuyo total es exactamente la suma de los importes redondeados de cada uno (usa un caso donde el redondeo del total no coincidiría con la suma); (7) un test que recorre el módulo y comprueba que no usa float; (8) la resolución de la tasa en sus cuatro niveles y con un nivel ausente; (9) un flight que empieza el 31 de diciembre o acaba el 1 de enero no puede cruzar de año, porque cae dentro de un mes: el test lo demuestra.
 
 Restricciones: test primero y un commit por tarea con git add de rutas concretas; ni SQLAlchemy ni FastAPI en el dominio; si algo del spec es ambiguo, pregunta antes de decidir. Marca cada tarea en tasks.md solo cuando su test pase. Al terminar, reconstruye (docker compose build backend) y pega la salida cruda de pytest con la línea de resultado completa dos veces seguidas, el git show --stat de todos los commits del bloque y qué tareas quedan sin marcar. Sin resumen tuyo.
+
+
+**Prompt 2**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale feature/campaign-margin-and-rebate-accrual, para y avísame. Si git status --short no está vacío, para. No toques infraestructura, API ni frontend. No leas .env. Para ejecutar los tests usa el docker compose de este worktree (build, up y exec); no levantes bases propias ni inventes variables de entorno: si algo falta, párate y dímelo.
+
+Objetivo: el motor de rebate puro, tareas 3.1–3.4 y 4.1–4.3 de tasks.md (el resto de 3.x y 4.x está aplazado). Dominio puro: sin SQLAlchemy ni FastAPI, Decimal, sin float.
+
+Paso 0, sin código. Lee las especificaciones rebate-schedule y rebate-accrual y esas tareas, y responde con una lista corta qué implementarás y en qué orden, y qué discrepancias ves con estas decisiones. Registra las decisiones en spec y design en un commit docs(openspec): ... antes del código.
+
+Decisiones:
+
+Escalera: los seis pasos de docs/product-description.md §5.9 (agencia con tipo de plataforma y ámbito, agencia con tipo, agencia sola, grupo con tipo y ámbito, grupo con tipo, grupo solo), con la tabla en vigor en flight_start. El paso 7 (tabla del año anterior) queda aplazado (3.6): sin resultado, 0 % explícito con motivo (no_schedule, o no_schedule_for_year si el año no tiene tabla). Una tarifa sin canal vale para cualquier canal, el ámbito se estrecha antes de ampliarse, y la excepción de agencia gana a la del grupo. Usa los nombres de claves de la spec.
+Fecha de referencia y año: flight_start. Un flight nunca cruza de año.
+Tramos marginales sobre el ingreso, medidos contra el contador anual: cada euro de ingreso del flight cae en el tramo que corresponde a su posición. El rebate sale exacto, sin redondear; se redondea una sola vez dentro del cálculo de margen de M1, sin cambiar su firma.
+Contador: (grupo, agencia o None, canal, año). La agencia solo aparece si la tarifa resuelta es una excepción de agencia. Un contador independiente por canal. Una excepción de agencia sin canal cubre todos los canales, con un contador de esa agencia por canal. El recorte del contador del grupo (4.4) está aplazado: documéntalo como limitación conocida.
+Orden: los flights se aplican al contador en orden cronológico de flight_start, con desempate por id, y el resultado no depende del orden de la entrada. Solo los flights cerrados avanzan el contador. Un flight en curso calcula su rebate sobre su ingreso prorrateado, desde la posición tras todos los cerrados, sin avanzarlo.
+Salida por flight (los datos que después congelará applied_rates; aquí no se persiste nada): tasa resuelta, paso de resolución, indicador de excepción de agencia, año de la tabla, posición del contador antes y después, importe por tramo y rebate exacto.
+
+Tests, escritos antes y vistos fallar: (a) cada paso de la escalera; la excepción de agencia gana; el ámbito se estrecha antes de ampliarse; una tarifa sin canal sirve para cualquier canal; sin resultado, 0 % explícito con su motivo. (b) Tramos: contador en 90.000 € y campaña de 30.000 €, con 15 % hasta 100.000 € y 20 % de 100.000 a 500.000 €: 10.000 al 15 % y 20.000 al 20 %, rebate 5.500 € (18,33 %). (c) 600.000 € con 15 %, 20 % y 25 % (cortes en 100.000 y 500.000): 120.000 € (20,0 %). (d) Una tarifa plana del 25 % sobre un ingreso de 3.631,01 €: 907,7525 exacto. (e) Contadores independientes por canal; dos flights del mismo grupo aplicados en orden; permutar la entrada no cambia nada; desempate por id. (f) Un flight en curso no avanza el contador. (g) Una excepción de agencia sin canal cubre todos los canales. (h) Un flight que empieza el 1 de enero pertenece al año nuevo. (i) Sin float, importes Decimal, y el módulo no importa SQLAlchemy ni FastAPI.
+
+Restricciones: test primero y un commit por tarea con git add de rutas concretas; si algo de la especificación es ambiguo, pregunta antes de decidir; marca cada tarea solo cuando su test pase. Al terminar, reconstruye y pega la salida cruda de pytest con la línea de resultado completa dos veces, el git show --stat de todos los commits y qué tareas quedan sin marcar. Sin resumen tuyo.
+
+**Respuesta**
+Tareas sin marcar en 3.x y 4.x: 3.5, 3.6, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9 y 4.10, todas aplazadas y tachadas en tasks.md con su motivo. Las 3.1–3.4 y 4.1–4.3 están marcadas. git status --short queda vacío.
+
+Notas sobre decisiones que no estaban en tu lista:
+- Tests que pasaron al escribirlos. Los de 3.3 y casi todos los de 4.1–4.3 sobre comportamiento que la implementación previa ya cubría pasaron nada más escribirlos. Los vi fallar solo cuando faltaba el módulo o el código: 3.4 (2 fallos), 4.3 (8 fallos), 4.1 y 4.2 (módulo ausente).
+- Código de error añadido. bracket_table_empty no existe: una tabla vacía devuelve bracket_table_must_start_at_zero. También añadí duplicate_flight_id y revenue_must_not_be_negative, que no estaban en tus decisiones.
+- Contador de un flight sin tarifa (paso 8): avanza el contador del grupo (agencia None), aunque su rebate sea 0.
+- Cómo corrí los tests. Usé docker compose build backend, up -d backend y exec, con el .env del compose; sin bases ni variables propias esta vez.
+
+
+**Prompt 3**
+**Herramienta** Claude Code
+**Prompt**
+Antes del paso 0, y como primer commit: añade tests de dominio que faltan. (a) Permutación con varios contadores: una lista de flights de varios grupos, canales y una excepción de agencia, mezclados, que da el mismo resultado con todas las rotaciones, el orden inverso y al menos veinte ordenaciones barajadas con semilla fija (no recorras todas las permutaciones, no cabe). (b) Un flight sin tarifa (paso 8) avanza el contador del grupo aunque su rebate sea 0: un flight sin tarifa seguido de otro con tarifa en el mismo contador y año; si el primero avanza el contador, el segundo parte de esa posición. (c) Escribe en design.md el supuesto con su razón, marcado como «a confirmar con Finanzas»: el contador mide el volumen anual del grupo, con o sin tarifa; el riesgo es que un grupo sin ninguna tabla en vigor acumule volumen que distorsione los tramos cuando aparezca una. Si (b) falla, no cambies el motor sin decírmelo: pégame el resultado.
+Empieza ejecutando git branch --show-current; si no sale feature/campaign-margin-and-rebate-accrual, para y avísame. Si git status --short no está vacío, para. No toques el frontend. No leas .env. Para ejecutar los tests usa el docker compose de este worktree.
+
+Paso 0, sin código. Lee los apartados 1, 5, 6 y 7 de tasks.md y las cinco especificaciones, y los modelos de campaign_lines, campaign_line_periods, daily_deliveries, users/roles y el servicio de estado diario. Responde con una lista corta qué implementarás y en qué orden, y qué choca con estas decisiones. Si algo no encaja, pregunta antes de seguir. Registra las decisiones en spec y design en un commit docs(openspec): ... antes del código.
+
+Decisiones:
+
+Rol: el margen es solo para finance. operations y business reciben 403 en todas las rutas de margen. El seed de desarrollo asigna finance además de operations al usuario de prueba, sin quitar nada.
+Esquema (una migración con --autogenerate y test_migration_schema_sync en verde, con upgrade, downgrade -1 y upgrade limpios sobre una base con datos): tablas de tarifas de rebate y sus tramos (con valid_from, valid_to, grupo, agencia opcional, canal opcional y ámbito opcional; sin solapamientos en el mismo paso y día, garantizado por la base), la tasa de plataforma (línea, agencia, tipo de campaña, y el valor de sistema como un dato de maestros, no una constante), y applied_rates: una fila por flight cerrado, con clave ajena al flight, solo de añadir, con los campos de 1.5 más la posición del contador antes y después, el desglose por tramo y el rebate exacto. Importes en Numeric(18,6) o más precisos, nunca float.
+POST /margin/closings (año y mes, solo finance, def normal): resuelve y congela las tasas de los flights terminados de ese mes. Es idempotente: si ya existen, no se tocan. Regla de orden: se rechaza con 409 previous_month_open si un mes anterior del mismo año tiene flights terminados sin congelar; el error nombra el mes que bloquea. Un mes sin flights terminados devuelve 200 con cero cerrados. Todo en una transacción.
+GET /margin (solo finance): por campaña, línea y flight. Un flight cerrado lee lo congelado, sin recalcular; uno en curso se calcula al vuelo con as_of = D-1 (función de zona horaria existente) y se marca provisional; uno no iniciado no aparece. Filtros: año, mes y campaña. Los importes salen como cadenas decimales, nunca como números de coma flotante. Una línea con flights de distintos estados y los totales exponen el recuento de below_cost.
+Lo congelado no se mueve: cambiar una tarifa o una tasa después no cambia un mes cerrado. Un test lo demuestra.
+Maestros: endpoints para crear tarifas de rebate y fijar la tasa de plataforma, solo finance. Si recortas, deja el seed con una tarifa y una tasa de ejemplo ficticias, y registra el recorte como aplazado con motivo.
+La salida de cualquier error es {"code","message"} por manejadores globales; los códigos de dominio de M2 se traducen a mensajes distintos (por ejemplo, tabla vacía frente a tabla que no empieza en cero).
+
+Pruebas, test primero y vistas fallar: el cierre (éxito, idempotente, previous_month_open nombrando el mes, mes sin flights, atomicidad con un fallo forzado a mitad); el GET (cerrado, en curso provisional, no iniciado ausente, línea con flights mixtos, filtros); que un cambio de tarifa posterior no mueve lo cerrado; 401 sin token y 403 sin finance en cada ruta nueva, y que el test de protección de rutas, que se construye a partir de las registradas, las recoge; que el GET no escribe nada; que ningún importe sale como float; y que un usuario operations no recibe ningún campo de margen. Un test del cálculo de extremo a extremo con los ejemplos de la spec (mes cerrado 3.631,01 / 1.200,00 / 907,75 / 700,00 → 823,26).
+
+Restricciones: commits pequeños con git add de rutas concretas; no edites uv.lock; si algo es ambiguo, pregunta. Marca cada tarea solo cuando su test pase. Al terminar, reconstruye y pega la salida cruda de pytest con la línea de resultado completa dos veces, el git show --stat de todos los commits y qué tareas quedan sin marcar. Sin resumen tuyo.
+
+**Respuesta**
+Los dos commits previos están hechos, y para ninguno hizo falta tocar el motor. Dejo abajo el paso 0 de M3 con lo que choca, sin código ni commit de decisiones todavía.
+
+Primer commit (tests pedidos)
+- 0a93bc9: los tests de permutación (rotaciones, orden inverso y 25 barajadas con semilla fija) y el test del flight sin tarifa que avanza el contador. Los dos pasan con el motor tal como está. Comprobé que el de permutación detecta fallos: cambié el desempate por id y fallaron 3 tests, y revertí el cambio.
+- c95a34e: el supuesto «el contador mide el volumen anual del grupo, con o sin tarifa» en design.md, marcado «a confirmar con Finanzas».
+
+Qué implementaré, en este orden
+1. Migración con --autogenerate: tarifas y tramos, platform_rate_settings y applied_rates. Añado test_migration_schema_sync y un test de upgrade, downgrade -1 y upgrade sobre datos. (1.1, 1.2, 1.4, 1.5, 1.6)
+2. Repositorios SQLAlchemy detrás de interfaces de dominio. Los importes se agregan en la base, con el mismo patrón que el estado diario. (6.1)
+3. Servicio de cierre y POST /margin/closings. (6A.1–6A.4, 6.2, 5.2)
+4. Servicio de lectura y GET /margin. (6.4, 6A.5, 6.3)
+5. Endpoints de maestros (crear tarifa, fijar tasa) y seed con finance.
+6. Roles, protección de rutas, errores y el test de extremo a extremo con 3.631,01 → 823,26. (6.7, 6.8)
+
+Cada paso lleva test primero y un commit pequeño.
+
+Qué choca o necesito que decidas
+1. Estado «terminado pero sin congelar». Tu decisión cubre cerrado (congelado), en curso y no iniciado. No dice qué devuelve el GET para un flight cuyo flight_end ≤ D-1 si su mes aún no se ha cerrado.
+   - Mi propuesta: calcularlo al vuelo con state = "pending_close" y provisional = true, porque su tasa puede cambiar hasta el cierre.
+   - Los estados serían closed (congelado), pending_close, running, y el no iniciado no aparece.
+2. Posición de partida del contador al cerrar. Para no repreciar lo congelado, la posición de un flight nuevo debe salir de la última position_after congelada de su contador. calculate_rebates hoy solo recibe flights.
+   - Propongo añadir un parámetro opcional opening_positions (por defecto vacío) y guardar la clave del contador en applied_rates. Es un cambio aditivo del dominio de M2.
+3. Campañas inactivas. El estado diario solo mira active. ¿El margen incluye campañas inactive? Propongo incluir todas, porque el ingreso es el contratado, y que el filtro de campaña sea por campaign_id, con 404 si no existe.
+4. Roll-ups. Las decisiones solo piden GET /margin por campaña, línea y flight. Los roll-ups por periodo, agencia, anunciante y tipo (6.4 y 6.5) no están.
+   - Los dejo aplazados con motivo, y 6.5 pasa a «el total de GET /margin es la suma de su detalle».
+5. Forma de los errores de validación. Los tests de registro de campañas esperan {"detail": ...} (FastAPI por defecto), así que un manejador global de RequestValidationError los rompería.
+   - Propongo un manejador que devuelva {"code","message"} solo para rutas bajo /margin, y dejar el resto como está.
+6. Tasa de plataforma.
+   - Los overrides son filas de solo añadir, y gana la última por id.
+   - La fila de sistema (1,00) la inserta la propia migración como dato, con created_by nulo y un check que solo lo permite en el nivel system.
+7. Desglose por tramo. Lo guardo en una tabla hija applied_rate_brackets con Numeric, en vez de JSON, para no perder precisión.
+8. Sin solapamientos, «garantizado por la base». Necesita una restricción de exclusión con btree_gist y daterange, y por tanto CREATE EXTENSION btree_gist en la migración. Con el usuario superusuario de este compose funciona. En una base gestionada hará falta permiso.
+9. Concurrencia del cierre. Un pg_advisory_xact_lock por año y mes, además de la unicidad de applied_rates.flight_id.
+10. Rutas de maestros. POST /margin/rebate-schedules y POST /margin/platform-rates, ambas solo finance, bajo el prefijo /margin.
+11. El apartado 7 de tasks.md es frontend. Lo leo solo como contrato de la API y no implemento nada de él.
+
+Con tus respuestas registro todo en spec y design en un commit docs y después empiezo por la migración.
+
+**Respuesta**
+Tareas sin marcar en 1, 5, 6, 6A y 6B:
+- 1.3, 6.6 y 6.9 están aplazadas y tachadas con su motivo.
+- Pendientes de la tanda 2: 6.3, 6.4, 6.5, 6.7, 6.8, 6A.5, 6A.8 y 6B.1–6B.7.
+- 6A.8 necesita el GET: hoy solo está probada la mitad (el cierre llama a la misma función de dominio y sus cifras coinciden al céntimo con las de lectura).
+- 6B.3 está hecha a medias: el manejador {"code","message"} bajo /margin ya existe y funciona. Falta la traducción de los códigos de M2 a mensajes distintos.
+
+Cosas que debes saber de esta tanda:
+- CREATE EXTENSION (btree_gist) en el test de migración. El test de migración crea un rol sin permiso y comprueba que falla con el mensaje que menciona btree_gist y docs/deploy.md.
+- El soporte de enum en btree_gist. Mi primera exclusión usaba scope::text, que PostgreSQL rechaza por no ser inmutable. La sustituí por (scope IS NULL) más coalesce(scope, 'national'::scope_enum). Lo descubrió el test, no la revisión.
+- Mutaciones. Los tests del cierre que pasaron a la primera los verifiqué rompiendo el código: quitar el rollback, la comprobación de previous_month_open y las posiciones de apertura hace fallar su test. Quitar el bloqueo consultivo hizo fallar el test de concurrencia 3 de 3 veces. Con el bloqueo pasó 5 de 5.
+- Una mala suposición mía. Un rm dentro del contenedor me hizo creer que la migración fallaba. El contenedor no se recreaba al reconstruir la imagen. dt.sh ahora usa --force-recreate.
+- Fuera del plan. El marcador de la extensión va en el comentario de la propia extensión, no en una tabla: alembic check marcaba como diferencia el comentario de la tabla.
+- Base de datos. La base temporal m3_autogen ya está borrada. La base de desarrollo no se ha tocado, salvo que pytest recrea <db>_test como siempre.
+
+
+**Ajustes Humanos**
+Margen: un change escrito sobre el modelo antiguo Ajuste humano Antes de escribir código pedí a Claude Code una lectura del spec del margen, con citas y «no especificado» donde faltara. Descubrió que las cinco especificaciones, el diseño y las tareas estaban escritos sobre el modelo antiguo (la palabra «flight» no aparecía) y que el proposal afirmaba que sus dependencias no estaban archivadas cuando la de registro ya lo estaba. Reescribí el change sobre flights y fijé, antes de tocar código, lo que el spec no cubría: la unidad de cálculo es el flight; el ingreso no depende de la versión de la orden de compra (que puede ser nula); cada importe se redondea antes de restar; los días transcurridos llegan hasta D-1; las tasas se congelan en un cierre de mes explícito, idempotente y con orden, no al leer; y la tasa de sistema es un dato, no una constante. La lectura destapó además contradicciones del propio spec (congelar frente a recalcular, «computado a demanda» frente a «escrito en cada cálculo»), que resolví con ese cierre explícito.
+
+Dominio del margen: comprobar que los tests detectan lo que dicen Ajuste humano Claude Code ejecutó los tests con una base PostgreSQL propia y valores ficticios de Cognito en lugar del flujo del proyecto; desde entonces exijo el docker compose del worktree y que pare si falta algo. Para comprobar los tests de «sin float» y «un solo modelo para todos los canales», pedí mutaciones: inyectó un float y un literal «Deal» en el código y los tests fallaron. Los tests de dominio dependen de la base de datos por una fixture de sesión global: deuda anotada para el informe de pruebas.
+
+Motor de rebate: preguntas antes del código y una instrucción mía retirada Ajuste humano Antes de escribir, Claude Code planteó cinco puntos donde mi prompt chocaba con la especificación. El más importante: yo había pedido que el rebate de un flight en curso se calculase sobre el ingreso ya prorrateado, y el dominio ya prorrateaba, con lo que se habría aplicado dos veces. Retiré mi instrucción: el motor calcula el rebate del flight completo y el dominio lo prorratea. Decidí además que el volumen de una excepción de agencia avanza el contador de esa agencia y no el del grupo (aplazando la reexpresión de lo ya congelado), que los tramos empiezan en cero, son contiguos y el último es abierto, y que un flight sin tarifa avanza el contador del grupo, supuesto marcado «a confirmar con Finanzas». Pedí una prueba con todas las permutaciones de entrada y otra con varios contadores mezclados; la segunda no existía y se añadió.
+
+Persistencia, cierre de mes y API: mutaciones que no mutaban Ajuste humano La entrega se hizo en dos tandas. Exigí que el cierre y la lectura en curso usen la misma función de dominio, con un test que compara al céntimo el importe antes y después del cierre y que comprueba que cambiar una tarifa después no mueve lo cerrado. Claude Code verificó sus tests con mutaciones: una, escrita con una sintaxis de sed que macOS no soporta, no cambió nada y pasó en verde (la repitió con Python y entonces falló); y al restaurar copias sobrescribió un fichero con otro del mismo nombre, y lo detectó porque el contenedor no arrancaba. Acepté la restricción de exclusión de tarifas con btree_gist, anotando el permiso que requiere en una base gestionada.
+
+Un número del ejemplo que no era un dato, y una alarma que no era real Ajuste humano El ejemplo de la especificación usaba un coste de medios que era un marcador, y lo usé en una prueba manual sin avisar de que no era un dato real. Mi pregunta sobre su origen mezcló dos cosas y sembró una duda de doble cómputo (que el coste completo de plataforma ya incluyera el de Adform). La despejó una hoja anonimizada de un mes cerrado de compra directa que aportó Finanzas: coste total igual a compra más extraprima más infraestructura, con las tres partidas restándose. Retiré la alarma.
+
+Dos meses reales de Finanzas cambiaron tres decisiones Ajuste humano Las hojas de un mes cerrado y de uno en curso se convirtieron en pruebas de aceptación (se leen de una carpeta ignorada por Git y se saltan si no existen): el dominio reproduce, con tolerancia de céntimos y sin ajustar el código, los importes y porcentajes de las campañas comparadas, y las diferencias con la hoja quedan explicadas. Cambiaron tres cosas. (1) below_cost pasó de «coste de medios mayor que el ingreso» a «margen final negativo»: la única campaña con pérdidas del mes cerrado no la marcaba la definición antigua. (2) Clasifiqué mal las campañas sin venta como «entrega sin orden de compra», cuando eran ventas a cero; acoté el alcance: una línea con precio 0 y volumen es una excepción de precio, y las de volumen 0 no se contemplan por ahora (en el mes en curso suponen en torno a una cuarta parte del coste, la mayor diferencia con la hoja). (3) El registro aceptaba CPM negativos, y mi premisa de que los rechazaba era falsa: lo detectó Claude Code al leer la validación. Hubo además una mutación que no detectaba nada (ignorar la tasa de plataforma por línea, porque todas las filas usaban la tasa de sistema), que se arregló con una línea sintética con otra tasa, y se excluyeron dos filas con ajustes manuales en la hoja de origen.
+
+Qué son los «días servidos» de la hoja Ajuste humano La hoja devenga el margen provisional por días con impresiones servidas sobre días de la orden; AdOps360, por días transcurridos del contrato hasta D-1. Coinciden mientras la campaña sirva cada día, y a mes cerrado no hay diferencia. Si una campaña se pausa, la hoja devenga menos ingreso que AdOps360. La prueba de aceptación del mes en curso construye la fecha de corte a partir de los días servidos de la hoja, así que valida la fórmula pero no esta definición. Lo documento como diferencia conocida.
+
+Errores del asistente en esta ronda Ajuste humano Tres comandos del asistente dieron resultados engañosos y los detecté al ejecutarlos o al contar líneas: un patrón ** que zsh rechaza, una variable sin comillas que zsh no divide y un sed con un límite de 12 líneas que cortó justo lo que buscaba. Además dio por ignorada una carpeta con importes reales antes de que existiera la regla en .gitignore. Dos veces, un resumen de Claude Code contó mal los commits o los tests (dijo cuatro y eran tres); lo vi al contrastarlo con git log y con el diff.
+
+Patrón común (historia 3). Los datos reales cambiaron el diseño más que cualquier test: dos hojas de Finanzas corrigieron tres decisiones y desmontaron una alarma. La verificación que más valió fue la independiente: identidades comprobadas fila a fila sobre las hojas, mutaciones sobre los tests, y comparación del importe leído antes y después del cierre. Lo que menos valió fueron los resúmenes: contaron mal recuentos de commits y de tests y dieron por buena una prueba manual con un número de ejemplo. Los fallos de los tests verdes siguen apareciendo donde el test no puede mirar.
