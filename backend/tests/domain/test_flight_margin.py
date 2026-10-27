@@ -251,24 +251,59 @@ def test_a_flight_whose_media_cost_exceeds_its_revenue_is_below_cost():
     assert result.margin == Decimal("3631.01") - Decimal("4000.00") - Decimal("700.00")
 
 
-def test_media_cost_equal_to_revenue_is_not_below_cost():
-    result = calculate_flight_margin(_flight(media_cost="3631.01"), as_of=AFTER_AUGUST)
+def test_a_margin_of_exactly_zero_is_not_below_cost():
+    # Revenue 3,631.01 = media cost, no rebate, no platform cost: the final margin is 0.00.
+    result = calculate_flight_margin(
+        _flight(media_cost="3631.01", rebate_amount="0", platform_rate="0"), as_of=AFTER_AUGUST
+    )
 
+    assert result.margin == Decimal("0.00")
     assert result.below_cost is False
 
 
-def test_below_cost_compares_the_rounded_amounts():
-    # Revenue 3,631.01; a media cost of 3,631.014 rounds to 3,631.01, so it does not exceed it.
-    result = calculate_flight_margin(_flight(media_cost="3631.014"), as_of=AFTER_AUGUST)
+def test_below_cost_judges_the_margin_made_of_rounded_amounts():
+    # A media cost of 100.004 rounds to 100.00 against a revenue of 100.00: the margin is 0.00, not -0.004.
+    result = calculate_flight_margin(
+        _flight(contracted_impressions=10_000, sale_cpm="10.00", media_cost="100.004", rebate_amount="0", platform_rate="0"),
+        as_of=AFTER_AUGUST,
+    )
 
+    assert result.revenue == Decimal("100.00") and result.media_cost == Decimal("100.00")
+    assert result.margin == Decimal("0.00")
     assert result.below_cost is False
 
 
-def test_a_flight_can_be_loss_making_without_being_below_cost():
-    # Media cost under revenue, but the rebate and the platform cost take the margin negative.
+def test_a_cent_under_zero_is_below_cost():
+    result = calculate_flight_margin(
+        _flight(contracted_impressions=10_000, sale_cpm="10.00", media_cost="100.01", rebate_amount="0", platform_rate="0"),
+        as_of=AFTER_AUGUST,
+    )
+
+    assert result.margin == Decimal("-0.01")
+    assert result.below_cost is True
+
+
+def test_a_flight_with_media_cost_under_revenue_is_below_cost_when_the_rebate_and_platform_take_it_under_zero():
+    # Media cost 2,100.00 against revenue 3,631.01, but the rebate (907.75) and the platform cost (700.00) follow.
     result = calculate_flight_margin(_flight(media_cost="2100.00"), as_of=AFTER_AUGUST)
 
-    assert result.margin < 0
+    assert result.media_cost < result.revenue
+    assert result.margin == Decimal("-76.74")
+    assert result.below_cost is True
+
+
+def test_a_flight_whose_media_cost_equals_its_revenue_is_below_cost_once_the_other_costs_are_counted():
+    result = calculate_flight_margin(_flight(media_cost="3631.01"), as_of=AFTER_AUGUST)
+
+    assert result.below_cost is True
+
+
+def test_a_positive_margin_is_not_below_cost_even_with_a_high_media_cost():
+    result = calculate_flight_margin(
+        _flight(media_cost="3000.00", rebate_amount="0", platform_rate="0.10"), as_of=AFTER_AUGUST
+    )
+
+    assert result.margin == Decimal("3631.01") - Decimal("3000.00") - Decimal("70.00")
     assert result.below_cost is False
 
 

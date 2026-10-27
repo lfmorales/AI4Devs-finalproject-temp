@@ -47,13 +47,15 @@ def calculate_flight_margin(flight: FlightEconomics, as_of: date) -> FlightMargi
     media_cost = round_amount(flight.media_cost)
     rebate = round_amount(full_rebate)
     platform_cost = round_amount(Decimal(flight.delivered_impressions) / _THOUSAND * flight.platform_rate)
+    margin = revenue - media_cost - rebate - platform_cost
     return FlightMargin(
         status=status,
         revenue=revenue,
         media_cost=media_cost,
         rebate=rebate,
         platform_cost=platform_cost,
-        margin=revenue - media_cost - rebate - platform_cost,
+        margin=margin,
         provisional=status is FlightStatus.RUNNING,
-        below_cost=media_cost > revenue,
+        # Margen negativo: the final margin, made of the rounded amounts, is below zero.
+        below_cost=margin < 0,
     )

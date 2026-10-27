@@ -147,3 +147,16 @@ def test_a_campaign_total_equals_the_sum_of_all_its_flights():
     campaign = total_lines([total_flights(flights) for flights in flights_by_line])
 
     assert campaign.revenue == Decimal("30.00")
+
+
+def test_a_flight_whose_rebate_and_platform_cost_make_its_margin_negative_is_counted_at_line_and_campaign():
+    # Media cost 8.00 against revenue 10.00, but a 50 % rebate (5.00) takes the final margin to -3.00.
+    negative = _closed(media_cost="8.00", rebate_amount="5.00")
+    healthy = _closed()
+
+    line = total_flights([negative, healthy])
+    campaign = total_lines([line])
+
+    assert negative.margin == Decimal("-3.00") and negative.below_cost is True
+    assert (line.below_cost_count, campaign.below_cost_count) == (1, 1)
+    assert line.margin == Decimal("7.00")  # -3.00 + 10.00: the flagged flight keeps its true value
