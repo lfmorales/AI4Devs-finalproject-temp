@@ -84,6 +84,8 @@ Two facts shape the design. The rebate is a **tiered annual accrual attributed c
 
 **Deferred in this cut.** The period, agency, advertiser and campaign-type roll-ups (their endpoints and 6.5 beyond the sum of `GET /margin`'s own detail) wait for the roll-up view. The frontend (section 7) is not touched.
 
+**Known differences with the source sheets.** The running-month sheet accrues by the days a line *served* (`days_served / days_oc`); the domain accrues by the contract days elapsed up to `as_of` (D-1), whether or not the line delivered on them, which is the deliberate revenue-recognition choice of this change (a line that stopped delivering keeps accruing revenue). The acceptance test sets `as_of` from `days_served`, so the two coincide there; a real line that delivered fewer days than have elapsed would accrue more here than in the sheet. The sheet's `margin_pct_full_month` subtracts partial costs from the revenue of the whole month and is not replicated. Its `rebate_cost` column is the rebate on the whole month's sale, not the accrued one, and is not compared.
+
 ## Cut
 
 Deferred, each with its reason in `tasks.md`:
