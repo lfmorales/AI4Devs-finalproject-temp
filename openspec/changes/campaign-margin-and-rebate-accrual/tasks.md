@@ -105,15 +105,22 @@
 - [x] 6D.2 Write the test that the rows left out are exactly those with no contracted volume (pixels included) and Campaign 38 (a manual adjustment of 37.50 € in the source sheet), each with its reason, and that makes the cost and the share of the month's cost of the first group explicit from the sheet's own columns
 - [x] 6D.3 Write the database case: five lines (one running with sale, one closed, one running without a rebate schedule, one over-delivered and the line without a price), the month closed for what has ended, and `GET /margin` returning the same amounts as decimal strings, provisional where it applies and `zero_sale` on the line without a price
 
-## 7. Frontend: Margin and Roll-up Views
+## 7. Frontend: Margin View
 
-- [ ] 7.1 Implement the typed API client for margin and roll-ups in `lib/api/` and verify no component calls `fetch` directly
-- [ ] 7.2 Write failing Vitest tests asserting a running-flight figure, and a line or campaign that includes one, renders with its provisional label and a closed figure does not
-- [ ] 7.3 Implement the margin view and verify the tests from 7.2 pass, with no monetary value recomputed client-side
+The shapes of `GET /margin` and `POST /margin/closings` are taken from the backend's real OpenAPI schema (`create_app().openapi()`): `MarginResponse`, `CampaignMarginResponse`, `LineMarginResponse`, `FlightMarginResponse`, `TotalsResponse`, `ClosingRequest` and `ClosingResponse`. No field is invented.
+
+- [ ] 7.1 Implement the typed API client for the margin in `lib/api/margin.ts` (decimal amounts typed as strings) and a formatter of decimal strings in `lib/format/`, and verify no component calls `fetch` directly and that no amount goes through `Number`
+- [ ] 7.2 Write failing Vitest tests, with the real HTTP client over a simulated fetch, for the hierarchy campaign, line and flight with totals at every level; the three flight states with their text (`Cerrado`, `Pendiente de cierre`, `En curso (provisional)`); the fixed notice `Las cifras provisionales pueden cambiar hasta el cierre del mes`; `Margen negativo` and `Sin venta` on the flight and their counts on the line and the campaign; an amount such as 12345678901234.56 shown whole as `12.345.678.901.234,56`; a null `margin_pct` shown as `—`; and loading, empty (`No hay margen para el periodo elegido`) and error states that differ from one another
+- [ ] 7.3 Implement the margin page in the authenticated layout, with a link `Margen` in the navigation, native `details` and `summary` for the hierarchy, year, month and campaign filters (held in component state only, never in the URL or in storage), labelled controls and no inline style (the names go through the shared masked-name component), and verify the tests from 7.2 pass, with no amount added, subtracted, divided or rounded in the browser
 - [ ] 7.4 ~~Implement the roll-up view with filtering by period, agency, advertiser and campaign type, and verify sorting and filtering work on each~~ **Deferred**: the margin view is the only view of this cut; the roll-up endpoints stay available through the API (6.4)
-- [ ] 7.5 Implement the `finance` route guard and write a test asserting what a user without the role sees
-- [ ] 7.6 Verify a flight with a negative margin renders as "Margen negativo" and a flight without a price as "Sin venta", that its line and campaign show the counts, and that the totals still include their true value, asserted by a test
+- [ ] 7.5 Make a `403` lead to `Acceso denegado` and hide the `Margen` link afterwards, and a `401` lead to `Sesión caducada`, without decoding roles in the browser, on the page and on the closing, asserted by tests
+- [ ] 7.6 Verify a flight with a negative margin renders as `Margen negativo` and a flight without a price as `Sin venta`, that its line and campaign show the counts, and that the totals still include their true value, asserted by a test
 - [ ] 7.7 ~~Verify the masters view distinguishes a group negotiated at zero from one whose rate was never loaded~~ **Deferred**: there is no masters view in this cut; the distinction is recorded in `applied_rates` (step 8 with its reason) and read from there
+- [ ] 7.8 Write failing tests and implement the `Cerrar mes` button for the chosen year and month: it opens the shared native dialog explaining that closing freezes the rates and cannot be undone, calls `POST /margin/closings` only on confirmation, shows how many flights were closed or `No hay flights terminados en este mes`, shows `previous_month_open` in Spanish naming the month that blocks it, and shows every other backend code in Spanish with its own message
+- [ ] 7.9 Let the new-campaign form accept a sale CPM of 0 (never negative) to register a line without a price, keep the volume above 0, and show a Spanish message for a negative CPM, with its test
+- [ ] 7.10 ~~Editing rebate schedules and the platform rate on screen~~ **Deferred**: they are created through the API (6B.4); there is no editing screen in this cut
+- [ ] 7.11 ~~Roll-ups by agency and by advertiser, and exports~~ **Deferred**: they wait for the roll-up view (7.4) and for the export (6.6)
+- [ ] 7.12 ~~Campaigns with no contracted volume in the margin view~~ **Deferred**: they have no flights and do not enter the margin (2A.5); their delivery stays in the exception queue
 
 ## 8. Data: Rebate Migration and Reconciliation
 
