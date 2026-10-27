@@ -42,3 +42,5 @@ letsencrypt/
 
 # The real master data to load in production (docs/deploy.md); deploy/masters.example.json is the template.
 deploy/masters.json
+
+backend/tests/private/
