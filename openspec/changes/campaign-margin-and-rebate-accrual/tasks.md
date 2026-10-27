@@ -101,8 +101,8 @@
 
 ## 6D. Acceptance with the private in-progress-month sheet
 
-- [ ] 6D.1 Write the acceptance test of a month still running from `tests/private/mes_en_curso.csv` (skipped with a clear reason if absent): each compared row is one line with one flight of `days_oc` days from 1 October 2026, `as_of` set to the start plus `days_served` minus one, priced with the same domain functions as the closing and the reads, with the per-row (revenue, rebate and margin accrued by `days_served / days_oc`, media and platform cost as served, `margin_pct_actual`, provisional or closed) and the aggregate assertions
-- [ ] 6D.2 Write the test that the rows left out are exactly those with no contracted volume (pixels included) and Campaign 38 (a manual adjustment of 37.50 € in the source sheet), each with its reason, and that makes the cost and the share of the month's cost of the first group explicit from the sheet's own columns
+- [x] 6D.1 Write the acceptance test of a month still running from `tests/private/mes_en_curso.csv` (skipped with a clear reason if absent): each compared row is one line with one flight of `days_oc` days from 1 October 2026, `as_of` set to the start plus `days_served` minus one, priced with the same domain functions as the closing and the reads, with the per-row (revenue, rebate and margin accrued by `days_served / days_oc`, media and platform cost as served, `margin_pct_actual`, provisional or closed) and the aggregate assertions
+- [x] 6D.2 Write the test that the rows left out are exactly those with no contracted volume (pixels included) and Campaign 38 (a manual adjustment of 37.50 € in the source sheet), each with its reason, and that makes the cost and the share of the month's cost of the first group explicit from the sheet's own columns
 - [ ] 6D.3 Write the database case: five lines (one running with sale, one closed, one running without a rebate schedule, one over-delivered and the line without a price), the month closed for what has ended, and `GET /margin` returning the same amounts as decimal strings, provisional where it applies and `zero_sale` on the line without a price
 
 ## 7. Frontend: Margin and Roll-up Views
