@@ -34,6 +34,7 @@ class TotalsResponse(BaseModel):
     provisional: bool
     flights_counted: int
     below_cost_count: int
+    zero_sale_count: int
 
     @classmethod
     def from_totals(cls, totals: MarginTotals) -> "TotalsResponse":
@@ -41,6 +42,7 @@ class TotalsResponse(BaseModel):
             revenue=totals.revenue, media_cost=totals.media_cost, rebate=totals.rebate,
             platform_cost=totals.platform_cost, margin=totals.margin, provisional=totals.provisional,
             flights_counted=totals.flights_counted, below_cost_count=totals.below_cost_count,
+            zero_sale_count=totals.zero_sale_count,
         )
 
 
@@ -62,6 +64,7 @@ class FlightMarginResponse(BaseModel):
     state: FlightState
     provisional: bool
     below_cost: bool
+    zero_sale: bool
     revenue: DecimalString
     media_cost: DecimalString
     rebate: DecimalString
@@ -78,7 +81,7 @@ class FlightMarginResponse(BaseModel):
         return cls(
             flight_id=report.flight_id, period_year=report.period_year, period_month=report.period_month,
             flight_start=report.flight_start, flight_end=report.flight_end, state=report.state,
-            provisional=margin.provisional, below_cost=margin.below_cost, revenue=margin.revenue,
+            provisional=margin.provisional, below_cost=margin.below_cost, zero_sale=margin.zero_sale, revenue=margin.revenue,
             media_cost=margin.media_cost, rebate=margin.rebate, platform_cost=margin.platform_cost,
             margin=margin.margin,
             rates=AppliedRatesResponse(
@@ -94,6 +97,7 @@ class LineMarginResponse(BaseModel):
     line_number: int
     channel: str
     scope: str
+    zero_sale: bool
     flights: list[FlightMarginResponse]
     totals: TotalsResponse
 
@@ -102,6 +106,7 @@ class CampaignMarginResponse(BaseModel):
     campaign_id: int
     name: str
     status: str
+    zero_sale: bool
     lines: list[LineMarginResponse]
     totals: TotalsResponse
 
@@ -118,10 +123,11 @@ class MarginResponse(BaseModel):
             campaigns=[
                 CampaignMarginResponse(
                     campaign_id=campaign.campaign_id, name=campaign.name, status=campaign.status,
+                    zero_sale=campaign.totals.zero_sale,
                     lines=[
                         LineMarginResponse(
                             campaign_line_id=line.campaign_line_id, line_number=line.line_number,
-                            channel=line.channel, scope=line.scope,
+                            channel=line.channel, scope=line.scope, zero_sale=line.totals.zero_sale,
                             flights=[FlightMarginResponse.from_report(flight) for flight in line.flights],
                             totals=TotalsResponse.from_totals(line.totals),
                         )

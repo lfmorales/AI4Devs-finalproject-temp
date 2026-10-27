@@ -56,6 +56,8 @@ class FlightMargin:
     margin: Decimal | None
     provisional: bool
     below_cost: bool
+    # Sin venta: the line has a sale CPM of 0.00, so the flight has no revenue and no rebate but still has cost.
+    zero_sale: bool = False
 
 
 @dataclass(frozen=True)
@@ -75,6 +77,12 @@ class MarginTotals:
     flights_counted: int
     below_cost_count: int
     not_started_count: int
+    zero_sale_count: int = 0
+
+    @property
+    def zero_sale(self) -> bool:
+        """A line carries it when one of its flights does, a campaign when one of its lines does."""
+        return self.zero_sale_count > 0
 
 
 @dataclass(frozen=True)

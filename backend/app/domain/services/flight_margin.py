@@ -58,4 +58,5 @@ def calculate_flight_margin(flight: FlightEconomics, as_of: date) -> FlightMargi
         provisional=status is FlightStatus.RUNNING,
         # Margen negativo: the final margin, made of the rounded amounts, is below zero.
         below_cost=margin < 0,
+        zero_sale=flight.sale_cpm == 0,
     )
