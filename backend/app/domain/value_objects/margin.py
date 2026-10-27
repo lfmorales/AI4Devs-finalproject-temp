@@ -1,7 +1,18 @@
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
+
+
+_ONE_HUNDRED = Decimal(100)
+_HUNDREDTH = Decimal("0.01")
+
+
+def margin_percentage(margin: Decimal | None, revenue: Decimal | None) -> Decimal | None:
+    """Margin over revenue in percentage points, two decimals, half up; None when there is no revenue to divide by."""
+    if margin is None or revenue is None or revenue == 0:
+        return None
+    return (margin * _ONE_HUNDRED / revenue).quantize(_HUNDREDTH, rounding=ROUND_HALF_UP)
 
 
 class FlightStatus(StrEnum):
@@ -59,6 +70,10 @@ class FlightMargin:
     # Sin venta: the line has a sale CPM of 0.00, so the flight has no revenue and no rebate but still has cost.
     zero_sale: bool = False
 
+    @property
+    def margin_pct(self) -> Decimal | None:
+        return margin_percentage(self.margin, self.revenue)
+
 
 @dataclass(frozen=True)
 class MarginTotals:
@@ -83,6 +98,10 @@ class MarginTotals:
     def zero_sale(self) -> bool:
         """A line carries it when one of its flights does, a campaign when one of its lines does."""
         return self.zero_sale_count > 0
+
+    @property
+    def margin_pct(self) -> Decimal | None:
+        return margin_percentage(self.margin, self.revenue)
 
 
 @dataclass(frozen=True)

@@ -35,6 +35,7 @@ class TotalsResponse(BaseModel):
     flights_counted: int
     below_cost_count: int
     zero_sale_count: int
+    margin_pct: DecimalString | None
 
     @classmethod
     def from_totals(cls, totals: MarginTotals) -> "TotalsResponse":
@@ -42,7 +43,7 @@ class TotalsResponse(BaseModel):
             revenue=totals.revenue, media_cost=totals.media_cost, rebate=totals.rebate,
             platform_cost=totals.platform_cost, margin=totals.margin, provisional=totals.provisional,
             flights_counted=totals.flights_counted, below_cost_count=totals.below_cost_count,
-            zero_sale_count=totals.zero_sale_count,
+            zero_sale_count=totals.zero_sale_count, margin_pct=totals.margin_pct,
         )
 
 
@@ -70,6 +71,7 @@ class FlightMarginResponse(BaseModel):
     rebate: DecimalString
     platform_cost: DecimalString
     margin: DecimalString
+    margin_pct: DecimalString | None
     rates: AppliedRatesResponse
 
     @classmethod
@@ -83,7 +85,7 @@ class FlightMarginResponse(BaseModel):
             flight_start=report.flight_start, flight_end=report.flight_end, state=report.state,
             provisional=margin.provisional, below_cost=margin.below_cost, zero_sale=margin.zero_sale, revenue=margin.revenue,
             media_cost=margin.media_cost, rebate=margin.rebate, platform_cost=margin.platform_cost,
-            margin=margin.margin,
+            margin=margin.margin, margin_pct=margin.margin_pct,
             rates=AppliedRatesResponse(
                 platform_rate=rates.platform_rate, effective_rebate_rate=rates.effective_rebate_rate,
                 rebate_step=rates.rebate_step, agency_exception=rates.agency_exception,

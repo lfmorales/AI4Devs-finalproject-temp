@@ -75,3 +75,28 @@ def test_the_free_line_adds_nothing_to_the_counter_and_is_the_same_after_closing
     # The priced line is priced as if the free one were not in its counter: 25 % of 3,631.01.
     assert _lines(after)[2]["flights"][0]["rebate"] == "907.75"
     assert after["totals"]["margin"] == before["totals"]["margin"]
+
+
+def test_a_line_without_revenue_has_no_percentage_and_the_levels_with_revenue_have_one(world):
+    body = world.get("/margin").json()
+    lines = _lines(body)
+
+    (free,) = lines[1]["flights"]
+    assert free["margin_pct"] is None and lines[1]["totals"]["margin_pct"] is None
+    assert lines[2]["flights"][0]["margin_pct"] == "22.67"
+    # The campaign and the report divide their own sums: (823.26 - 520.00) / 3,631.01.
+    expected = str((Decimal("303.26") * 100 / Decimal("3631.01")).quantize(Decimal("0.01")))
+    assert body["campaigns"][0]["totals"]["margin_pct"] == body["totals"]["margin_pct"] == expected
+
+
+def test_a_campaign_made_only_of_free_lines_has_no_percentage_anywhere(client_for_roles, test_db_session):
+    line_id = insert_campaign_line(test_db_session, campaign_name="Only free")
+    set_volume(test_db_session, line_id, 500_000, "0.00")
+    insert_delivery(test_db_session, line_id, date(2026, 8, 10), 400_000, insert_ingestion_batch(test_db_session), Decimal("120.00"))
+    client = client_for_roles("finance")
+    client.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
+
+    body = client.get("/margin", params={"campaign_id": client.get("/margin").json()["campaigns"][0]["campaign_id"]}).json()
+
+    assert body["campaigns"][0]["totals"]["margin_pct"] is None and body["totals"]["margin_pct"] is None
+    assert body["totals"]["revenue"] == "0.00" and body["totals"]["margin"] == "-520.00"

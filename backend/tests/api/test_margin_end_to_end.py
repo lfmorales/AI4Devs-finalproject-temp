@@ -84,3 +84,19 @@ def test_a_running_flight_ten_days_into_thirty_is_pro_rated_and_provisional(fina
     assert (flight["revenue"], flight["media_cost"], flight["rebate"], flight["platform_cost"], flight["margin"]) == (
         "500.00", "150.00", "100.00", "90.00", "160.00")
     assert body["totals"]["provisional"] is True
+
+
+def test_the_margin_percentage_is_present_at_every_level_as_a_two_decimal_string(finance, test_db_session):
+    line_id = insert_campaign_line(test_db_session)
+    set_volume(test_db_session, line_id, 726_202, "5.00")
+    insert_delivery(test_db_session, line_id, date(2026, 8, 10), 700_000, insert_ingestion_batch(test_db_session), Decimal("1200.00"))
+    _flat_schedule(finance, group_of(test_db_session, line_id), "0.25")
+    finance.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
+    finance.post("/margin/closings", json={"year": 2026, "month": 8})
+
+    body = finance.get("/margin").json()
+
+    assert _only_flight(body)["margin_pct"] == "22.67"  # 823.26 / 3,631.01
+    assert body["campaigns"][0]["lines"][0]["totals"]["margin_pct"] == "22.67"
+    assert body["campaigns"][0]["totals"]["margin_pct"] == "22.67"
+    assert body["totals"]["margin_pct"] == "22.67"
