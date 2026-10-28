@@ -52,12 +52,13 @@ export function MarginPage() {
   const campaignId = useId();
   const hintId = useId();
   const nothingToCloseId = useId();
+  const campaignFilterId = useId();
 
   const filters = toFilters(fields);
   const { state } = useApiCall(`${marginPath(filters)}#${reloads}`, (client) => getMargin(client, filters));
 
   // The campaigns on offer are those of the last margin loaded without a campaign filter, so that choosing one
-  // does not hide the others. Adjusted while rendering (not in an effect) so the first screen already has them.
+  // does not hide the others (it is used for nothing else). Adjusted while rendering (not in an effect) so the first screen already has them.
   if (state.status === "ready" && filters.campaignId === undefined && state.data !== offeredFrom) {
     setOfferedFrom(state.data);
   }
@@ -71,10 +72,9 @@ export function MarginPage() {
 
   const target = filters.year !== undefined && filters.month !== undefined ? { year: filters.year, month: filters.month } : null;
   const masked = namesAreMasked();
-  // A campaign filter narrows the flights loaded, so the whole month is read from the last unfiltered margin.
-  const monthMargin = filters.campaignId === undefined ? (state.status === "ready" ? state.data : null) : offeredFrom;
-  const unverified = target !== null && monthMargin === null && filters.campaignId !== undefined;
-  const nothingToClose = target !== null && (monthMargin === null || !hasPendingClose(monthMargin));
+  // Closing acts on the whole month, so a campaign filter, which narrows the flights loaded, rules it out.
+  const campaignFiltered = filters.campaignId !== undefined;
+  const nothingToClose = !campaignFiltered && target !== null && (state.status !== "ready" || !hasPendingClose(state.data));
 
   async function confirmClosing() {
     if (target === null) return;
@@ -85,7 +85,6 @@ export function MarginPage() {
       const lines = [closedFlightsMessage(result.closed, target)];
       if (result.closed === 0 && result.already_closed > 0) lines.push(`Ya estaban cerrados: ${result.already_closed}`);
       setOutcome({ kind: "success", lines });
-      setOfferedFrom(null);
       setReloads((count) => count + 1);
     } catch (caught) {
       setDialogOpen(false);
@@ -136,14 +135,15 @@ export function MarginPage() {
           <button
             type="button"
             className="btn-primary"
-            disabled={target === null || nothingToClose || submitting}
-            aria-describedby={target === null ? hintId : nothingToClose ? nothingToCloseId : undefined}
+            disabled={target === null || campaignFiltered || nothingToClose || submitting}
+            aria-describedby={campaignFiltered ? campaignFilterId : target === null ? hintId : nothingToClose ? nothingToCloseId : undefined}
             onClick={() => setDialogOpen(true)}
           >
             Cerrar mes
           </button>
-          {target === null && <p id={hintId} className="hint">Elige año y mes para cerrar un mes</p>}
-          {nothingToClose && <p id={nothingToCloseId} className="hint">{unverified ? REMOVE_CAMPAIGN_FILTER : NOTHING_TO_CLOSE}</p>}
+          {campaignFiltered && <p id={campaignFilterId} className="hint">{REMOVE_CAMPAIGN_FILTER}</p>}
+          {!campaignFiltered && target === null && <p id={hintId} className="hint">Elige año y mes para cerrar un mes</p>}
+          {nothingToClose && <p id={nothingToCloseId} className="hint">{NOTHING_TO_CLOSE}</p>}
         </div>
       </div>
 
