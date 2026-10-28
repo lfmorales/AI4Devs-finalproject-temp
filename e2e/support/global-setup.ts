@@ -1,4 +1,7 @@
+import { join } from "node:path";
+
 import { BASE_URL } from "../playwright.config";
+import { checkComposeProject } from "./compose-project";
 import { minutesLeft, readToken } from "./token";
 
 /** Silent renew starts shortly before the token expires and would end the injected session mid-run. */
@@ -38,6 +41,16 @@ export default async function globalSetup(): Promise<void> {
     if ((await status("/margin")) === 404) problems.push(`${BASE_URL}/margin answered 404: the frontend on this port has no margin page. Rebuild the frontend image.`);
   } catch {
     problems.push(`${BASE_URL}/margin could not be reached.`);
+  }
+
+  // Port 80 can belong to another worktree's stack that also has /margin; its Compose project gives it away.
+  const { hostname, port } = new URL(BASE_URL);
+  if ((hostname === "localhost" || hostname === "127.0.0.1") && (port === "" || port === "80")) {
+    const compose = checkComposeProject(undefined, join(__dirname, "..", ".."));
+    if (compose.status === "mismatch") problems.push(compose.message);
+    if (compose.status === "unavailable") console.warn(`Warning: ${compose.message}`);
+  } else {
+    console.warn(`Warning: ${BASE_URL} is not port 80 of this machine, so its Compose project was not checked.`);
   }
 
   try {
