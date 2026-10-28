@@ -1,14 +1,10 @@
+import { registerCampaign } from "../support/campaigns";
 import { expect, test } from "../support/fixtures";
 
 interface StatusRow {
   campaign: { id: number; name: string };
   missing_data_flag: boolean;
   pacing_flag: boolean;
-}
-
-interface MasterItem {
-  id: number;
-  name: string;
 }
 
 /** Today in Madrid as YYYY-MM-DD, shifted by whole days. */
@@ -37,47 +33,12 @@ test.describe("the campaign status", () => {
   });
 
   test("shows the two flags of a campaign whose running flight has received no delivery", async ({ financeSession: page, api }) => {
-    const firstOf = async (path: string): Promise<number> => {
-      const items = (await (await api.get(path)).json()) as MasterItem[];
-      const first = items[0];
-      if (first === undefined) throw new Error(`GET /api/${path} has no item: the masters are not loaded.`);
-      return first.id;
-    };
     // The line starts five days ago and ends in five days, so a flight contains D-1 whatever the day of the month is.
     const start = madridDate(-5);
     const end = madridDate(5);
     const name = `E2E-SIN-ENTREGA-${Date.now()}`;
 
-    // The body follows CampaignCreateRequest and CampaignLineCreateRequest of the backend's OpenAPI schema.
-    const registration = await api.post("campaigns", {
-      data: {
-        name,
-        display_name: name,
-        agency_id: await firstOf("masters/agencies"),
-        advertiser_id: await firstOf("masters/advertisers"),
-        campaign_type_id: await firstOf("masters/campaign-types"),
-        sector_id: await firstOf("masters/sectors"),
-        sales_rep_id: await firstOf("masters/sales-reps"),
-        start_date: start,
-        end_date: end,
-        order_reference: name,
-        order_received_on: madridDate(-6),
-        lines: [
-          {
-            start_date: start,
-            end_date: end,
-            dsp_id: await firstOf("masters/dsps"),
-            channel_id: await firstOf("masters/channels"),
-            format_id: await firstOf("masters/formats"),
-            scope: "national",
-            market_description: "E2E",
-            contracted_impressions: 1_000_000,
-            sale_cpm: "1.00",
-          },
-        ],
-      },
-    });
-    expect(registration.status(), "the registration of the campaign").toBe(201);
+    await registerCampaign(api, { name, start, end, orderReceivedOn: madridDate(-6) });
 
     const rows = (await (await api.get("campaign-status")).json()) as StatusRow[];
     const row = rows.find((candidate) => candidate.campaign.name === name);
