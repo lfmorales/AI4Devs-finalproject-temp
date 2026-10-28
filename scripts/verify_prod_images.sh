@@ -96,10 +96,11 @@ check_http_redirects_and_leaves_acme_open() {
 check_backend_image_contents() {
   local image="${PROJECT}-backend"
   docker run --rm --entrypoint sh "$image" -c '
-    test ! -e tests && test ! -e scripts/seed_dev_data.py && test ! -e /opt/venv/bin/pytest &&
+    test ! -e tests && test ! -e scripts/seed_dev_data.py && test ! -e scripts/seed_margin_demo.py &&
+    test ! -e /opt/venv/bin/pytest &&
     ! python -c "import pytest" 2> /dev/null &&
     test -f scripts/run_ingestion.py && test -f scripts/grant_roles.py && test -d alembic/versions' \
-    || stop "the backend image has pytest, tests/ or seed_dev_data.py, or lacks run_ingestion.py, grant_roles.py or the migrations"
+    || stop "the backend image has pytest, tests/, seed_dev_data.py or seed_margin_demo.py, or lacks run_ingestion.py, grant_roles.py or the migrations"
 }
 
 check_backend_is_not_root() {
