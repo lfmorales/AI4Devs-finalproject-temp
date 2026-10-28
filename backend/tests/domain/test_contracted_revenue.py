@@ -76,3 +76,38 @@ def test_a_running_flight_does_not_change_the_existing_amounts():
     result = _flight()
 
     assert (result.revenue, result.provisional) == (Decimal("1612.90"), True)
+
+
+# ---------------------------------------------------------------- the volumes behind the amounts
+
+def _with_delivery(delivered: int, contracted: int = 1_000_000, start: date = date(2026, 8, 1), end: date = date(2026, 8, 31)):
+    return calculate_flight_margin(
+        FlightEconomics(
+            flight_start=start, flight_end=end, contracted_impressions=contracted, sale_cpm=Decimal("5.00"),
+            delivered_impressions=delivered, media_cost=Decimal("0"), rebate_amount=Decimal("0"), platform_rate=Decimal("1.00"),
+        ),
+        AS_OF,
+    )
+
+
+def test_a_flight_carries_its_delivered_and_contracted_impressions():
+    result = _with_delivery(delivered=300_000)
+
+    assert (result.delivered_impressions, result.contracted_impressions) == (300_000, 1_000_000)
+
+
+def test_a_flight_that_has_not_started_carries_neither_volume():
+    result = _with_delivery(delivered=0, start=date(2026, 8, 11))
+
+    assert (result.delivered_impressions, result.contracted_impressions) == (None, None)
+
+
+def test_the_volumes_add_exactly_by_line_and_by_campaign_and_skip_the_flights_not_started():
+    flights = [_with_delivery(300_000, 1_000_000), _with_delivery(250_001, 400_000), _with_delivery(0, 700_000, start=date(2026, 8, 11))]
+
+    line = total_flights(flights)
+
+    assert (line.delivered_impressions, line.contracted_impressions) == (550_001, 1_400_000)
+    campaign = total_lines([line, total_flights([_with_delivery(7, 9)])])
+    assert (campaign.delivered_impressions, campaign.contracted_impressions) == (550_008, 1_400_009)
+    assert isinstance(campaign.delivered_impressions, int) and isinstance(campaign.contracted_impressions, int)

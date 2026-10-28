@@ -65,4 +65,6 @@ def calculate_flight_margin(flight: FlightEconomics, as_of: date) -> FlightMargi
         contracted_revenue=contracted_revenue,
         accrued_days=accrued_days,
         window_days=flight.total_days,
+        delivered_impressions=flight.delivered_impressions,
+        contracted_impressions=flight.contracted_impressions,
     )

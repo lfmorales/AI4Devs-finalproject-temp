@@ -28,6 +28,8 @@ DecimalString = Annotated[Decimal, PlainSerializer(lambda value: format(value, "
 class TotalsResponse(BaseModel):
     revenue: DecimalString
     contracted_revenue: DecimalString
+    delivered_impressions: int
+    contracted_impressions: int
     media_cost: DecimalString
     rebate: DecimalString
     platform_cost: DecimalString
@@ -41,7 +43,8 @@ class TotalsResponse(BaseModel):
     @classmethod
     def from_totals(cls, totals: MarginTotals) -> "TotalsResponse":
         return cls(
-            revenue=totals.revenue, contracted_revenue=totals.contracted_revenue, media_cost=totals.media_cost,
+            revenue=totals.revenue, contracted_revenue=totals.contracted_revenue,
+            delivered_impressions=totals.delivered_impressions, contracted_impressions=totals.contracted_impressions, media_cost=totals.media_cost,
             rebate=totals.rebate, platform_cost=totals.platform_cost, margin=totals.margin, provisional=totals.provisional,
             flights_counted=totals.flights_counted, below_cost_count=totals.below_cost_count,
             zero_sale_count=totals.zero_sale_count, margin_pct=totals.margin_pct,
@@ -71,6 +74,8 @@ class FlightMarginResponse(BaseModel):
     contracted_revenue: DecimalString
     accrued_days: int
     window_days: int
+    delivered_impressions: int
+    contracted_impressions: int
     media_cost: DecimalString
     rebate: DecimalString
     platform_cost: DecimalString
@@ -84,12 +89,14 @@ class FlightMarginResponse(BaseModel):
         assert margin.revenue is not None and margin.media_cost is not None and margin.rebate is not None
         assert margin.platform_cost is not None and margin.margin is not None
         assert margin.contracted_revenue is not None and margin.accrued_days is not None and margin.window_days is not None
+        assert margin.delivered_impressions is not None and margin.contracted_impressions is not None
         rates = report.rates
         return cls(
             flight_id=report.flight_id, period_year=report.period_year, period_month=report.period_month,
             flight_start=report.flight_start, flight_end=report.flight_end, state=report.state,
             provisional=margin.provisional, below_cost=margin.below_cost, zero_sale=margin.zero_sale, revenue=margin.revenue,
             contracted_revenue=margin.contracted_revenue, accrued_days=margin.accrued_days, window_days=margin.window_days,
+            delivered_impressions=margin.delivered_impressions, contracted_impressions=margin.contracted_impressions,
             media_cost=margin.media_cost, rebate=margin.rebate, platform_cost=margin.platform_cost,
             margin=margin.margin, margin_pct=margin.margin_pct,
             rates=AppliedRatesResponse(

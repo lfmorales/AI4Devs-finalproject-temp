@@ -74,6 +74,9 @@ class FlightMargin:
     contracted_revenue: Decimal | None = None
     accrued_days: int | None = None
     window_days: int | None = None
+    # The line's deliveries inside the flight's window and the flight's contracted volume. None when not started.
+    delivered_impressions: int | None = None
+    contracted_impressions: int | None = None
 
     @property
     def margin_pct(self) -> Decimal | None:
@@ -99,6 +102,8 @@ class MarginTotals:
     not_started_count: int
     zero_sale_count: int = 0
     contracted_revenue: Decimal = Decimal("0.00")
+    delivered_impressions: int = 0
+    contracted_impressions: int = 0
 
     @property
     def zero_sale(self) -> bool:
