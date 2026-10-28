@@ -185,6 +185,21 @@ The decision uses only the `state` the API already returns on each flight of the
 - [ ] 12.5 Execute the flow as a user holding several roles and verify the interface composes from all of them
 - [ ] 12.6 Clean up test data, restore database state and document the scenarios in a report in the change folder
 
+## 12A. E2E Harness and First Specs
+
+Playwright lives in `e2e/` at the repository root with its own `package.json` (`@playwright/test` as the only dependency, version pinned) and `package-lock.json`, Chromium only; nothing under `backend/` or `frontend/` changes. Real Cognito sign-in is not driven by the specs (it is covered only by `login.spec.ts`): the session is injected.
+
+What is injected, read from `frontend/lib/auth/cognito-config.ts` and oidc-client-ts 3.5.0: the `UserManager` keeps its user in `sessionStorage` under the key `oidc.user:<authority>:<client_id>`, where the authority is `https://cognito-idp.<region>.amazonaws.com/<userPoolId>` and `client_id` is the app client. Both are the `iss` and `aud` claims of the Cognito ID token, so the key is built from the token and no `.env` is read by the specs. The stored value is the JSON of the oidc-client-ts `User`: `id_token` (the only field the application uses, as the bearer token), `access_token`, `token_type`, `scope` (`openid email`), `profile` (`sub`, `iss`, `aud`, `exp`, `iat` and `email`, taken from the token) and `expires_at` (the token's `exp`), so that `user.expired` is false.
+
+- [ ] 12A.1 Create `e2e/` with the pinned `@playwright/test`, its lockfile, `playwright.config.ts` (Chromium only, base URL `http://localhost`) and the ignore rules for `e2e/.auth/`, `e2e/node_modules/`, `e2e/test-results/` and `e2e/playwright-report/` in the root `.gitignore`
+- [ ] 12A.2 Add `e2e/scripts/get-token.sh` (an ID token through `aws cognito-idp initiate-auth`, `USER_PASSWORD_AUTH`, `eu-central-1`; password read without echo; email and client id taken from `.env` without printing them; token written to `e2e/.auth/token.json` and never printed) and `e2e/scripts/reset-data.sh` (compose down with volumes, up, migrations, both seeds, nginx restart, wait for `/api/health`); neither is run by the agent
+- [ ] 12A.3 Write `globalSetup` that aborts with a message saying what to check unless `/api/health` answers 200, `/api/openapi.json` has a `/margin` path, the `/margin` page is not a 404 and the token exists with at least ten minutes before its `exp`
+- [ ] 12A.4 Write the `financeSession` fixture that injects the user with `addInitScript` before the page loads, and simulate 401 and 403 with `page.route` on `/api/**`
+- [ ] 12A.5 Write the es-ES formatter helper over decimal strings (integer and decimal parts apart, no `Number`) and the API reader that fetches with the token; no figure is written in a spec
+- [ ] 12A.6 Write `smoke.spec.ts` (no session: `Por favor, inicia sesión` and the sign-in button) and `navigation-roles.spec.ts` (finance: five links in the navigation; a 403 on `/api/margin` shows `Acceso denegado` and hides the link; a 401 shows `Sesión caducada`)
+- [ ] 12A.7 Write `status.spec.ts` (the rows of `/status` match `GET /api/campaign-status` in number and campaign, and each flag shows its text) and `login.spec.ts` (real Cognito sign-in, skipped unless `E2E_EMAIL` and `E2E_PASSWORD` are set)
+- [ ] 12A.8 Skip, with the reason stated, every case that depends on a running flight when today in Madrid is the first of the month; locate by role and accessible name only, and report any element without an accessible name instead of adding a fragile selector
+
 ## 13. Update Technical Documentation (MANDATORY)
 
 - [ ] 13.1 Update `readme.md` §3 if the rebate or rate schema diverged from the documented model
