@@ -130,6 +130,10 @@ The shapes of `GET /margin` and `POST /margin/closings` are taken from the backe
 - [ ] 8.4 ~~Classify every difference as a named known defect or an implementation error, and verify none is accepted as merely close enough~~ **Deferred**: the reconciliation needs the rebate tables loaded (8.1) and a recalculation of closed months, which is itself deferred
 - [ ] 8.5 ~~Produce the reconciliation summary for Finance and Business before any figure is published~~ **Deferred**: the reconciliation needs the rebate tables loaded (8.1) and a recalculation of closed months, which is itself deferred
 
+## 8A. Demonstration data
+
+- [ ] 8A.1 Write failing tests for `scripts/seed_margin_demo.py`, an idempotent command that creates synthetic demonstration data to see the three states of the margin, and implement it reusing the registration service, the delivery and ingestion-batch repositories, the master loader and the schedule service: three campaigns with neutral `DEMO-MARGEN-*` names and one line each, dates relative to today in Madrid (the whole previous month, ended and pending close; ten days ago to the end of next month, running; and the same with a sale CPM of 0.00, running), invented daily deliveries giving a non-zero margin (one with a media cost above its sale, for "Margen negativo"), a flat example rebate schedule, counts-only output, a second run that changes nothing, the three states in `GET /margin` (closed only after `POST /margin/closings` of the previous month) and no real data touched
+
 ## 9. Review and Update Existing Unit Tests (MANDATORY)
 
 - [ ] 9.1 Review every test touched by this change and update any asserting superseded behaviour
