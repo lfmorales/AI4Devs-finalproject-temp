@@ -85,6 +85,9 @@ export function lineDateIssues(
   return issues;
 }
 
+const CPM_FORMAT = /^\d+(\.\d{1,2})?$/;
+const NEGATIVE_NUMBER = /^-\s*\d/;
+
 export const campaignLineSchema = z.object({
   dsp_id: z.number().int(),
   channel_id: z.number().int(),
@@ -99,7 +102,14 @@ export const campaignLineSchema = z.object({
   }),
   market_description: z.string().min(1, "Descripción del mercado es obligatoria"),
   contracted_impressions: z.number().int().gt(0, "Impresiones contratadas debe ser mayor que 0"),
-  sale_cpm: z.string().regex(/^\d+(\.\d{1,2})?$/, "CPM (venta) debe ser un número decimal válido"),
+  // A sale CPM of 0 is a line without a price; it is never negative. The volume above stays above 0.
+  sale_cpm: z.string().superRefine((value, ctx) => {
+    if (NEGATIVE_NUMBER.test(value)) {
+      ctx.addIssue({ code: "custom", message: "El CPM (venta) no puede ser negativo" });
+    } else if (!CPM_FORMAT.test(value)) {
+      ctx.addIssue({ code: "custom", message: "CPM (venta) debe ser un número decimal válido" });
+    }
+  }),
   // Sent only when the line does not inherit the campaign's dates.
   start_date: z.string().date("Fecha de inicio de la línea debe ser una fecha válida").optional(),
   end_date: z.string().date("Fecha de fin de la línea debe ser una fecha válida").optional(),

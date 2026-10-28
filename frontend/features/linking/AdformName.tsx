@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 // Next.js inlines NEXT_PUBLIC_* at build time, so this reads as a build setting. Only the exact value "true" masks.
-function namesAreMasked(): boolean {
+export function namesAreMasked(): boolean {
   return process.env.NEXT_PUBLIC_MASK_NAMES === "true";
 }
 

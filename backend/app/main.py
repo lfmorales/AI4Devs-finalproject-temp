@@ -10,6 +10,7 @@ from app.presentation.routers import (
     flight_preview,
     health,
     ingestion_exceptions,
+    margin,
     masters,
 )
 
@@ -28,6 +29,7 @@ def create_app() -> FastAPI:
     app.include_router(ingestion_exceptions.router)
     app.include_router(flight_preview.router)
     app.include_router(campaign_status.router)
+    app.include_router(margin.router)
     return app
 
 

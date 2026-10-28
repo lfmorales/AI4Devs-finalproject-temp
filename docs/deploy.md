@@ -4,6 +4,10 @@ This guide covers the production composition (`docker-compose.prod.yml`) and the
 
 Nothing secret lives in the repository: not the `.env`, not the certificates and not their keys.
 
+## The `btree_gist` extension
+
+The margin migration creates the PostgreSQL extension `btree_gist`, which the exclusion constraint on rebate schedules needs. The database user that runs migrations must be allowed to create extensions: the PostgreSQL superuser of the Compose `db` container is. On a database where that is not allowed, an administrator must run `CREATE EXTENSION btree_gist;` before the migration; otherwise the migration stops with a message saying so. Its downgrade removes the extension only if the migration was the one that created it.
+
 ## 1. Prerequisites
 
 - An AWS account with a Cognito User Pool and an app client (authorization code + PKCE, no client secret).

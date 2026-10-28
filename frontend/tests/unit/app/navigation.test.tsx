@@ -72,7 +72,7 @@ describe("the navigation of the authenticated layout", () => {
 
     await screen.findByText("No hay campañas en curso");
     const nav = screen.getByRole("navigation", { name: "Principal" });
-    expect(within(nav).getAllByRole("link")).toHaveLength(4);
+    expect(within(nav).getAllByRole("link")).toHaveLength(5);
   });
 
   it("hides the exceptions link once the exception queue answers 403, and keeps the others", async () => {

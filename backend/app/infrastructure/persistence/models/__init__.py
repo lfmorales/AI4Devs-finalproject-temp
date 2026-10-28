@@ -30,6 +30,13 @@ from app.infrastructure.persistence.models.delivery import (
     IngestionExceptionRecord,
     IngestionExceptionDeliveryRecord,
 )
+from app.infrastructure.persistence.models.margin import (
+    RebateScheduleRecord,
+    RebateBracketRecord,
+    PlatformRateSettingRecord,
+    AppliedRateRecord,
+    AppliedRateBracketRecord,
+)
 
 __all__ = [
     "RoleRecord",
@@ -56,4 +63,9 @@ __all__ = [
     "DailyDeliveryRecord",
     "IngestionExceptionRecord",
     "IngestionExceptionDeliveryRecord",
+    "RebateScheduleRecord",
+    "RebateBracketRecord",
+    "PlatformRateSettingRecord",
+    "AppliedRateRecord",
+    "AppliedRateBracketRecord",
 ]
