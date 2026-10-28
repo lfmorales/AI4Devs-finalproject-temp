@@ -1,10 +1,20 @@
 import { expect, test } from "../support/fixtures";
-import { madridDayOfMonth, RUNNING_FLIGHT_SKIP_REASON } from "../support/format";
 
 interface StatusRow {
   campaign: { id: number; name: string };
   missing_data_flag: boolean;
   pacing_flag: boolean;
+}
+
+interface MasterItem {
+  id: number;
+  name: string;
+}
+
+/** Today in Madrid as YYYY-MM-DD, shifted by whole days. */
+function madridDate(offsetDays: number): string {
+  const day = new Date(Date.now() + offsetDays * 86_400_000);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid" }).format(day);
 }
 
 test.describe("the campaign status", () => {
@@ -26,19 +36,58 @@ test.describe("the campaign status", () => {
     }
   });
 
-  test("shows the text of every flag the API raises", async ({ financeSession: page, api }) => {
-    test.skip(madridDayOfMonth() === 1, RUNNING_FLIGHT_SKIP_REASON);
+  test("shows the two flags of a campaign whose running flight has received no delivery", async ({ financeSession: page, api }) => {
+    const firstOf = async (path: string): Promise<number> => {
+      const items = (await (await api.get(path)).json()) as MasterItem[];
+      const first = items[0];
+      if (first === undefined) throw new Error(`GET /api/${path} has no item: the masters are not loaded.`);
+      return first.id;
+    };
+    // The line starts five days ago and ends in five days, so a flight contains D-1 whatever the day of the month is.
+    const start = madridDate(-5);
+    const end = madridDate(5);
+    const name = `E2E-SIN-ENTREGA-${Date.now()}`;
+
+    // The body follows CampaignCreateRequest and CampaignLineCreateRequest of the backend's OpenAPI schema.
+    const registration = await api.post("campaigns", {
+      data: {
+        name,
+        display_name: name,
+        agency_id: await firstOf("masters/agencies"),
+        advertiser_id: await firstOf("masters/advertisers"),
+        campaign_type_id: await firstOf("masters/campaign-types"),
+        sector_id: await firstOf("masters/sectors"),
+        sales_rep_id: await firstOf("masters/sales-reps"),
+        start_date: start,
+        end_date: end,
+        order_reference: name,
+        order_received_on: madridDate(-6),
+        lines: [
+          {
+            start_date: start,
+            end_date: end,
+            dsp_id: await firstOf("masters/dsps"),
+            channel_id: await firstOf("masters/channels"),
+            format_id: await firstOf("masters/formats"),
+            scope: "national",
+            market_description: "E2E",
+            contracted_impressions: 1_000_000,
+            sale_cpm: "1.00",
+          },
+        ],
+      },
+    });
+    expect(registration.status(), "the registration of the campaign").toBe(201);
+
     const rows = (await (await api.get("campaign-status")).json()) as StatusRow[];
-    const flagged = rows.map((row, index) => ({ row, index })).filter(({ row }) => row.missing_data_flag || row.pacing_flag);
-    test.skip(flagged.length === 0, "No row of the seeded data carries a flag, so there is no flag text to read.");
+    const row = rows.find((candidate) => candidate.campaign.name === name);
+    expect(row, "the new campaign is in GET /api/campaign-status").toBeDefined();
+    expect(row?.missing_data_flag).toBe(true);
+    expect(row?.pacing_flag).toBe(true);
 
     await page.goto("/status");
 
-    const bodyRows = page.getByRole("table", { name: "Estado de las campañas" }).getByRole("row");
-    for (const { row, index } of flagged) {
-      const flags = bodyRows.nth(index + 1).getByRole("listitem");
-      if (row.missing_data_flag) await expect(flags.filter({ hasText: "Sin datos recibidos" })).toHaveCount(1);
-      if (row.pacing_flag) await expect(flags.filter({ hasText: "Desviación de ritmo" })).toHaveCount(1);
-    }
+    const flags = page.getByRole("table", { name: "Estado de las campañas" }).getByRole("row").filter({ hasText: name }).getByRole("listitem");
+    await expect(flags).toHaveText(["Sin datos recibidos", "Desviación de ritmo"]);
   });
 });
