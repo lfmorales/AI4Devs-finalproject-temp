@@ -132,9 +132,9 @@ The shapes of `GET /margin` and `POST /margin/closings` are taken from the backe
 
 The decision uses only the `state` the API already returns on each flight of the margin loaded for the chosen year and month; the browser computes nothing.
 
-- [ ] 7A.1 Write failing tests, with the real HTTP client over a simulated `fetch`, for the `Cerrar mes` button: disabled for a month whose flights are all `Cerrado`, disabled for one whose flights are all `En curso (provisional)`, enabled as soon as at least one flight is `Pendiente de cierre`, and disabled again after closing the month and reloading; the disabled button carries the accessible help text `No hay flights pendientes de cierre en este mes`, which disappears once it is enabled
-- [ ] 7A.2 Implement it in the margin page from the loaded margin's flight states only (no sum, count or date comparison in the browser), keeping the existing hint when no year and month are chosen, and verify the tests from 7A.1 pass
-- [ ] 7A.3 Verify a `409` `previous_month_open` still shows the month that blocks the closing, named in Spanish, and adapt the existing closing and access tests so their month has a flight pending close
+- [x] 7A.1 Write failing tests, with the real HTTP client over a simulated `fetch`, for the `Cerrar mes` button: disabled for a month whose flights are all `Cerrado`, disabled for one whose flights are all `En curso (provisional)`, enabled as soon as at least one flight is `Pendiente de cierre`, and disabled again after closing the month and reloading; the disabled button carries the accessible help text `No hay flights pendientes de cierre en este mes`, which disappears once it is enabled
+- [x] 7A.2 Implement it in the margin page from the loaded margin's flight states only (no sum, count or date comparison in the browser), keeping the existing hint when no year and month are chosen, and verify the tests from 7A.1 pass
+- [x] 7A.3 Verify a `409` `previous_month_open` still shows the month that blocks the closing, named in Spanish, and adapt the existing closing and access tests so their month has a flight pending close
 
 ## 8. Data: Rebate Migration and Reconciliation
 

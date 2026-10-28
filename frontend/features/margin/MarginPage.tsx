@@ -14,11 +14,19 @@ import { hasActiveFilter, NO_FILTERS, toFilters, type FilterFields } from "./fil
 import { MarginTree } from "./MarginTree";
 import { closedFlightsMessage, closingErrorMessage, monthNames } from "./messages";
 
+const NOTHING_TO_CLOSE = "No hay flights pendientes de cierre en este mes";
 const NOTICE = "Las cifras provisionales pueden cambiar hasta el cierre del mes";
 
 interface CampaignOption {
   id: number;
   name: string;
+}
+
+/** Whether any flight of the margin the API returned is waiting to be closed; only the state it reports is read. */
+function hasPendingClose(margin: MarginResponse): boolean {
+  return margin.campaigns.some((campaign) =>
+    campaign.lines.some((line) => line.flights.some((flight) => flight.state === "pending_close")),
+  );
 }
 
 type Outcome = { kind: "success"; lines: string[] } | { kind: "error"; text: string };
@@ -42,6 +50,7 @@ export function MarginPage() {
   const monthId = useId();
   const campaignId = useId();
   const hintId = useId();
+  const nothingToCloseId = useId();
 
   const filters = toFilters(fields);
   const { state } = useApiCall(`${marginPath(filters)}#${reloads}`, (client) => getMargin(client, filters));
@@ -61,6 +70,9 @@ export function MarginPage() {
 
   const target = filters.year !== undefined && filters.month !== undefined ? { year: filters.year, month: filters.month } : null;
   const masked = namesAreMasked();
+  // A campaign filter narrows the flights loaded, so the whole month is read from the last unfiltered margin.
+  const monthMargin = filters.campaignId === undefined ? (state.status === "ready" ? state.data : null) : offeredFrom;
+  const nothingToClose = target !== null && (monthMargin === null || !hasPendingClose(monthMargin));
 
   async function confirmClosing() {
     if (target === null) return;
@@ -71,6 +83,7 @@ export function MarginPage() {
       const lines = [closedFlightsMessage(result.closed, target)];
       if (result.closed === 0 && result.already_closed > 0) lines.push(`Ya estaban cerrados: ${result.already_closed}`);
       setOutcome({ kind: "success", lines });
+      setOfferedFrom(null);
       setReloads((count) => count + 1);
     } catch (caught) {
       setDialogOpen(false);
@@ -121,13 +134,14 @@ export function MarginPage() {
           <button
             type="button"
             className="btn-primary"
-            disabled={target === null || submitting}
-            aria-describedby={target === null ? hintId : undefined}
+            disabled={target === null || nothingToClose || submitting}
+            aria-describedby={target === null ? hintId : nothingToClose ? nothingToCloseId : undefined}
             onClick={() => setDialogOpen(true)}
           >
             Cerrar mes
           </button>
           {target === null && <p id={hintId} className="hint">Elige año y mes para cerrar un mes</p>}
+          {nothingToClose && <p id={nothingToCloseId} className="hint">{NOTHING_TO_CLOSE}</p>}
         </div>
       </div>
 

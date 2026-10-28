@@ -4,7 +4,8 @@ import userEvent from "@testing-library/user-event";
 
 import MarginPage from "@/app/(authenticated)/margin/page";
 import { installRoutes, renderAuthenticated, reply, type FakeReply } from "../../../helpers/api-pages";
-import { margin } from "../../../helpers/margin-data";
+import { campaign, flight, line, margin } from "../../../helpers/margin-data";
+import type { FlightState } from "@/lib/api/margin";
 
 vi.mock("@/lib/auth/user-manager", () => ({
   getUserManager: () => ({
@@ -16,7 +17,12 @@ vi.mock("@/lib/auth/user-manager", () => ({
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.unstubAllGlobals());
 
-const GET_ALL = () => reply(200, margin());
+/** A margin whose only flight is in the given state. */
+function marginWith(...states: FlightState[]) {
+  return margin({ campaigns: [campaign({ lines: [line({ flights: states.map((state, index) => flight({ flight_id: index + 1, state })) })] })] });
+}
+
+const GET_ALL = () => reply(200, marginWith("pending_close"));
 
 /** The routes of a page showing August 2026, with the closing answering as given. */
 function routes(closing: () => FakeReply | Promise<FakeReply>) {
@@ -150,6 +156,68 @@ describe("the close-month button", () => {
     expect(requests.filter((request) => request.method === "POST")).toHaveLength(1);
     answer(reply(200, { year: 2026, month: 8, closed: 2, already_closed: 0 }));
     expect(await screen.findByText("Se cerraron 2 flights de agosto de 2026")).toBeInTheDocument();
+  });
+});
+
+describe("the availability of the close-month button", () => {
+  const HELP = "No hay flights pendientes de cierre en este mes";
+
+  async function showAugust(margins: FlightState[][], closing: () => FakeReply = () => reply(200, { year: 2026, month: 8, closed: 1, already_closed: 0 })) {
+    let reads = 0;
+    const answer = () => reply(200, marginWith(...(margins[Math.min(reads++, margins.length - 1)] ?? [])));
+    installRoutes({ "GET /margin": () => reply(200, marginWith("pending_close")), "GET /margin?year=2026&month=8": answer, "POST /margin/closings": closing });
+    const user = userEvent.setup();
+    renderAuthenticated(<MarginPage />);
+    await screen.findByRole("region", { name: "Totales del periodo" });
+    await user.type(screen.getByLabelText("Año"), "2026");
+    await user.selectOptions(screen.getByLabelText("Mes"), "agosto");
+    return user;
+  }
+
+  it("is off, with an accessible help text, for a month with only closed flights", async () => {
+    await showAugust([["closed", "closed"]]);
+
+    const button = screen.getByRole("button", { name: "Cerrar mes" });
+    await waitFor(() => expect(button).toBeDisabled());
+    expect(button).toHaveAccessibleDescription(HELP);
+  });
+
+  it("is off for a month with only running flights", async () => {
+    await showAugust([["running"]]);
+
+    const button = screen.getByRole("button", { name: "Cerrar mes" });
+    await waitFor(() => expect(button).toBeDisabled());
+    expect(button).toHaveAccessibleDescription(HELP);
+  });
+
+  it("is on, without the help text, as soon as one flight is pending close among others", async () => {
+    await showAugust([["closed", "running", "pending_close"]]);
+
+    const button = screen.getByRole("button", { name: "Cerrar mes" });
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(screen.queryByText(HELP)).not.toBeInTheDocument();
+  });
+
+  it("is off again after closing the month and reloading", async () => {
+    const user = await showAugust([["pending_close"], ["closed"]]);
+    const button = screen.getByRole("button", { name: "Cerrar mes" });
+    await waitFor(() => expect(button).toBeEnabled());
+
+    await user.click(button);
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Confirmar cierre" }));
+
+    expect(await screen.findByText("Se cerró 1 flight de agosto de 2026")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cerrar mes" })).toBeDisabled());
+    expect(screen.getByRole("button", { name: "Cerrar mes" })).toHaveAccessibleDescription(HELP);
+  });
+
+  it("keeps the year-and-month hint, not this one, while no month is chosen", async () => {
+    installRoutes({ "GET /margin": () => reply(200, marginWith("closed")) });
+    renderAuthenticated(<MarginPage />);
+    await screen.findByRole("region", { name: "Totales del periodo" });
+
+    expect(screen.getByRole("button", { name: "Cerrar mes" })).toHaveAccessibleDescription("Elige año y mes para cerrar un mes");
+    expect(screen.queryByText(HELP)).not.toBeInTheDocument();
   });
 });
 

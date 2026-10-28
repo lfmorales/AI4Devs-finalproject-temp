@@ -6,7 +6,7 @@ import AuthenticatedLayout from "@/app/(authenticated)/layout";
 import MarginPage from "@/app/(authenticated)/margin/page";
 import { AuthContext, type AuthContextValue } from "@/lib/auth/AuthContext";
 import { installRoutes, reply } from "../../../helpers/api-pages";
-import { margin } from "../../../helpers/margin-data";
+import { campaign, flight, line, margin } from "../../../helpers/margin-data";
 
 vi.mock("@/lib/auth/user-manager", () => ({
   getUserManager: () => ({
@@ -97,10 +97,13 @@ describe("the closing and the access", () => {
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Confirmar cierre" }));
   }
 
+  const pendingClose = () =>
+    margin({ campaigns: [campaign({ lines: [line({ flights: [flight({ state: "pending_close" })] })] })] });
+
   function routesWithClosing(closing: () => ReturnType<typeof reply>) {
     return {
       "GET /margin": () => reply(200, margin()),
-      "GET /margin?year=2026&month=8": () => reply(200, margin()),
+      "GET /margin?year=2026&month=8": () => reply(200, pendingClose()),
       "POST /margin/closings": closing,
     };
   }
