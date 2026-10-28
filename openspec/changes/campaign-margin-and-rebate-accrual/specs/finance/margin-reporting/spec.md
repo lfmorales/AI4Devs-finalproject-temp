@@ -94,6 +94,26 @@ The system SHALL return `contracted_revenue` on every flight, line, campaign and
 - **WHEN** the same flight is read before and after its month is closed
 - **THEN** its `contracted_revenue`, `accrued_days` and `window_days` are the same
 
+### Requirement: Every level carries the delivered and the contracted impressions
+
+The system SHALL return `delivered_impressions` and `contracted_impressions` on every flight, line, campaign and on the totals, as integers. On a flight, `delivered_impressions` is the sum of the line's daily deliveries inside the flight's window, the same figure the platform cost is computed from, and `contracted_impressions` is the flight's contracted volume. A line, a campaign and the totals carry the exact sum of their flights. A delivery outside the flight's window is not counted. A flight that has not started does not appear, so it adds nothing. No amount changes.
+
+#### Scenario: A flight returns what the line delivered inside its window
+- **WHEN** a flight is read and its line also delivered on days before `flight_start` or after `flight_end`
+- **THEN** its `delivered_impressions` counts only the days inside the window and its `contracted_impressions` is the flight's volume
+
+#### Scenario: A line without a price still reports its volumes
+- **WHEN** a flight of a line with a sale CPM of 0.00 is read
+- **THEN** it carries its delivered and contracted impressions like any other
+
+#### Scenario: Higher levels add the flights exactly
+- **WHEN** a line has several flights, or a campaign several lines
+- **THEN** their `delivered_impressions` and `contracted_impressions` are the exact sums of the levels below
+
+#### Scenario: Reading and closing agree
+- **WHEN** the same flight is read before and after its month is closed
+- **THEN** its `delivered_impressions` and `contracted_impressions` are the same
+
 ### Requirement: Divergence from the legacy application is classified
 
 The system SHALL support comparing a recalculated closed month line by line against the legacy figures, and SHALL require every difference to be attributed either to a known defect or to an implementation error. **Deferred** (tasks 8.3 to 8.5).
