@@ -78,3 +78,58 @@ describe("reset-data.sh before it touches anything", () => {
     assert.match(result.stderr, /docker/i);
   });
 });
+
+/** A docker that lets the whole reset run: the seeding prints emails on both streams and exits as told. */
+function fullFakeStack({ seedExit = 0 } = {}) {
+  const dir = mkdtempSync(join(workDir, "bin-"));
+  writeFileSync(join(dir, "docker"), `#!/bin/sh
+case "$1" in
+  ps) exit 0 ;;
+  compose)
+    case "$2" in
+      config) printf '{"name":"mine"}' ;;
+      exec)
+        case "$*" in
+          *seed_dev_data*)
+            echo "Seeding database with user email: jane.doe+e2e@geoq.es"
+            echo "✓ Assigned finance role to jane.doe+e2e@geoq.es"
+            echo "ERROR for Jane.Doe_2@Sub.Example.co.uk and other.person@example.org" >&2
+            exit ${seedExit} ;;
+        esac ;;
+    esac ;;
+esac
+`);
+  writeFileSync(join(dir, "curl"), "#!/bin/sh\nprintf 200\n");
+  writeFileSync(join(dir, "sleep"), "#!/bin/sh\nexit 0\n");
+  for (const tool of ["docker", "curl", "sleep"]) chmodSync(join(dir, tool), 0o755);
+  return { dir };
+}
+
+describe("reset-data.sh and the seeded user's email", () => {
+  const LOCAL_PARTS = ["jane.doe+e2e", "Jane.Doe_2", "other.person"];
+
+  it("shows the domain of every email but never its local part, on both streams", () => {
+    const result = run(fullFakeStack());
+
+    assert.equal(result.status, 0, result.stderr);
+    const shown = result.stdout + result.stderr;
+    for (const local of LOCAL_PARTS) assert.ok(!shown.includes(local), `${local} is printed`);
+    assert.match(result.stdout, /user email: \*\*\*@geoq\.es/);
+    assert.match(result.stdout, /Assigned finance role to \*\*\*@geoq\.es/);
+    assert.match(result.stderr, /\*\*\*@Sub\.Example\.co\.uk and \*\*\*@example\.org/);
+  });
+
+  it("keeps the exit code of a failing seeding, and still prints nothing of the email", () => {
+    const result = run(fullFakeStack({ seedExit: 3 }));
+
+    assert.equal(result.status, 3);
+    for (const local of LOCAL_PARTS) assert.ok(!(result.stdout + result.stderr).includes(local), `${local} is printed`);
+  });
+
+  it("leaves the other lines of the output as they were", () => {
+    const result = run(fullFakeStack());
+
+    assert.match(result.stdout, /Seeding database with user email:/);
+    assert.match(result.stdout, /Stack ready: \/api\/health answers 200\./);
+  });
+});

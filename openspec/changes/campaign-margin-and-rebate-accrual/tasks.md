@@ -213,7 +213,7 @@ How the screen is located (from `frontend/features/margin`): the filters are lab
 - [ ] 12B.5 Real closing: the amounts of every flight of `GET /api/margin` for September are kept; `Cerrar mes` opens the dialog saying that the rates freeze, that it cannot be undone and that it closes the finished flights of all the campaigns of the month; after confirming, the screen shows the closed count the API gives and the state `Cerrado`; the amounts read again are identical to the kept ones, string by string
 - [ ] 12B.6 Idempotency: after the closing the button is disabled with `No hay flights pendientes de cierre en este mes`; `POST /api/margin/closings` for the same month closes nothing and neither the closed count nor any amount changes
 - [ ] 12B.7 Access: with a 403 on `POST /api/margin/closings` (`page.route`) the screen shows `Acceso denegado`
-- [ ] 12B.8 `reset-data.sh` does not print the seeded user's email: the local part is shown as `***` in everything the seeding prints, with a test over a simulated output written first
+- [x] 12B.8 `reset-data.sh` does not print the seeded user's email: the local part is shown as `***` in everything the seeding prints, with a test over a simulated output written first
 
 ## 13. Update Technical Documentation (MANDATORY)
 

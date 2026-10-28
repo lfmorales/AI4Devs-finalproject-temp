@@ -24,6 +24,13 @@ if [ -n "$foreign" ]; then
   exit 1
 fi
 
+# Runs a command with the local part of every email in its output (both streams) shown as ***. The exit code is
+# the command's own, because the pipelines run under pipefail.
+EMAIL_LOCAL_PART='[A-Za-z0-9._%+-]+@'
+without_emails() {
+  { "$@" 2>&1 1>&3 3>&- | sed -E "s/$EMAIL_LOCAL_PART/***@/g" >&2; } 3>&1 | sed -E "s/$EMAIL_LOCAL_PART/***@/g"
+}
+
 docker compose down -v
 docker compose up -d
 # The backend needs a moment before exec works; alembic is retried until the database accepts it.
@@ -32,8 +39,8 @@ for attempt in $(seq 1 30); do
   [ "$attempt" -lt 30 ] || { echo "The migrations did not run after 30 attempts." >&2; exit 1; }
   sleep 2
 done
-docker compose exec -T backend python -m scripts.seed_dev_data
-docker compose exec -T backend python -m scripts.seed_margin_demo
+without_emails docker compose exec -T backend python -m scripts.seed_dev_data
+without_emails docker compose exec -T backend python -m scripts.seed_margin_demo
 docker compose restart nginx
 
 for attempt in $(seq 1 30); do
