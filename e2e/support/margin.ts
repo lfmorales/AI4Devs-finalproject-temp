@@ -131,9 +131,14 @@ export function closedFlightsMessage(closed: number, month: Month): string {
   return `Se cerraron ${closed} flights de ${monthOfYear(month)}`;
 }
 
+/** The filter controls by role and exact name: the cards `Campaña <name>` also carry that word in their label. */
+export const yearField = (page: Page): Locator => page.getByRole("textbox", { name: "Año", exact: true });
+export const monthField = (page: Page): Locator => page.getByRole("combobox", { name: "Mes", exact: true });
+export const campaignField = (page: Page): Locator => page.getByRole("combobox", { name: "Campaña", exact: true });
+
 export async function chooseMonth(page: Page, { year, month }: Month): Promise<void> {
-  await page.getByLabel("Año").fill(String(year));
-  await page.getByLabel("Mes").selectOption(monthName(month));
+  await yearField(page).fill(String(year));
+  await monthField(page).selectOption(monthName(month));
   await expect(page.getByRole("region", { name: "Totales del periodo" })).toBeVisible();
 }
 

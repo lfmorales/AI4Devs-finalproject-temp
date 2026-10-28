@@ -1,7 +1,8 @@
+import { appAlert } from "../support/alerts";
 import { registerCampaign } from "../support/campaigns";
 import { expect, test } from "../support/fixtures";
 import {
-  amountsByFlight, campaignCard, chooseMonth, closedFlightsMessage, currentMonth, expectStates, flightCell, flightsOf,
+  amountsByFlight, campaignCard, campaignField, chooseMonth, closedFlightsMessage, currentMonth, expectStates, flightCell, flightsOf,
   flightsTable, FRESH_DATABASE_SKIP_REASON, hasPendingClose, integer, isoDate, lastDayOf, madridToday, money, monthName,
   monthOfYear, NOTHING_TO_CLOSE, openAllCards, percent, previousMonth, readMargin, REMOVE_CAMPAIGN_FILTER,
   type MarginResponse, type Month,
@@ -106,7 +107,7 @@ test.describe("the close-month button", () => {
 
     await page.goto("/margin");
     await chooseMonth(page, previous);
-    await page.getByLabel("Campaña").selectOption(String(campaign?.campaign_id));
+    await campaignField(page).selectOption(String(campaign?.campaign_id));
 
     const button = page.getByRole("button", { name: "Cerrar mes" });
     await expect(button).toBeDisabled();
@@ -179,7 +180,7 @@ test.describe("the closing order", () => {
       await page.getByRole("button", { name: "Cerrar mes" }).click();
       await page.getByRole("dialog").getByRole("button", { name: "Confirmar cierre" }).click();
 
-      await expect(page.getByRole("alert")).toHaveText(
+      await expect(appAlert(page)).toHaveText(
         `Hay un mes anterior sin cerrar: ${monthOfYear(earlier)}. Ciérralo antes de cerrar ${monthOfYear(previous)}.`,
       );
       expect(hasPendingClose(await readMargin(api, previous)), "nothing was closed").toBe(true);
