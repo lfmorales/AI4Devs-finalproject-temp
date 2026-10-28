@@ -70,6 +70,30 @@ The system SHALL return `margin_pct` on every flight, line, campaign and on the 
 - **WHEN** a level has revenue 0.00
 - **THEN** its `margin_pct` is null
 
+### Requirement: Every level carries the contracted revenue and a flight its accrued days
+
+The system SHALL return `contracted_revenue` on every flight, line, campaign and on the totals: the sale contracted for the whole flight (contracted volume / 1000 × the line's CPM), as a decimal string with two decimals, rounded half up once, exactly like `revenue`. A line, a campaign and the totals carry the exact sum of the `contracted_revenue` of their flights. A flight SHALL also return `accrued_days` and `window_days` as integers: the contract days counted up to `as_of` and the days of its whole window, both ends included. In a closed or pending-close flight `revenue` equals `contracted_revenue` and `accrued_days` equals `window_days`; in a running flight `accrued_days` is below `window_days`. A flight that has not started does not appear, so it carries none. No existing amount changes.
+
+#### Scenario: A closed flight accrues all its contracted revenue
+- **WHEN** a closed or pending-close flight is read
+- **THEN** its `revenue` equals its `contracted_revenue` and its `accrued_days` equals its `window_days`
+
+#### Scenario: A running flight shows how much of the sale it has accrued
+- **WHEN** a running flight of 31 days with 9 elapsed days and a contracted revenue of 3100.00 is read
+- **THEN** `contracted_revenue` is "3100.00", `revenue` is "900.00", `accrued_days` is 9 and `window_days` is 31
+
+#### Scenario: A line without a price has a contracted revenue of zero
+- **WHEN** a flight of a line with a sale CPM of 0.00 is read
+- **THEN** its `contracted_revenue` is "0.00" and so is its `revenue`
+
+#### Scenario: Higher levels add the flights
+- **WHEN** a line, a campaign or the totals are read
+- **THEN** their `contracted_revenue` is the exact sum of the `contracted_revenue` of the flights below, with no further rounding
+
+#### Scenario: Reading and closing agree
+- **WHEN** the same flight is read before and after its month is closed
+- **THEN** its `contracted_revenue`, `accrued_days` and `window_days` are the same
+
 ### Requirement: Divergence from the legacy application is classified
 
 The system SHALL support comparing a recalculated closed month line by line against the legacy figures, and SHALL require every difference to be attributed either to a known defect or to an implementation error. **Deferred** (tasks 8.3 to 8.5).
