@@ -5,6 +5,25 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
+# Before anything is stopped: port 80 must be free or this project's own. A stack of another worktree that
+# publishes it would make `up` fail with "port is already allocated", and the E2E would read the wrong stack.
+command -v docker >/dev/null || { echo "docker is not available." >&2; exit 1; }
+project="$(docker compose config --format json | python3 -c 'import json, sys; print(json.load(sys.stdin)["name"])')" \
+  || { echo "Compose could not name this repository's project." >&2; exit 1; }
+foreign=""
+while IFS='|' read -r name label ports; do
+  [ -n "$name" ] || continue
+  # Only a host mapping of port 80 itself counts, not another host port mapped to a container's port 80.
+  printf '%s' "$ports" | grep -Eq '(^|[[:space:],]):?[^[:space:],]*:80->' || continue
+  [ "$label" = "$project" ] && continue
+  if [ -n "$label" ]; then owner="project \"$label\""; else owner="not a Compose project"; fi
+  foreign="${foreign:+$foreign, }$name ($owner)"
+done < <(docker ps --filter publish=80 --format '{{.Names}}|{{.Label "com.docker.compose.project"}}|{{.Ports}}')
+if [ -n "$foreign" ]; then
+  echo "Port 80 is published by $foreign, not by this repository's Compose project \"$project\". Nothing was stopped. Stop that stack yourself, then run this script again." >&2
+  exit 1
+fi
+
 docker compose down -v
 docker compose up -d
 # The backend needs a moment before exec works; alembic is retried until the database accepts it.
