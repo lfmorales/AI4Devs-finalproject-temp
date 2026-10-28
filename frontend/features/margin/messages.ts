@@ -1,3 +1,4 @@
+import { formatInteger } from "@/lib/format/integer";
 const MONTH_NAMES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
@@ -74,4 +75,19 @@ export function closedFlightsMessage(closed: number, target: ClosingTarget): str
 
 export function flightCount(count: number): string {
   return count === 1 ? "1 flight" : `${count} flights`;
+}
+
+export const ACCRUED_LABEL = "Devengado";
+
+export const ACCRUED_HELP =
+  "Ingreso proporcional a los días transcurridos del flight; en un flight cerrado es igual a la venta contratada.";
+
+/** «10 de 14 días»: the days of a running flight counted so far and the days of the whole flight, as received. */
+export function daysLegend(accruedDays: number, windowDays: number): string {
+  return `${accruedDays} de ${windowDays} días`;
+}
+
+/** «Entregado X de Y impresiones»: what was delivered of what was contracted, as received. */
+export function deliveryLegend(delivered: number, contracted: number): string {
+  return `Entregado ${formatInteger(delivered)} de ${formatInteger(contracted)} impresiones`;
 }

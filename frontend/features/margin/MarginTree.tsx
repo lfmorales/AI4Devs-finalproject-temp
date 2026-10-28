@@ -1,8 +1,11 @@
+import { useId } from "react";
+
 import { AdformName } from "@/features/linking/AdformName";
 import type { CampaignMargin, FlightMargin, FlightState, LineMargin, MarginResponse } from "@/lib/api/margin";
 import { formatMoney, formatPercent } from "@/lib/format/decimal";
 import { Figures } from "./Figures";
 import { TotalsFlags } from "./Flags";
+import { ACCRUED_HELP, ACCRUED_LABEL, daysLegend, deliveryLegend } from "./messages";
 
 const STATE_LABEL: Record<FlightState, string> = {
   closed: "Cerrado",
@@ -27,7 +30,13 @@ function FlightRow({ flight }: { flight: FlightMargin }) {
     <tr>
       <td>{twoDigits(flight.period_month)}/{flight.period_year}</td>
       <td>{flight.flight_start} – {flight.flight_end}</td>
-      <td><span className={STATE_CLASS[flight.state]}>{STATE_LABEL[flight.state]}</span></td>
+      <td>
+        <span className={STATE_CLASS[flight.state]}>{STATE_LABEL[flight.state]}</span>
+        {flight.state === "running" && (
+          <span className="flight-legend">{daysLegend(flight.accrued_days, flight.window_days)}</span>
+        )}
+      </td>
+      <td className="num">{formatMoney(flight.contracted_revenue)}</td>
       <td className="num">{formatMoney(flight.revenue)}</td>
       <td className="num">{formatMoney(flight.media_cost)}</td>
       <td className="num">{formatMoney(flight.rebate)}</td>
@@ -39,11 +48,13 @@ function FlightRow({ flight }: { flight: FlightMargin }) {
         {flight.below_cost && flight.zero_sale ? " " : null}
         {flight.zero_sale && <span className="tag tag-info">Sin venta</span>}
       </td>
+      <td>{deliveryLegend(flight.delivered_impressions, flight.contracted_impressions)}</td>
     </tr>
   );
 }
 
 function LineLevel({ campaign, line }: { campaign: CampaignMargin; line: LineMargin }) {
+  const helpId = useId();
   return (
     <details className="margin-level margin-line" aria-label={`Línea ${line.line_number} de ${campaign.name}`}>
       <summary className="margin-summary">
@@ -60,19 +71,22 @@ function LineLevel({ campaign, line }: { campaign: CampaignMargin; line: LineMar
               <th scope="col">Periodo</th>
               <th scope="col">Ventana</th>
               <th scope="col">Estado</th>
-              <th scope="col">Ingreso</th>
+              <th scope="col">Venta contratada</th>
+              <th scope="col" aria-describedby={helpId} title={ACCRUED_HELP}>{ACCRUED_LABEL}</th>
               <th scope="col">Coste de medios</th>
               <th scope="col">Rebate</th>
               <th scope="col">Coste de plataforma</th>
               <th scope="col">Margen</th>
               <th scope="col">% de margen</th>
               <th scope="col">Avisos</th>
+              <th scope="col">Entrega</th>
             </tr>
           </thead>
           <tbody>
             {line.flights.map((flight) => <FlightRow key={flight.flight_id} flight={flight} />)}
           </tbody>
         </table>
+        <span id={helpId} hidden>{ACCRUED_HELP}</span>
       </div>
     </details>
   );

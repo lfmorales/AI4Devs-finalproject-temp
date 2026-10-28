@@ -74,14 +74,14 @@ describe("the margin page: hierarchy and totals", () => {
 
     expect(await screen.findByRole("heading", { level: 1, name: "Margen" })).toBeInTheDocument();
     const period = await screen.findByRole("region", { name: "Totales del periodo" });
-    expect(figure(period, "Ingreso")).toBe(`9.000,00${SPACE}€`);
+    expect(figure(period, "Devengado")).toBe(`9.000,00${SPACE}€`);
     expect(figure(period, "Coste de medios")).toBe(`3.000,00${SPACE}€`);
     expect(figure(period, "Rebate")).toBe(`1.500,00${SPACE}€`);
     expect(figure(period, "Coste de plataforma")).toBe(`1.000,00${SPACE}€`);
     expect(figure(period, "Margen")).toBe(`3.500,00${SPACE}€`);
     expect(figure(period, "% de margen")).toBe(`38,89${SPACE}%`);
     const group = screen.getByRole("group", { name: "Campaña Alfa" });
-    expect(figure(group, "Ingreso")).toBe(`9.000,00${SPACE}€`);
+    expect(figure(group, "Devengado")).toBe(`9.000,00${SPACE}€`);
   });
 
   it("shows each line of the campaign with its own totals", async () => {
@@ -91,10 +91,10 @@ describe("the margin page: hierarchy and totals", () => {
 
     const first = await screen.findByRole("group", { name: "Línea 1 de Alfa" });
     const second = screen.getByRole("group", { name: "Línea 2 de Alfa" });
-    expect(figure(first, "Ingreso")).toBe(`6.000,00${SPACE}€`);
+    expect(figure(first, "Devengado")).toBe(`6.000,00${SPACE}€`);
     expect(figure(first, "Margen")).toBe(`2.300,00${SPACE}€`);
     expect(figure(first, "% de margen")).toBe(`38,33${SPACE}%`);
-    expect(figure(second, "Ingreso")).toBe(`3.000,00${SPACE}€`);
+    expect(figure(second, "Devengado")).toBe(`3.000,00${SPACE}€`);
     expect(within(first).getByText(/Directo/)).toBeInTheDocument();
     expect(within(second).getByText(/Deal/)).toBeInTheDocument();
   });
@@ -107,13 +107,14 @@ describe("the margin page: hierarchy and totals", () => {
     const table = await screen.findByRole("table", { name: "Flights de la línea 1 de Alfa" });
     const headers = within(table).getAllByRole("columnheader").map((h) => plain(h));
     expect(headers).toEqual([
-      "Periodo", "Ventana", "Estado", "Ingreso", "Coste de medios", "Rebate", "Coste de plataforma", "Margen", "% de margen", "Avisos",
+      "Periodo", "Ventana", "Estado", "Venta contratada", "Devengado", "Coste de medios", "Rebate", "Coste de plataforma", "Margen",
+      "% de margen", "Avisos", "Entrega",
     ]);
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(2);
-    expect(cellsOf(rows[0]!).slice(0, 9)).toEqual([
+    expect(cellsOf(rows[0]!).slice(0, 10)).toEqual([
       "07/2026", "2026-07-01 – 2026-07-31", "Cerrado",
-      `3.000,00${SPACE}€`, `1.000,00${SPACE}€`, `500,00${SPACE}€`, `350,00${SPACE}€`, `1.150,00${SPACE}€`, `38,33${SPACE}%`,
+      `3.631,01${SPACE}€`, `3.000,00${SPACE}€`, `1.000,00${SPACE}€`, `500,00${SPACE}€`, `350,00${SPACE}€`, `1.150,00${SPACE}€`, `38,33${SPACE}%`,
     ]);
   });
 
@@ -165,7 +166,7 @@ describe("the state of each flight and the provisional notice", () => {
     renderAuthenticated(<MarginPage />);
 
     const table = await screen.findByRole("table", { name: "Flights de la línea 1 de Alfa" });
-    const states = within(table).getAllByRole("row").slice(1).map((row) => cellsOf(row)[2]);
+    const states = within(table).getAllByRole("row").slice(1).map((row) => plain(row.querySelector(".tag")));
     expect(states).toEqual(["Cerrado", "Pendiente de cierre", "En curso (provisional)"]);
   });
 
@@ -237,7 +238,7 @@ describe("negative margin and zero sale", () => {
     renderAuthenticated(<MarginPage />);
 
     const table = await screen.findByRole("table", { name: "Flights de la línea 1 de Alfa" });
-    const flags = within(table).getAllByRole("row").slice(1).map((row) => cellsOf(row)[9]);
+    const flags = within(table).getAllByRole("row").slice(1).map((row) => cellsOf(row)[10]);
     expect(flags).toEqual(["Margen negativo", "Margen negativo Sin venta", ""]);
   });
 
@@ -284,7 +285,7 @@ describe("amounts and percentages", () => {
     renderAuthenticated(<MarginPage />);
 
     const period = await screen.findByRole("region", { name: "Totales del periodo" });
-    expect(figure(period, "Ingreso")).toBe(`12.345.678.901.234,56${SPACE}€`);
+    expect(figure(period, "Devengado")).toBe(`12.345.678.901.234,56${SPACE}€`);
     expect(figure(period, "Margen")).toBe(`-9.007.199.254.740.993,01${SPACE}€`);
   });
 
@@ -302,7 +303,7 @@ describe("amounts and percentages", () => {
     expect(figure(period, "% de margen")).toBe("—");
     expect(figure(screen.getByRole("group", { name: "Campaña Alfa" }), "% de margen")).toBe("—");
     const table = screen.getByRole("table", { name: "Flights de la línea 1 de Alfa" });
-    expect(cellsOf(within(table).getAllByRole("row")[1]!)[8]).toBe("—");
+    expect(cellsOf(within(table).getAllByRole("row")[1]!)[9]).toBe("—");
   });
 
   it("shows the percentage exactly as the server computed it, with its sign", async () => {

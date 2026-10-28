@@ -11,6 +11,9 @@ import type {
 export function totals(overrides: Partial<MarginTotals> = {}): MarginTotals {
   return {
     revenue: "3631.01",
+    contracted_revenue: "3631.01",
+    delivered_impressions: 700000,
+    contracted_impressions: 726202,
     media_cost: "1200.00",
     rebate: "907.75",
     platform_cost: "700.00",
@@ -48,6 +51,11 @@ export function flight(overrides: Partial<FlightMargin> = {}): FlightMargin {
     below_cost: false,
     zero_sale: false,
     revenue: "3631.01",
+    contracted_revenue: "3631.01",
+    accrued_days: 31,
+    window_days: 31,
+    delivered_impressions: 700000,
+    contracted_impressions: 726202,
     media_cost: "1200.00",
     rebate: "907.75",
     platform_cost: "700.00",

@@ -12,6 +12,10 @@ export type FlightState = "closed" | "pending_close" | "running";
 
 export interface MarginTotals {
   revenue: DecimalString;
+  /** The sale of the whole flights, summed by the server. */
+  contracted_revenue: DecimalString;
+  delivered_impressions: number;
+  contracted_impressions: number;
   media_cost: DecimalString;
   rebate: DecimalString;
   platform_cost: DecimalString;
@@ -45,7 +49,15 @@ export interface FlightMargin {
   below_cost: boolean;
   /** A line without a price ("Sin venta"). */
   zero_sale: boolean;
+  /** The accrued revenue: proportional to the elapsed days in a running flight, the whole sale in a closed one. */
   revenue: DecimalString;
+  /** The sale of the whole flight. */
+  contracted_revenue: DecimalString;
+  /** Contract days counted up to the day of the figures, and days of the whole flight. */
+  accrued_days: number;
+  window_days: number;
+  delivered_impressions: number;
+  contracted_impressions: number;
   media_cost: DecimalString;
   rebate: DecimalString;
   platform_cost: DecimalString;

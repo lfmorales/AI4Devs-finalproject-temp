@@ -731,3 +731,14 @@ dialog .notice {
 .card .btn {
   width: 100%;
 }
+
+.flight-legend,
+.margin-delivery {
+  display: block;
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+
+.margin-figures .margin-delivery {
+  flex-basis: 100%;
+}
