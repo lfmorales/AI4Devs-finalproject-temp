@@ -211,6 +211,41 @@ describe("the availability of the close-month button", () => {
     expect(screen.getByRole("button", { name: "Cerrar mes" })).toHaveAccessibleDescription(HELP);
   });
 
+  it("asks to remove the campaign filter, not claiming nothing is pending, once the month is closed under that filter", async () => {
+    let closed = false;
+    installRoutes({
+      "GET /margin": () => reply(200, marginWith("pending_close")),
+      "GET /margin?year=2026&month=8": () => reply(200, marginWith(closed ? "closed" : "pending_close")),
+      "GET /margin?year=2026&month=8&campaign_id=1": () => reply(200, marginWith(closed ? "closed" : "pending_close")),
+      "POST /margin/closings": () => {
+        closed = true;
+        return reply(200, { year: 2026, month: 8, closed: 1, already_closed: 0 });
+      },
+    });
+    const user = userEvent.setup();
+    renderAuthenticated(<MarginPage />);
+    await screen.findByRole("region", { name: "Totales del periodo" });
+    await user.type(screen.getByLabelText("Año"), "2026");
+    await user.selectOptions(screen.getByLabelText("Mes"), "agosto");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cerrar mes" })).toBeEnabled());
+    await user.selectOptions(screen.getByLabelText("Campaña"), "Campaña A");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cerrar mes" })).toBeEnabled());
+
+    await user.click(screen.getByRole("button", { name: "Cerrar mes" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Confirmar cierre" }));
+
+    expect(await screen.findByText("Se cerró 1 flight de agosto de 2026")).toBeInTheDocument();
+    const button = screen.getByRole("button", { name: "Cerrar mes" });
+    await waitFor(() => expect(button).toBeDisabled());
+    expect(button).toHaveAccessibleDescription("Quita el filtro de campaña para cerrar el mes");
+    expect(screen.queryByText(HELP)).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Campaña"), "Todas");
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cerrar mes" })).toHaveAccessibleDescription(HELP));
+    expect(screen.queryByText("Quita el filtro de campaña para cerrar el mes")).not.toBeInTheDocument();
+  });
+
   it("keeps the year-and-month hint, not this one, while no month is chosen", async () => {
     installRoutes({ "GET /margin": () => reply(200, marginWith("closed")) });
     renderAuthenticated(<MarginPage />);

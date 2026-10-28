@@ -15,6 +15,7 @@ import { MarginTree } from "./MarginTree";
 import { closedFlightsMessage, closingErrorMessage, monthNames } from "./messages";
 
 const NOTHING_TO_CLOSE = "No hay flights pendientes de cierre en este mes";
+const REMOVE_CAMPAIGN_FILTER = "Quita el filtro de campaña para cerrar el mes";
 const NOTICE = "Las cifras provisionales pueden cambiar hasta el cierre del mes";
 
 interface CampaignOption {
@@ -72,6 +73,7 @@ export function MarginPage() {
   const masked = namesAreMasked();
   // A campaign filter narrows the flights loaded, so the whole month is read from the last unfiltered margin.
   const monthMargin = filters.campaignId === undefined ? (state.status === "ready" ? state.data : null) : offeredFrom;
+  const unverified = target !== null && monthMargin === null && filters.campaignId !== undefined;
   const nothingToClose = target !== null && (monthMargin === null || !hasPendingClose(monthMargin));
 
   async function confirmClosing() {
@@ -141,7 +143,7 @@ export function MarginPage() {
             Cerrar mes
           </button>
           {target === null && <p id={hintId} className="hint">Elige año y mes para cerrar un mes</p>}
-          {nothingToClose && <p id={nothingToCloseId} className="hint">{NOTHING_TO_CLOSE}</p>}
+          {nothingToClose && <p id={nothingToCloseId} className="hint">{unverified ? REMOVE_CAMPAIGN_FILTER : NOTHING_TO_CLOSE}</p>}
         </div>
       </div>
 
