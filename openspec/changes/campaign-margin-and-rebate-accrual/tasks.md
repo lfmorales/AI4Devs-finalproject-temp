@@ -128,6 +128,14 @@ The shapes of `GET /margin` and `POST /margin/closings` are taken from the backe
 - [x] 7.15 Write failing tests and implement the legends: `N de M días` with `accrued_days` and `window_days` as received on each running flight, omitted on a closed or pending-close one; `Entregado X de Y impresiones` with `delivered_impressions` and `contracted_impressions` as received on each flight, formatted with the existing integer formatter, and the same legend with their sums on every line, campaign and the period
 - [x] 7.16 Verify the browser computes nothing for these fields (no percentage, sum or difference; amounts through the existing formatter, never `Number`), that every new header and control has an accessible label for Playwright, and that the static test forbidding `Number(`, `parseFloat`, `toFixed` and `Intl.NumberFormat` in the margin display code still passes
 
+## 7A. Frontend: Close-Month Availability
+
+The decision uses only the `state` the API already returns on each flight of the margin loaded for the chosen year and month; the browser computes nothing.
+
+- [ ] 7A.1 Write failing tests, with the real HTTP client over a simulated `fetch`, for the `Cerrar mes` button: disabled for a month whose flights are all `Cerrado`, disabled for one whose flights are all `En curso (provisional)`, enabled as soon as at least one flight is `Pendiente de cierre`, and disabled again after closing the month and reloading; the disabled button carries the accessible help text `No hay flights pendientes de cierre en este mes`, which disappears once it is enabled
+- [ ] 7A.2 Implement it in the margin page from the loaded margin's flight states only (no sum, count or date comparison in the browser), keeping the existing hint when no year and month are chosen, and verify the tests from 7A.1 pass
+- [ ] 7A.3 Verify a `409` `previous_month_open` still shows the month that blocks the closing, named in Spanish, and adapt the existing closing and access tests so their month has a flight pending close
+
 ## 8. Data: Rebate Migration and Reconciliation
 
 - [ ] 8.1 ~~Normalise `extraprimas 2023/2024/2026.xlsx` into `rebate_schedules` with validity ranges, each rate as a single open bracket, and verify 2025 resolves through the ladder rather than a hardcoded label~~ **Deferred**: 2025 resolves through ladder step 7, which is deferred with 3.6; schedules are created through the application and the tests
