@@ -262,12 +262,12 @@ def _ensure_rebate_schedule(session: Session, today: date) -> int:
     return 1
 
 
-def _batch(session: Session, window: DeliveryDateRange, started_at: datetime) -> int:
-    existing = session.scalar(select(IngestionBatchRecord.id).where(IngestionBatchRecord.source_file == BATCH_SOURCE))
+def _batch(session: Session, window: DeliveryDateRange, started_at: datetime, source: str = BATCH_SOURCE) -> int:
+    existing = session.scalar(select(IngestionBatchRecord.id).where(IngestionBatchRecord.source_file == source))
     if existing is not None:
         return existing
     batches = SqlAlchemyIngestionBatchRepository(session)
-    batch_id = batches.start(_id_of(session, DSPRecord, "DEMO DSP"), IngestionRoute.UPLOAD, BATCH_SOURCE, started_at, window)
+    batch_id = batches.start(_id_of(session, DSPRecord, "DEMO DSP"), IngestionRoute.UPLOAD, source, started_at, window)
     batches.finish(batch_id, BatchStatus.SUCCEEDED, started_at, 0, 0, 0)
     return batch_id
 
