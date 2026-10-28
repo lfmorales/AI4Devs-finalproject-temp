@@ -1605,3 +1605,148 @@ Qué son los «días servidos» de la hoja Ajuste humano La hoja devenga el marg
 Errores del asistente en esta ronda Ajuste humano Tres comandos del asistente dieron resultados engañosos y los detecté al ejecutarlos o al contar líneas: un patrón ** que zsh rechaza, una variable sin comillas que zsh no divide y un sed con un límite de 12 líneas que cortó justo lo que buscaba. Además dio por ignorada una carpeta con importes reales antes de que existiera la regla en .gitignore. Dos veces, un resumen de Claude Code contó mal los commits o los tests (dijo cuatro y eran tres); lo vi al contrastarlo con git log y con el diff.
 
 Patrón común (historia 3). Los datos reales cambiaron el diseño más que cualquier test: dos hojas de Finanzas corrigieron tres decisiones y desmontaron una alarma. La verificación que más valió fue la independiente: identidades comprobadas fila a fila sobre las hojas, mutaciones sobre los tests, y comparación del importe leído antes y después del cierre. Lo que menos valió fueron los resúmenes: contaron mal recuentos de commits y de tests y dieron por buena una prueba manual con un número de ejemplo. Los fallos de los tests verdes siguen apareciendo donde el test no puede mirar.
+
+## Test Playwright
+**Prompt 1**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale final-project-LFMC, para y avísame. Si git status --short no está vacío, para. No toques backend/ ni frontend/ (salvo .gitignore de la raíz). No leas .env. Usa Playwright en una carpeta nueva e2e/ en la raíz, con su propio package.json (@playwright/test como única dependencia, versión fijada) y su package-lock.json. Solo Chromium. Si falta red para instalar algo, para y dímelo.
+
+Paso 0, sin código. Lee cómo guarda el frontend la sesión (la configuración de oidc-client-ts en frontend/lib/auth): clave de sessionStorage, autoridad y client_id, y qué campos necesita el objeto de usuario. Dime qué vas a inyectar. Registra el plan en tasks.md (secciones 12, que ya existen para los E2E) en un commit docs(openspec): ....
+
+Decisiones:
+
+e2e/scripts/get-token.sh: obtiene un ID token con aws cognito-idp initiate-auth (USER_PASSWORD_AUTH, región eu-central-1), pide la contraseña con read -rs sin eco, extrae el correo y el identificador de cliente de .env sin imprimirlos, y escribe el token en e2e/.auth/token.json. Nunca imprime el token ni la contraseña. e2e/.auth/, e2e/node_modules/, e2e/test-results/ y e2e/playwright-report/ van a .gitignore.
+e2e/scripts/reset-data.sh: ejecuta, en la raíz, docker compose down -v, up -d, alembic upgrade head, seed_dev_data, seed_margin_demo y restart nginx, y espera a que /api/health responda 200.
+globalSetup: comprueba que el stack que responde es el esperado: /api/health da 200, /api/openapi.json contiene una ruta /margin, la página /margin no da 404, y el token existe y no ha caducado (lee su exp). Si algo falla, aborta con un mensaje que dice qué comprobar. Es la protección contra el stack equivocado en el puerto 80.
+Un fixture financeSession inyecta con addInitScript el usuario en sessionStorage antes de cargar la página. Los 401 y 403 se simulan con page.route sobre /api/**.
+Datos: las aserciones leen el API (request con el token) y comparan con la pantalla, con un ayudante que da formato es-ES a una cadena decimal como lo hace la aplicación (parte entera y decimal por separado, sin Number). Nada de cifras escritas. Si hoy (Madrid) es día 1, los casos que dependan de un flight en curso se saltan con el motivo.
+Localiza por rol y etiqueta accesible, nunca por clases. Si algo no tiene nombre accesible, dímelo en lugar de añadir un selector frágil.
+
+Especificaciones de este bloque: (a) smoke.spec.ts: la portada sin sesión muestra «Por favor, inicia sesión» y el botón de iniciar sesión; (b) navigation-roles.spec.ts: con la sesión de finance, la navegación tiene cinco enlaces; con un 403 interceptado en /api/margin aparece «Acceso denegado» y el enlace desaparece; con un 401, «Sesión caducada»; (c) status.spec.ts: las filas de /status coinciden en número y en campaña con GET /api/campaign-status, y cada aviso se ve con su texto; (d) login.spec.ts: el inicio de sesión real con Cognito, que se salta si no están E2E_EMAIL y E2E_PASSWORD en el entorno.
+
+Restricciones: commits pequeños con git add de rutas concretas; no edites uv.lock ni nada de backend/ o frontend/; si algo es ambiguo, pregunta. No ejecutes reset-data.sh ni docker compose down: lo ejecuto yo. Al terminar, pega git show --stat de todos los commits y cómo ejecutar los E2E, sin resumen tuyo en lugar de las salidas.
+
+**Respuesta**
+Tests
+
+- node --test support/compose-project.test.mjs: 10 de 10 (ℹ tests 10 / pass 10 / fail 0).
+- node --test scripts/reset-data.test.mjs: 5 de 5.
+
+Cubren:
+- proyecto propio, ajeno, sin proyecto y nombre personalizado;
+- un contenedor que solo mapea otro puerto de host a su puerto 80, que se ignora;
+- docker no disponible y Compose sin nombre;
+- que solo se ejecutan ps y compose config.
+
+El helper de TypeScript se prueba con node --test importando el .ts, lo que exige Node 22.18 o superior (en Node 25 funciona).
+
+Lo que he visto
+
+- Stack equivocado: al arrancar globalSetup en una ejecución de prueba, con un PATH sin docker, abortó con «/api/openapi.json has no /margin path». El stack que hoy responde en el puerto 80 no es el de esta rama. El token ya existe, con 47 minutos de vida.
+- Mensaje de conflicto: la comprobación del proyecto de Compose no se pudo ejercitar en esa ejecución. La parte de reset-data.sh sí tiene test.
+- Dudas sin comprobar:
+  - docker ps --format '{{.Label "..."}}' y docker compose config --format json los he escrito de memoria y solo los he probado con un docker falso.
+  - Si el POST /campaigns exige un rol que tu usuario no tiene, el spec fallará con el estado HTTP en el mensaje.
+- Datos en el stack: el spec deja la campaña creada en la base de datos. No hay endpoint de borrado, así que desaparece con tu reset-data.sh.
+- format.ts: ya no usa madridDayOfMonth ni RUNNING_FLIGHT_SKIP_REASON. Siguen en e2e/support/format.ts por si los necesitas luego.
+
+**Prompt 2**
+**Herramienta** Claude Code
+**Prompt**
+
+Empieza ejecutando git branch --show-current; si no sale final-project-LFMC, para y avísame. Si git status --short no está vacío, para. Toca solo e2e/ y tasks.md, nunca backend/ ni frontend/. Usa la misma infraestructura de P0 (sesión inyectada, globalSetup, ayudante de formato es-ES y localización por rol y etiqueta accesible). No ejecutes reset-data.sh ni nada de docker compose: lo ejecuto yo.
+
+Paso 0, sin código. Lee frontend/features/margin y lib/api/margin.ts y dime qué roles y etiquetas accesibles tienen las tarjetas de campaña, los desplegables, el botón y el diálogo, para localizarlos por rol y nombre. Si algo no tiene nombre accesible, dímelo en lugar de añadir un selector frágil. Registra el plan en tasks.md (sección 12B) en un commit docs(openspec): ....
+
+Datos. Las aserciones leen el API (request con el token) y comparan con la pantalla; ninguna cifra escrita. La base parte recién sembrada: septiembre del año en curso, pendiente de cierre. Antes de cada spec que cierre un mes, comprueba por API que hay un flight pending_close; si no, se salta con el motivo «la base no está recién sembrada: ejecuta reset-data.sh».
+
+Especificaciones (margin.spec.ts):
+
+Lectura: con septiembre elegido, la pantalla muestra «Pendiente de cierre» y, para cada campaña, la «Venta contratada» y el «Devengado» que da GET /api/margin, formateados como la aplicación; con octubre, el estado «En curso (provisional)», la leyenda de días «N de M días» con accrued_days y window_days del API, y la de entrega con delivered_impressions y contracted_impressions. Los desplegables se abren antes de leer.
+Etiquetas: una campaña con margen negativo muestra «Margen negativo» y una sin precio muestra «Sin venta» y el porcentaje «—», exactamente donde el API trae below_cost, zero_sale y margin_pct nulo.
+Botón: con un filtro de campaña activo, «Cerrar mes» está desactivado con «Quita el filtro de campaña para cerrar el mes»; sin filtro, con octubre (solo en curso) está desactivado con «No hay flights pendientes de cierre en este mes»; con septiembre está activo.
+Cierre real: guarda el JSON de GET /api/margin de septiembre (importes de cada flight). Pulsa «Cerrar mes»; comprueba el aviso de que congela las tasas y no se puede deshacer y que menciona todas las campañas; confirma; comprueba «1 flight cerrado» (o el recuento del API) y que el estado pasa a «Cerrado». Vuelve a leer el API y comprueba que cada importe del flight es idéntico al guardado, cadena por cadena.
+Idempotencia: tras el cierre, el botón queda desactivado con «No hay flights pendientes…». Llama a POST /api/margin/closings otra vez con el mismo mes y comprueba que responde sin cerrar nada y que el recuento de flights closed y todos los importes no cambian.
+Orden de cierre: crea por API una campaña con un flight terminado en un mes anterior del mismo año, si el esquema de registro lo permite, y comprueba que cerrar un mes posterior da el error con el mes bloqueante nombrado. Si el registro no admite fechas pasadas, salta este caso con el motivo.
+Acceso: con page.route devolviendo 403 en POST /api/margin/closings, la pantalla muestra el mensaje de acceso denegado.
+
+Además, haz que reset-data.sh no imprima el correo del usuario sembrado: sustituye en lo que muestra la parte local del correo por «***». Test primero, con una salida simulada.
+
+Restricciones: commits pequeños, git add de rutas concretas; no edites uv.lock; si algo es ambiguo, pregunta. Al terminar, pega git show --stat de todos los commits y cómo ejecutarlos, sin resumen tuyo en lugar de las salidas.
+
+**Respuesta**
+Paso 0 hecho: leí frontend/features/margin y lib/api/margin.ts, y registré el plan como sección 12B en tasks.md (docs(openspec): plan the E2E margin specs and the email masking (12B)). No he escrito código ni tocado el stack. La rama era final-project-LFMC y el árbol estaba limpio. Me paro aquí, como pedías.
+
+Roles y etiquetas accesibles
+
+┌─────────────┬───────────────────────────────────┬─────────────────────────────────────────────┐
+│  Elemento   │           Rol y nombre            │             ¿Nombre accesible?              │
+├─────────────┼───────────────────────────────────┼─────────────────────────────────────────────┤
+│             │ textbox «Año», combobox «Mes»     │                                             │
+│ Filtros     │ (opciones «Todos» y los meses),   │ Sí, con label                               │
+│             │ combobox «Campaña» («Todas» y los │                                             │
+│             │  nombres)                         │                                             │
+├─────────────┼───────────────────────────────────┼─────────────────────────────────────────────┤
+│ Tarjeta de  │ details, rol group, aria-label    │ Sí                                          │
+│ campaña     │ «Campaña <nombre>»                │                                             │
+├─────────────┼───────────────────────────────────┼─────────────────────────────────────────────┤
+│ Tarjeta de  │ details dentro de la campaña,     │ Sí                                          │
+│ línea       │ «Línea <n> de <nombre>»           │                                             │
+├─────────────┼───────────────────────────────────┼─────────────────────────────────────────────┤
+│ Flights     │ table «Flights de la línea <n> de │ Sí. La celda se localiza por la posición de │
+│             │  <nombre>», con columnheader      │  su cabecera                                │
+├─────────────┼───────────────────────────────────┼─────────────────────────────────────────────┤
+│ Totales     │ region «Totales del periodo»      │ Sí                                          │
+├─────────────┼───────────────────────────────────┼─────────────────────────────────────────────┤
+│ Botón       │ button «Cerrar mes»               │ Sí. El texto de ayuda es su descripción     │
+│             │                                   │ accesible (toHaveAccessibleDescription)     │
+├─────────────┼───────────────────────────────────┼─────────────────────────────────────────────┤
+│             │ dialog «Cerrar <mes> de <año>»,   │                                             │
+│ Diálogo     │ con «Confirmar cierre» y          │ Sí                                          │
+│             │ «Cancelar»                        │                                             │
+├─────────────┼───────────────────────────────────┼─────────────────────────────────────────────┤
+│             │ status con el texto del cierre;   │ Sí, pero hay más de un status (también      │
+│ Resultado   │ los errores son alert             │ «Cargando margen…»), así que se localiza    │
+│             │                                   │ por texto                                   │
+└─────────────┴───────────────────────────────────┴─────────────────────────────────────────────┘
+
+Sin nombre accesible propio:
+- summary de cada tarjeta: su nombre sería la fila entera de cifras. Para abrirla pulsaré el texto del título dentro del grupo.
+- Cifras y etiquetas: cada cifra («Venta contratada», «Devengado»…) y cada etiqueta («Margen negativo», «Sin venta», «Pendiente de cierre») son span sin rol. Las leeré por su texto dentro de la tarjeta, por ejemplo toContainText("Devengado 1.234,56 €").
+
+No añadiré selectores de clase. Si prefieres que pida al frontend un aria-label en esos summary, tendría que ser otra tarea, porque aquí no toco frontend/.
+
+Diferencias con lo que pedías
+
+- El aviso de cierre es «Se cerró 1 flight de septiembre de 2026» (o «Se cerraron N flights de…»), no «1 flight cerrado». Usaré el texto real, con el recuento que dé el API.
+- Datos del seed. DEMO-MARGEN-CERRADO ocupa todo el mes anterior (septiembre). Las otras tres campañas (CURSO, NEGATIVO, SIN-PRECIO) empiezan hace 10 días. Si hoy es día 10 o anterior, esas tres también tendrían flights pendientes de cierre en el mes anterior. Hoy es 28 de octubre, así que no ocurre, pero el spec leerá los recuentos del API.
+
+Riesgo: el orden de cierre ensucia la base
+
+- El bloqueo: el servicio comprueba primero si hay un mes anterior abierto y solo después la idempotencia. Una campaña de junio sin cerrar bloquearía septiembre, también para el POST repetido.
+- El orden: el caso de orden de cierre tiene que ir antes del cierre real.
+- La limpieza: al terminar cierra junio por API, incluso si el spec falla a mitad. El plan lo recoge en 12B.4.
+- El registro con fechas pasadas: el servicio de registro no impone ninguna regla de fechas pasadas, así que probablemente funcione. No lo he podido comprobar sin ejecutar.
+- Los cierres: son irreversibles. Tras un cierre real, volver a ejecutar los specs de cierre los salta hasta que ejecutes reset-data.sh.
+
+Email en reset-data.sh
+
+seed_dev_data imprime el correo en tres líneas: «Seeding database with user email: …», «User seeded: …» y «Assigned <rol> role to …». El plan: pasar la salida de esa llamada por un sed que sustituya la parte local por ***, conservando el código de salida con pipefail. El test irá primero, con una salida simulada.
+
+Pendiente de tu confirmación
+
+Cuando des el visto bueno empiezo por 12B.8 (el enmascarado, con su test) y sigo con margin.spec.ts. El plan queda en commits pequeños, con git add de rutas concretas.
+
+**Prompt 3**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale final-project-LFMC, para y avísame. Si git status --short no está vacío, para. Solo backend/, scripts/verify_prod_images.sh, e2e/scripts/reset-data.sh y tasks.md. Sin dependencias nuevas, sin leer .env; no ejecutes nada de docker compose que cambie el stack: lo ejecuto yo.
+
+Paso 0, sin código. Lee seed_margin_demo.py y dime qué reutilizas del servicio de registro, de los repositorios de excepciones y del catálogo de líneas de Adform. Registra el plan en tasks.md en un commit docs(openspec): ....
+
+Decisiones: backend/scripts/seed_exceptions_demo.py, idempotente y sintético, reutilizando los servicios y repositorios reales (nada de insert a mano). Crea: (1) una campaña DEMO-EXC-CAMPANA con una línea sin mapeo, con fechas que empiecen hace más de siete días, para que al vincular salga el aviso de histórico; (2) cinco líneas de catálogo de Adform con nombres inventados (DEMO Catalogo Linea 1…5, con acentos en al menos dos para probar la búsqueda sin acentos) y parejas externas inventadas; (3) tres excepciones unmatched_delivery abiertas con sus entregas retenidas por día, cuyas parejas están en el catálogo; (4) una excepción ya resuelta, con nota, para la pestaña «Resueltas»; (5) una missing_delivery abierta, para el filtro por tipo. La salida solo imprime recuentos. Una segunda ejecución no cambia ninguno.
+
+Pruebas, test primero: crea los datos; idempotencia; las tres abiertas, la resuelta y la de ausencia salen en GET /ingestion-exceptions con su estado; vincular una de ellas por el endpoint real crea el mapeo, resuelve la excepción y devuelve needs_history_load verdadero; ninguna entrega ni excepción es real. Mutación: quita la idempotencia y comprueba que falla un test.
+
+Además: reset-data.sh ejecuta este seed después de seed_margin_demo, y verify_prod_images.sh comprueba que seed_exceptions_demo.py no está en la imagen de producción, con una mutación que demuestre que falla. Al terminar, pega los dos pytest con la línea de resultado completa, el git show --stat de todos los commits y git status --short.
