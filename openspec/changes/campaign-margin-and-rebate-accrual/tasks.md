@@ -31,6 +31,7 @@
 - [x] 2A.3 Write failing tests for a flight with revenue 0 (a synthetic line without a price with volume and cost: margin minus the cost, no rebate, no counter advance, `zero_sale` at flight, line and campaign, counted in the totals) and implement it
 - [x] 2A.4 Write failing tests for `margin_pct` (two decimals half up, in points, null with revenue 0, at flight, line, campaign and totals, no division by zero) and implement it in the domain and the API
 - [ ] 2A.5 ~~A campaign with contracted volume 0 (a zero sale with no purchase order) and delivery with no purchase cost (pixels) in the margin~~ **Deferred**: they have no contracted volume to hang a flight from; registration still refuses a volume of 0 and their delivery stays as unmatched delivery in the exception queue
+- [x] 2A.6 Write failing tests for `contracted_revenue` (the sale of the whole flight, rounded half up once like `revenue`, summed exactly into the line, the campaign and the totals, 0.00 for a line without a price) and for `accrued_days` and `window_days` on a flight (a running flight accrues fewer days than its window, a closed or pending-close flight all of them and a revenue equal to its contracted revenue, closing changes none), in the domain and through `GET /margin`, and implement them without changing any existing amount
 
 ## 3. Domain: Rebate Resolution Ladder
 

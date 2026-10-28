@@ -69,6 +69,11 @@ class FlightMargin:
     below_cost: bool
     # Sin venta: the line has a sale CPM of 0.00, so the flight has no revenue and no rebate but still has cost.
     zero_sale: bool = False
+    # The sale of the whole flight, the days counted up to `as_of` and the days of the whole window. A running flight's
+    # `revenue` is the accrued part of `contracted_revenue`; a closed one has them equal. None when not started.
+    contracted_revenue: Decimal | None = None
+    accrued_days: int | None = None
+    window_days: int | None = None
 
     @property
     def margin_pct(self) -> Decimal | None:
@@ -93,6 +98,7 @@ class MarginTotals:
     below_cost_count: int
     not_started_count: int
     zero_sale_count: int = 0
+    contracted_revenue: Decimal = Decimal("0.00")
 
     @property
     def zero_sale(self) -> bool:

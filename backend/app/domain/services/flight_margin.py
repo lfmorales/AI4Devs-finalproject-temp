@@ -43,7 +43,10 @@ def calculate_flight_margin(flight: FlightEconomics, as_of: date) -> FlightMargi
         full_revenue = full_revenue * elapsed_days / flight.total_days
         full_rebate = full_rebate * elapsed_days / flight.total_days
 
-    revenue = round_amount(full_revenue)
+    contracted_revenue = flight_revenue(flight.contracted_impressions, flight.sale_cpm)
+    accrued_days = (min(as_of, flight.flight_end) - flight.flight_start).days + 1
+    # A closed flight accrues all of its sale, so its revenue is the contracted revenue, rounded once.
+    revenue = contracted_revenue if status is FlightStatus.CLOSED else round_amount(full_revenue)
     media_cost = round_amount(flight.media_cost)
     rebate = round_amount(full_rebate)
     platform_cost = round_amount(Decimal(flight.delivered_impressions) / _THOUSAND * flight.platform_rate)
@@ -59,4 +62,7 @@ def calculate_flight_margin(flight: FlightEconomics, as_of: date) -> FlightMargi
         # Margen negativo: the final margin, made of the rounded amounts, is below zero.
         below_cost=margin < 0,
         zero_sale=flight.sale_cpm == 0,
+        contracted_revenue=contracted_revenue,
+        accrued_days=accrued_days,
+        window_days=flight.total_days,
     )

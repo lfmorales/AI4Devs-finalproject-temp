@@ -8,7 +8,7 @@ _ZERO = Decimal("0.00")
 
 def total_flights(flights: Iterable[FlightMargin]) -> MarginTotals:
     """A line's total: the exact sum of its flights' already rounded amounts, with no further rounding."""
-    revenue = media_cost = rebate = platform_cost = margin = _ZERO
+    revenue = media_cost = rebate = platform_cost = margin = contracted_revenue = _ZERO
     provisional = False
     counted = below_cost = not_started = zero_sale = 0
     for flight in flights:
@@ -17,7 +17,9 @@ def total_flights(flights: Iterable[FlightMargin]) -> MarginTotals:
             continue
         assert flight.revenue is not None and flight.media_cost is not None
         assert flight.rebate is not None and flight.platform_cost is not None and flight.margin is not None
+        assert flight.contracted_revenue is not None
         revenue += flight.revenue
+        contracted_revenue += flight.contracted_revenue
         media_cost += flight.media_cost
         rebate += flight.rebate
         platform_cost += flight.platform_cost
@@ -26,16 +28,20 @@ def total_flights(flights: Iterable[FlightMargin]) -> MarginTotals:
         below_cost += flight.below_cost
         zero_sale += flight.zero_sale
         counted += 1
-    return MarginTotals(revenue, media_cost, rebate, platform_cost, margin, provisional, counted, below_cost, not_started, zero_sale)
+    return MarginTotals(
+        revenue, media_cost, rebate, platform_cost, margin, provisional, counted, below_cost, not_started, zero_sale,
+        contracted_revenue,
+    )
 
 
 def total_lines(lines: Iterable[MarginTotals]) -> MarginTotals:
     """A campaign's total: the exact sum of its lines' totals."""
-    revenue = media_cost = rebate = platform_cost = margin = _ZERO
+    revenue = media_cost = rebate = platform_cost = margin = contracted_revenue = _ZERO
     provisional = False
     counted = below_cost = not_started = zero_sale = 0
     for line in lines:
         revenue += line.revenue
+        contracted_revenue += line.contracted_revenue
         media_cost += line.media_cost
         rebate += line.rebate
         platform_cost += line.platform_cost
@@ -45,4 +51,7 @@ def total_lines(lines: Iterable[MarginTotals]) -> MarginTotals:
         below_cost += line.below_cost_count
         zero_sale += line.zero_sale_count
         not_started += line.not_started_count
-    return MarginTotals(revenue, media_cost, rebate, platform_cost, margin, provisional, counted, below_cost, not_started, zero_sale)
+    return MarginTotals(
+        revenue, media_cost, rebate, platform_cost, margin, provisional, counted, below_cost, not_started, zero_sale,
+        contracted_revenue,
+    )

@@ -241,7 +241,8 @@ def test_a_running_flight_also_rounds_each_amount_exactly_once(monkeypatch: pyte
 
     calculate_flight_margin(_september_flight(), as_of=date(2026, 9, 10))
 
-    assert len(calls) == 4
+    # The contracted revenue, the accrued revenue, the media cost, the rebate and the platform cost.
+    assert len(calls) == 5
 
 
 def test_a_flight_whose_media_cost_exceeds_its_revenue_is_below_cost():

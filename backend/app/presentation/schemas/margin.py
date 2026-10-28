@@ -27,6 +27,7 @@ DecimalString = Annotated[Decimal, PlainSerializer(lambda value: format(value, "
 
 class TotalsResponse(BaseModel):
     revenue: DecimalString
+    contracted_revenue: DecimalString
     media_cost: DecimalString
     rebate: DecimalString
     platform_cost: DecimalString
@@ -40,8 +41,8 @@ class TotalsResponse(BaseModel):
     @classmethod
     def from_totals(cls, totals: MarginTotals) -> "TotalsResponse":
         return cls(
-            revenue=totals.revenue, media_cost=totals.media_cost, rebate=totals.rebate,
-            platform_cost=totals.platform_cost, margin=totals.margin, provisional=totals.provisional,
+            revenue=totals.revenue, contracted_revenue=totals.contracted_revenue, media_cost=totals.media_cost,
+            rebate=totals.rebate, platform_cost=totals.platform_cost, margin=totals.margin, provisional=totals.provisional,
             flights_counted=totals.flights_counted, below_cost_count=totals.below_cost_count,
             zero_sale_count=totals.zero_sale_count, margin_pct=totals.margin_pct,
         )
@@ -67,6 +68,9 @@ class FlightMarginResponse(BaseModel):
     below_cost: bool
     zero_sale: bool
     revenue: DecimalString
+    contracted_revenue: DecimalString
+    accrued_days: int
+    window_days: int
     media_cost: DecimalString
     rebate: DecimalString
     platform_cost: DecimalString
@@ -79,11 +83,13 @@ class FlightMarginResponse(BaseModel):
         margin = report.margin
         assert margin.revenue is not None and margin.media_cost is not None and margin.rebate is not None
         assert margin.platform_cost is not None and margin.margin is not None
+        assert margin.contracted_revenue is not None and margin.accrued_days is not None and margin.window_days is not None
         rates = report.rates
         return cls(
             flight_id=report.flight_id, period_year=report.period_year, period_month=report.period_month,
             flight_start=report.flight_start, flight_end=report.flight_end, state=report.state,
             provisional=margin.provisional, below_cost=margin.below_cost, zero_sale=margin.zero_sale, revenue=margin.revenue,
+            contracted_revenue=margin.contracted_revenue, accrued_days=margin.accrued_days, window_days=margin.window_days,
             media_cost=margin.media_cost, rebate=margin.rebate, platform_cost=margin.platform_cost,
             margin=margin.margin, margin_pct=margin.margin_pct,
             rates=AppliedRatesResponse(
