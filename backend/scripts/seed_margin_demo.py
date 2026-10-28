@@ -1,10 +1,12 @@
-"""Create synthetic demonstration data to see the three states of the margin. Nothing here is real.
+"""Create synthetic demonstration data to see the states of the margin. Nothing here is real.
 
-It registers three campaigns with neutral names, one line each, with dates relative to today in Madrid:
+It registers four campaigns with neutral names, one line each, with dates relative to today in Madrid:
 
 - DEMO-MARGEN-CERRADO fills the whole previous month: it has ended and is pending close until that month is closed.
-- DEMO-MARGEN-CURSO starts ten days ago and ends next month: it is running, and its invented media cost is above
-  its sale, so it shows "Margen negativo".
+- DEMO-MARGEN-CURSO starts ten days ago and ends next month: it is running, with an invented media cost of 1.60
+  per thousand against a sale CPM of 6.00, so its margin is positive.
+- DEMO-MARGEN-NEGATIVO has the same window and volume and the same CPM, but an invented media cost of 9.00 per
+  thousand: it is running and shows "Margen negativo".
 - DEMO-MARGEN-SIN-PRECIO is the same window with a sale CPM of 0.00 and a positive volume: running, "Sin venta".
 
 It also invents daily deliveries for each line up to yesterday and a flat example rebate schedule for a
@@ -12,8 +14,8 @@ demonstration holding group. The campaigns go through the registration service, 
 repository, the master data through the master loader and the schedule through the schedule service: no row is
 inserted by hand except the demonstration masters' names, which the loader writes.
 
-Running it again changes nothing the same day: what exists is kept, the deliveries are written again with the same
-values, and a later day only adds its new days. It never creates a user, a role, a platform rate or a frozen rate.
+Running it again changes nothing the same day: what exists is kept, the deliveries are written again with the current
+invented costs (so a database seeded earlier gets the new ones), and a later day only adds its new days. It never creates a user, a role, a platform rate or a frozen rate.
 
 The output is counts only: no name, no id, no date.
 
@@ -78,6 +80,7 @@ EXIT_OK, EXIT_FAILED, EXIT_INVALID_ARGUMENTS, EXIT_NOT_CONFIGURED = 0, 1, 2, 3
 
 CLOSED_NAME = "DEMO-MARGEN-CERRADO"
 RUNNING_NAME = "DEMO-MARGEN-CURSO"
+NEGATIVE_NAME = "DEMO-MARGEN-NEGATIVO"
 NO_PRICE_NAME = "DEMO-MARGEN-SIN-PRECIO"
 
 MADRID = "Europe/Madrid"
@@ -125,14 +128,16 @@ def _last_day_of_next_month(today: date) -> date:
 
 
 def demo_campaigns(today: date) -> list[DemoCampaign]:
-    """The three campaigns, dated from `today`. The running ones start ten days ago and end next month."""
+    """The four campaigns, dated from `today`. The running ones start ten days ago and end next month."""
     previous_last = today.replace(day=1) - timedelta(days=1)
     previous_first = previous_last.replace(day=1)
     running_start, running_end = today - timedelta(days=10), _last_day_of_next_month(today)
     return [
         DemoCampaign(CLOSED_NAME, "DEMO-MARGEN-PO-CERRADO", previous_first, previous_last, 3_000_000, "5.00", Decimal("2.00")),
+        # A media cost per thousand well below the sale CPM: a positive margin of around 45 % of the revenue.
+        DemoCampaign(RUNNING_NAME, "DEMO-MARGEN-PO-CURSO", running_start, running_end, 2_400_000, "6.00", Decimal("1.60")),
         # A media cost per thousand above the sale CPM: the delivered cost is above the revenue it accrues.
-        DemoCampaign(RUNNING_NAME, "DEMO-MARGEN-PO-CURSO", running_start, running_end, 2_400_000, "6.00", Decimal("9.00")),
+        DemoCampaign(NEGATIVE_NAME, "DEMO-MARGEN-PO-NEGATIVO", running_start, running_end, 2_400_000, "6.00", Decimal("9.00")),
         DemoCampaign(NO_PRICE_NAME, "DEMO-MARGEN-PO-SIN-PRECIO", running_start, running_end, 1_000_000, "0.00", Decimal("3.00")),
     ]
 

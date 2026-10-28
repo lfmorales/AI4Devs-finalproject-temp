@@ -1,4 +1,4 @@
-"""The demonstration data of the margin: three synthetic campaigns, idempotent, counts-only output, nothing real."""
+"""The demonstration data of the margin: four synthetic campaigns, idempotent, counts-only output, nothing real."""
 
 import re
 from datetime import date, datetime, UTC
@@ -39,6 +39,7 @@ from scripts.seed_margin_demo import (
     EXIT_INVALID_ARGUMENTS,
     EXIT_NOT_CONFIGURED,
     EXIT_OK,
+    NEGATIVE_NAME,
     NO_PRICE_NAME,
     RUNNING_NAME,
     main,
@@ -46,7 +47,7 @@ from scripts.seed_margin_demo import (
 from tests.fixtures.delivery_data import insert_campaign_line
 
 TODAY = date(2026, 10, 28)  # the previous month is September; next month is November
-NAMES = {CLOSED_NAME, RUNNING_NAME, NO_PRICE_NAME}
+NAMES = {CLOSED_NAME, RUNNING_NAME, NEGATIVE_NAME, NO_PRICE_NAME}
 
 MASTER_MODELS = (
     HoldingGroupRecord, AgencyRecord, AdvertiserRecord, DSPRecord, ChannelRecord, FormatRecord, CampaignTypeRecord,
@@ -87,12 +88,12 @@ def _flights(session, name: str) -> list[tuple[date, date]]:
 
 # ---------------------------------------------------------------- what it creates
 
-def test_it_creates_three_campaigns_with_neutral_names_and_one_line_each(rolled_back_session):
+def test_it_creates_four_campaigns_with_neutral_names_and_one_line_each(rolled_back_session):
     code, _ = _run(rolled_back_session)
 
     assert code == EXIT_OK
     assert {c.name for c in rolled_back_session.scalars(select(CampaignRecord))} == NAMES
-    assert NAMES == {"DEMO-MARGEN-CERRADO", "DEMO-MARGEN-CURSO", "DEMO-MARGEN-SIN-PRECIO"}
+    assert NAMES == {"DEMO-MARGEN-CERRADO", "DEMO-MARGEN-CURSO", "DEMO-MARGEN-NEGATIVO", "DEMO-MARGEN-SIN-PRECIO"}
     for name in NAMES:
         assert rolled_back_session.scalar(
             select(func.count()).select_from(CampaignLineRecord).where(CampaignLineRecord.campaign_id == _campaign(rolled_back_session, name).id)
@@ -110,7 +111,7 @@ def test_the_closed_campaign_fills_the_whole_previous_month(rolled_back_session)
 def test_the_running_campaigns_start_ten_days_ago_and_end_next_month(rolled_back_session):
     _run(rolled_back_session)
 
-    for name in (RUNNING_NAME, NO_PRICE_NAME):
+    for name in (RUNNING_NAME, NEGATIVE_NAME, NO_PRICE_NAME):
         campaign = _campaign(rolled_back_session, name)
         assert (campaign.start_date, campaign.end_date) == (date(2026, 10, 18), date(2026, 11, 30))
         assert _flights(rolled_back_session, name) == [
@@ -147,7 +148,7 @@ def test_it_follows_a_different_today(rolled_back_session):
 def test_it_registers_through_the_registration_service_so_the_purchase_order_and_periods_exist(rolled_back_session):
     _run(rolled_back_session)
 
-    assert rolled_back_session.scalar(select(func.count()).select_from(PurchaseOrderRecord)) == 3
+    assert rolled_back_session.scalar(select(func.count()).select_from(PurchaseOrderRecord)) == 4
     assert all(_campaign(rolled_back_session, name).purchase_order_id is not None for name in NAMES)
     assert all(_line(rolled_back_session, name).purchase_order_version_id is not None for name in NAMES)
 
@@ -187,6 +188,36 @@ def test_a_flat_example_schedule_exists_for_the_demonstration_group(rolled_back_
     assert len(brackets) == 1 and brackets[0].upper is None and brackets[0].rate > 0
 
 
+def test_the_running_and_the_negative_campaigns_share_window_volume_and_price_but_not_cost(rolled_back_session):
+    _run(rolled_back_session)
+
+    running, negative = _line(rolled_back_session, RUNNING_NAME), _line(rolled_back_session, NEGATIVE_NAME)
+    assert running.contracted_impressions == negative.contracted_impressions
+    assert running.sale_cpm == negative.sale_cpm == Decimal("6.00")
+    assert _flights(rolled_back_session, RUNNING_NAME) == _flights(rolled_back_session, NEGATIVE_NAME)
+
+    def cost_per_thousand(line) -> set[Decimal]:
+        rows = rolled_back_session.scalars(select(DailyDeliveryRecord).where(DailyDeliveryRecord.campaign_line_id == line.id))
+        return {(row.media_cost * 1000 / row.impressions).quantize(Decimal("0.01")) for row in rows}
+
+    assert cost_per_thousand(running) == {Decimal("1.60")}
+    assert cost_per_thousand(negative) == {Decimal("9.00")}
+
+
+def test_a_database_seeded_with_the_previous_cost_gets_the_new_cost_on_the_next_run(rolled_back_session):
+    _run(rolled_back_session)
+    line = _line(rolled_back_session, RUNNING_NAME)
+    rolled_back_session.execute(
+        DailyDeliveryRecord.__table__.update().where(DailyDeliveryRecord.campaign_line_id == line.id)
+        .values(media_cost=DailyDeliveryRecord.impressions * Decimal("9.00") / 1000)
+    )
+
+    _run(rolled_back_session)
+
+    rows = rolled_back_session.scalars(select(DailyDeliveryRecord).where(DailyDeliveryRecord.campaign_line_id == line.id)).all()
+    assert rows and all((row.media_cost * 1000 / row.impressions).quantize(Decimal("0.01")) == Decimal("1.60") for row in rows)
+
+
 # ---------------------------------------------------------------- idempotence
 
 def test_a_second_run_changes_no_count(rolled_back_session):
@@ -197,14 +228,14 @@ def test_a_second_run_changes_no_count(rolled_back_session):
 
     assert code == EXIT_OK
     assert _counts(rolled_back_session) == first
-    assert "campaigns created: 0" in lines and "campaigns existing: 3" in lines
+    assert "campaigns created: 0" in lines and "campaigns existing: 4" in lines
     assert "rebate schedules created: 0" in lines and "masters created: 0" in lines
 
 
 def test_the_first_run_says_what_it_created(rolled_back_session):
     _, lines = _run(rolled_back_session)
 
-    assert "campaigns created: 3" in lines and "campaigns existing: 0" in lines
+    assert "campaigns created: 4" in lines and "campaigns existing: 0" in lines
     assert "rebate schedules created: 1" in lines
     assert "masters created: 9" in lines
 
@@ -232,9 +263,9 @@ def test_a_later_day_adds_only_the_new_days(rolled_back_session):
 
     _run(rolled_back_session, today=date(2026, 10, 29))
 
-    # The previous month is still September, so the campaigns exist; one more day for the two running lines.
+    # The previous month is still September, so the campaigns exist; one more day for the three running lines.
     assert _counts(rolled_back_session, (CampaignRecord, CampaignLineRecord, CampaignLinePeriodRecord)) == campaigns
-    assert rolled_back_session.scalar(select(func.count()).select_from(DailyDeliveryRecord)) == first + 2
+    assert rolled_back_session.scalar(select(func.count()).select_from(DailyDeliveryRecord)) == first + 3
 
 
 # ---------------------------------------------------------------- nothing real

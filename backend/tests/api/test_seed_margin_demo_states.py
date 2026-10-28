@@ -6,7 +6,7 @@ from decimal import Decimal
 import pytest
 
 from app.presentation.dependencies import providers
-from scripts.seed_margin_demo import CLOSED_NAME, NO_PRICE_NAME, RUNNING_NAME, main
+from scripts.seed_margin_demo import CLOSED_NAME, NEGATIVE_NAME, NO_PRICE_NAME, RUNNING_NAME, main
 
 TODAY = date(2026, 10, 28)  # as_of is 27 October
 
@@ -30,9 +30,10 @@ def _states(campaign: dict) -> list[str]:
 def test_before_closing_the_previous_month_is_pending_close_and_the_others_are_running(demo):
     campaigns = _by_campaign(demo.get("/margin").json())
 
-    assert set(campaigns) == {CLOSED_NAME, RUNNING_NAME, NO_PRICE_NAME}
+    assert set(campaigns) == {CLOSED_NAME, RUNNING_NAME, NEGATIVE_NAME, NO_PRICE_NAME}
     assert _states(campaigns[CLOSED_NAME]) == ["pending_close"]
     assert _states(campaigns[RUNNING_NAME]) == ["running"]  # the November flight has not started
+    assert _states(campaigns[NEGATIVE_NAME]) == ["running"]
     assert _states(campaigns[NO_PRICE_NAME]) == ["running"]
 
 
@@ -43,6 +44,7 @@ def test_after_closing_the_previous_month_the_first_campaign_is_closed(demo):
 
     assert _states(campaigns[CLOSED_NAME]) == ["closed"]
     assert _states(campaigns[RUNNING_NAME]) == ["running"]
+    assert _states(campaigns[NEGATIVE_NAME]) == ["running"]
     assert _states(campaigns[NO_PRICE_NAME]) == ["running"]
 
 
@@ -60,14 +62,17 @@ def test_every_demo_flight_has_a_margin_other_than_zero(demo):
     assert flights and all(Decimal(flight["margin"]) != 0 for flight in flights)
 
 
-def test_the_closed_campaign_is_profitable_and_the_running_one_has_a_negative_margin(demo):
+def test_the_closed_and_the_running_campaigns_are_profitable_and_the_new_one_has_a_negative_margin(demo):
     campaigns = _by_campaign(demo.get("/margin").json())
 
     closed = campaigns[CLOSED_NAME]["lines"][0]["flights"][0]
     running = campaigns[RUNNING_NAME]["lines"][0]["flights"][0]
+    negative = campaigns[NEGATIVE_NAME]["lines"][0]["flights"][0]
     assert Decimal(closed["margin"]) > 0 and closed["below_cost"] is False
-    assert Decimal(running["media_cost"]) > Decimal(running["revenue"]) > 0
-    assert running["below_cost"] is True and running["zero_sale"] is False
+    assert Decimal(running["margin"]) > 0 and running["below_cost"] is False and running["zero_sale"] is False
+    assert Decimal("40") <= Decimal(running["margin_pct"]) <= Decimal("50")
+    assert Decimal(negative["media_cost"]) > Decimal(negative["revenue"]) > 0
+    assert Decimal(negative["margin"]) < 0 and negative["below_cost"] is True and negative["zero_sale"] is False
 
 
 def test_the_campaign_without_a_price_has_no_revenue_no_rebate_and_zero_sale(demo):
@@ -83,7 +88,7 @@ def test_the_campaign_without_a_price_has_no_revenue_no_rebate_and_zero_sale(dem
 def test_the_flat_example_rebate_applies_to_the_priced_campaigns(demo):
     campaigns = _by_campaign(demo.get("/margin").json())
 
-    for name in (CLOSED_NAME, RUNNING_NAME):
+    for name in (CLOSED_NAME, RUNNING_NAME, NEGATIVE_NAME):
         flight = campaigns[name]["lines"][0]["flights"][0]
         assert Decimal(flight["rebate"]) > 0
         assert flight["rates"]["rebate_step"] == 6
