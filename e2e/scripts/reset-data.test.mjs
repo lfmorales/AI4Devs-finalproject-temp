@@ -80,9 +80,11 @@ describe("reset-data.sh before it touches anything", () => {
 });
 
 /** A docker that lets the whole reset run: the seeding prints emails on both streams and exits as told. */
-function fullFakeStack({ seedExit = 0 } = {}) {
+function fullFakeStack({ seedExit = 0, exceptionsExit = 0 } = {}) {
   const dir = mkdtempSync(join(workDir, "bin-"));
+  const log = join(dir, "calls.log");
   writeFileSync(join(dir, "docker"), `#!/bin/sh
+echo "$@" >> "${log}"
 case "$1" in
   ps) exit 0 ;;
   compose)
@@ -95,6 +97,9 @@ case "$1" in
             echo "✓ Assigned finance role to jane.doe+e2e@geoq.es"
             echo "ERROR for Jane.Doe_2@Sub.Example.co.uk and other.person@example.org" >&2
             exit ${seedExit} ;;
+          *seed_exceptions_demo*)
+            echo "exceptions seeded for jane.doe+e2e@geoq.es"
+            exit ${exceptionsExit} ;;
         esac ;;
     esac ;;
 esac
@@ -102,7 +107,7 @@ esac
   writeFileSync(join(dir, "curl"), "#!/bin/sh\nprintf 200\n");
   writeFileSync(join(dir, "sleep"), "#!/bin/sh\nexit 0\n");
   for (const tool of ["docker", "curl", "sleep"]) chmodSync(join(dir, tool), 0o755);
-  return { dir };
+  return { dir, calls: () => readFileSync(log, "utf8").trim().split("\n") };
 }
 
 describe("reset-data.sh and the seeded user's email", () => {
@@ -131,5 +136,44 @@ describe("reset-data.sh and the seeded user's email", () => {
 
     assert.match(result.stdout, /Seeding database with user email:/);
     assert.match(result.stdout, /Stack ready: \/api\/health answers 200\./);
+  });
+});
+
+describe("reset-data.sh and the demonstration data of the exception queue", () => {
+  const seeds = (stack) => stack.calls().filter((call) => call.includes("scripts.seed_"));
+
+  it("runs the exception seed after the margin seed, which comes after the development seed", () => {
+    const stack = fullFakeStack();
+
+    const result = run(stack);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(seeds(stack).map((call) => call.match(/scripts\.(seed_\w+)/)[1]), ["seed_dev_data", "seed_margin_demo", "seed_exceptions_demo"]);
+  });
+
+  it("runs it before nginx is restarted", () => {
+    const stack = fullFakeStack();
+
+    run(stack);
+
+    const calls = stack.calls();
+    const seeded = calls.findIndex((call) => call.includes("seed_exceptions_demo"));
+    assert.ok(seeded >= 0 && seeded < calls.findIndex((call) => call.startsWith("compose restart nginx")));
+  });
+
+  it("stops with its exit code if it fails, and restarts nothing", () => {
+    const stack = fullFakeStack({ exceptionsExit: 4 });
+
+    const result = run(stack);
+
+    assert.equal(result.status, 4);
+    assert.ok(!stack.calls().some((call) => call.startsWith("compose restart")));
+  });
+
+  it("hides the local part of an email in its output too", () => {
+    const result = run(fullFakeStack());
+
+    assert.ok(!(result.stdout + result.stderr).includes("jane.doe+e2e"));
+    assert.match(result.stdout, /exceptions seeded for \*\*\*@geoq\.es/);
   });
 });

@@ -41,6 +41,7 @@ for attempt in $(seq 1 30); do
 done
 without_emails docker compose exec -T backend python -m scripts.seed_dev_data
 without_emails docker compose exec -T backend python -m scripts.seed_margin_demo
+without_emails docker compose exec -T backend python -m scripts.seed_exceptions_demo
 docker compose restart nginx
 
 for attempt in $(seq 1 30); do
