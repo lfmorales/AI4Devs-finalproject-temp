@@ -55,13 +55,23 @@ export async function readUnmappedLines(api: APIRequestContext): Promise<Unmappe
   return (await response.json()) as UnmappedLine[];
 }
 
-/** The line the catalogue says a pair is mapped to, or null when it is not mapped (or not in the catalogue). */
+/**
+ * The line the catalogue says a pair is mapped to, or null when no mapped item has that pair. The catalogue's `q`
+ * filter searches the campaign and line names, not the identifiers, so this reads every mapped item, page by page,
+ * and compares the pair as text.
+ */
 export async function mappedLineOf(api: APIRequestContext, externalCampaignId: string, externalLineItemId: string): Promise<number | null> {
-  const response = await api.get(`dsp-catalog?q=${encodeURIComponent(externalCampaignId)}&limit=100`);
-  if (response.status() !== 200) throw new Error(`GET /api/dsp-catalog answered ${response.status()}.`);
-  const page = (await response.json()) as { items: CatalogItem[] };
-  const item = page.items.find((entry) => entry.external_campaign_id === externalCampaignId && entry.external_line_item_id === externalLineItemId);
-  return item?.mapped_line_id ?? null;
+  const limit = 200;
+  for (let offset = 0; ; offset += limit) {
+    const response = await api.get(`dsp-catalog?mapped=true&limit=${limit}&offset=${offset}`);
+    if (response.status() !== 200) throw new Error(`GET /api/dsp-catalog answered ${response.status()}.`);
+    const page = (await response.json()) as { items: CatalogItem[]; total: number };
+    const item = page.items.find(
+      (entry) => String(entry.external_campaign_id) === String(externalCampaignId) && String(entry.external_line_item_id) === String(externalLineItemId),
+    );
+    if (item !== undefined) return item.mapped_line_id;
+    if (offset + limit >= page.total) return null;
+  }
 }
 
 /** Lowercase without accents, as the screen's search compares. */
