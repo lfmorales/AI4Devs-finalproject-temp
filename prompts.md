@@ -1750,3 +1750,100 @@ Decisiones: backend/scripts/seed_exceptions_demo.py, idempotente y sintético, r
 Pruebas, test primero: crea los datos; idempotencia; las tres abiertas, la resuelta y la de ausencia salen en GET /ingestion-exceptions con su estado; vincular una de ellas por el endpoint real crea el mapeo, resuelve la excepción y devuelve needs_history_load verdadero; ninguna entrega ni excepción es real. Mutación: quita la idempotencia y comprueba que falla un test.
 
 Además: reset-data.sh ejecuta este seed después de seed_margin_demo, y verify_prod_images.sh comprueba que seed_exceptions_demo.py no está en la imagen de producción, con una mutación que demuestre que falla. Al terminar, pega los dos pytest con la línea de resultado completa, el git show --stat de todos los commits y git status --short.
+
+
+**Respuesta**
+Empieza ejecutando git branch --show-current; si no sale final-project-LFMC, para y avísame. Si git status --short no está vacío, para. Toca solo e2e/ y tasks.md, nunca backend/ ni frontend/. Usa la infraestructura de P0 y P1, incluido el ayudante del aviso de error y los localizadores por rol. No ejecutes reset-data.sh ni docker compose.
+
+Paso 0, sin código: lee frontend/features/exceptions, linking y campaigns, y dime qué roles y nombres accesibles tienen la cola, el filtro, el diálogo de vincular y el formulario; si algo no tiene nombre accesible, dímelo en lugar de añadir un selector frágil. Registra el plan en tasks.md (sección 12C).
+
+exceptions.spec.ts: (1) la cola de «Abiertas» tiene las mismas filas que GET /api/ingestion-exceptions?status=open, y «Resueltas» muestra la resuelta con su nota; (2) el filtro de texto encuentra por nombre sin distinguir acentos ni mayúsculas, por pareja y por DSP, con «Mostrando X de Y» y el estado sin coincidencias; el selector de tipo; (3) resolver una excepción con nota la saca de «Abiertas» sin recargar, y el API la devuelve como resuelta; (4) vincular una a la línea sin mapeo de DEMO-EXC-CAMPANA: el diálogo lista las líneas sin mapeo, tras confirmar la fila sale de «Abiertas», aparece el aviso de histórico, y el API trae el mapeo creado; (5) un 403 interceptado en la cola lleva a «Acceso denegado» y quita el enlace; (6) un segundo intento de resolver la misma (resuelta ya por API antes de confirmar) muestra el error en español, no uno genérico.
+
+campaign.spec.ts: (1) registra una campaña E2E-ALTA-<marca de tiempo> de tres meses con una línea: «Calcular reparto» muestra tres meses y la suma coincide con el total, y lo que la pantalla enseña coincide con lo que guarda el API; (2) una línea con fechas propias muestra solo los meses que toca; (3) edita un volumen hasta que la suma no cuadre: el envío se bloquea con su mensaje, y no hay ninguna petición POST de registro en la red; (4) CPM 0 se registra, y con −1 sale el mensaje de CPM negativo; la campaña con CPM 0 aparece en el margen con «Sin venta»; (5) los códigos de error del backend (fechas fuera de la campaña, volumen demasiado pequeño) salen en español junto a la línea. No hay endpoint de borrado: cada ejecución crea campañas con nombre único y el reset-data.sh las elimina.
+
+Datos: las aserciones leen el API; ninguna cifra escrita. Los casos que cambian el estado se saltan con el motivo si la base no está recién sembrada. Restricciones: commits pequeños, git add de rutas concretas; si algo es ambiguo, pregunta. Al terminar, pega git show --stat de todos los commits y cómo ejecutarlos.
+
+**Prompt 4**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale final-project-LFMC, para y avísame. Si git status --short no está vacío, para. Toca solo e2e/ y tasks.md, nunca backend/ ni frontend/. Usa la infraestructura de P0 y P1, incluido el ayudante del aviso de error y los localizadores por rol. No ejecutes reset-data.sh ni docker compose.
+
+Paso 0, sin código: lee frontend/features/exceptions, linking y campaigns, y dime qué roles y nombres accesibles tienen la cola, el filtro, el diálogo de vincular y el formulario; si algo no tiene nombre accesible, dímelo en lugar de añadir un selector frágil. Registra el plan en tasks.md (sección 12C).
+
+exceptions.spec.ts: (1) la cola de «Abiertas» tiene las mismas filas que GET /api/ingestion-exceptions?status=open, y «Resueltas» muestra la resuelta con su nota; (2) el filtro de texto encuentra por nombre sin distinguir acentos ni mayúsculas, por pareja y por DSP, con «Mostrando X de Y» y el estado sin coincidencias; el selector de tipo; (3) resolver una excepción con nota la saca de «Abiertas» sin recargar, y el API la devuelve como resuelta; (4) vincular una a la línea sin mapeo de DEMO-EXC-CAMPANA: el diálogo lista las líneas sin mapeo, tras confirmar la fila sale de «Abiertas», aparece el aviso de histórico, y el API trae el mapeo creado; (5) un 403 interceptado en la cola lleva a «Acceso denegado» y quita el enlace; (6) un segundo intento de resolver la misma (resuelta ya por API antes de confirmar) muestra el error en español, no uno genérico.
+
+campaign.spec.ts: (1) registra una campaña E2E-ALTA-<marca de tiempo> de tres meses con una línea: «Calcular reparto» muestra tres meses y la suma coincide con el total, y lo que la pantalla enseña coincide con lo que guarda el API; (2) una línea con fechas propias muestra solo los meses que toca; (3) edita un volumen hasta que la suma no cuadre: el envío se bloquea con su mensaje, y no hay ninguna petición POST de registro en la red; (4) CPM 0 se registra, y con −1 sale el mensaje de CPM negativo; la campaña con CPM 0 aparece en el margen con «Sin venta»; (5) los códigos de error del backend (fechas fuera de la campaña, volumen demasiado pequeño) salen en español junto a la línea. No hay endpoint de borrado: cada ejecución crea campañas con nombre único y el reset-data.sh las elimina.
+
+Datos: las aserciones leen el API; ninguna cifra escrita. Los casos que cambian el estado se saltan con el motivo si la base no está recién sembrada. Restricciones: commits pequeños, git add de rutas concretas; si algo es ambiguo, pregunta. Al terminar, pega git show --stat de todos los commits y cómo ejecutarlos.
+
+**Prompt 5**
+**Herramienta** Claude Code
+**Prompt**
+Empieza ejecutando git branch --show-current; si no sale final-project-LFMC, para y avísame. Si git status --short no está vacío, para. Toca solo e2e/ y tasks.md, nunca backend/ ni frontend/. Usa la infraestructura de P0 y P1, incluido el ayudante del aviso de error y los localizadores por rol. No ejecutes reset-data.sh ni docker compose.
+
+Paso 0, sin código: lee frontend/features/exceptions, linking y campaigns, y dime qué roles y nombres accesibles tienen la cola, el filtro, el diálogo de vincular y el formulario; si algo no tiene nombre accesible, dímelo en lugar de añadir un selector frágil. Registra el plan en tasks.md (sección 12C).
+
+Datos de partida (los crea seed_exceptions_demo.py): tres excepciones sin casar abiertas, una resuelta con nota, una de ausencia (en DEMO-EXC-AUSENCIA), cinco líneas de catálogo DEMO Catalogo Linea 1…5 (dos con acentos) y una línea sin mapeo en DEMO-EXC-CAMPANA, con inicio de hace veinte días. Las fechas son relativas a hoy: léelas del API, no las escribas.
+
+exceptions.spec.ts: (1) la cola de «Abiertas» tiene las mismas filas que GET /api/ingestion-exceptions?status=open, y «Resueltas» muestra la resuelta con su nota; (2) el filtro de texto encuentra por nombre sin distinguir acentos ni mayúsculas, por pareja y por DSP, con «Mostrando X de Y» y el estado sin coincidencias; el selector de tipo; (3) resolver una excepción con nota la saca de «Abiertas» sin recargar, y el API la devuelve como resuelta; (4) vincular una a la línea sin mapeo de DEMO-EXC-CAMPANA: el diálogo lista las líneas sin mapeo, tras confirmar la fila sale de «Abiertas», aparece el aviso de histórico, y el API trae el mapeo creado; (5) un 403 interceptado en la cola lleva a «Acceso denegado» y quita el enlace; (6) un segundo intento de resolver la misma (resuelta ya por API antes de confirmar) muestra el error en español, no uno genérico.
+
+campaign.spec.ts: (1) registra una campaña E2E-ALTA-<marca de tiempo> de tres meses con una línea: «Calcular reparto» muestra tres meses y la suma coincide con el total, y lo que la pantalla enseña coincide con lo que guarda el API; (2) una línea con fechas propias muestra solo los meses que toca; (3) edita un volumen hasta que la suma no cuadre: el envío se bloquea con su mensaje, y no hay ninguna petición POST de registro en la red; (4) CPM 0 se registra, y con −1 sale el mensaje de CPM negativo; la campaña con CPM 0 aparece en el margen con «Sin venta»; (5) los códigos de error del backend (fechas fuera de la campaña, volumen demasiado pequeño) salen en español junto a la línea. No hay endpoint de borrado: cada ejecución crea campañas con nombre único y reset-data.sh las elimina.
+
+Reglas: las aserciones leen el API; ninguna cifra escrita. Los casos que cambian el estado se saltan con el motivo si la base no está recién sembrada. Commits pequeños, git add de rutas concretas; si algo es ambiguo, pregunta. Al terminar, pega git show --stat de todos los commits y cómo ejecutarlos.
+
+**Respuesta**
+Paso 0 hecho: el plan está en tasks.md 12C (commit 1eebc3e) y el árbol está limpio. No he escrito ningún spec porque falta una decisión tuya sobre el formulario de campaña.
+
+Cola de excepciones: todo tiene nombre accesible
+
+- Pestañas: tablist «Estado de las excepciones» con tab «Abiertas» y «Resueltas».
+- Cola: table «Cola de excepciones», con cabeceras de columna. Las filas se leen por la posición de la cabecera.
+- Filtro:
+  - searchbox «Buscar excepciones».
+  - combobox «Tipo», con las opciones «Todas», «Entrega sin emparejar» y «Entrega ausente».
+  - Botón «Limpiar filtros».
+- Botones por fila: «Resolver excepción <id>» y «Vincular a una línea (excepción <id>)».
+- Diálogo de resolver: dialog «Resolver excepción <id>», con textbox «Nota (opcional)» y botones «Confirmar resolución» y «Cancelar».
+- Diálogo de vincular:
+  - dialog «Vincular la excepción <id> a una línea», con searchbox «Buscar línea».
+  - radiogroup «Líneas sin mapeo»; cada radio se llama como la descripción de su línea (campaña, línea n, fechas, DSP).
+  - Botones «Confirmar vinculación» y «Cancelar».
+- Avisos:
+  - Resuelta o vinculada: status.
+  - Aviso de histórico y errores: alert.
+
+Sin nombre propio, pero legibles por su texto, hay tres cosas: el contador «Mostrando X de Y», los estados vacíos y las celdas de nota. Ninguna necesita un selector frágil.
+
+Formulario de campaña: los controles no tienen nombre accesible
+
+En CreateCampaignForm.tsx cada <label> es hermano de su control, sin htmlFor ni envoltura. Por eso no tienen nombre accesible estos controles:
+- el nombre y el nombre mostrado,
+- la agencia, el anunciante, el tipo, el sector y el comercial,
+- las fechas de campaña, la referencia del pedido y su fecha,
+- y, en cada línea, el DSP, el canal, el formato, el alcance, el mercado, las impresiones y el CPM.
+
+Los avisos de error del formulario («Por favor corrige los errores…») tampoco tienen rol, y los errores de línea son párrafos sueltos.
+
+Sí tienen nombre estos elementos:
+- la casilla «Heredar las fechas de la campaña»,
+- «Inicio de la línea» y «Fin de la línea»,
+- los «Volumen <mes>»,
+- los botones «Calcular reparto» y «Registrar campaña».
+
+Con tu regla de no añadir selectores frágiles, campaign.spec.ts no se puede escribir tal cual. No toco frontend/, así que lo dejo como 12C.6, bloqueado.
+
+Lo que haría con las excepciones
+
+Los tres specs que cambian estado consumen una excepción abierta sin casar cada uno (resolver, vincular, el segundo intento). Hay exactamente tres, así que van al final, tras los de solo lectura. Se saltan si el API no muestra las filas sembradas.
+
+Decisión
+
+¿Cómo seguimos con campaign.spec.ts?
+1. Arreglar el formulario primero (recomendado): un cambio pequeño en frontend/ que asocia cada <label> con su control mediante htmlFor e id, y da role="alert" a los avisos de error. Sería un paso aparte, con sus tests de Vitest, y después escribo el spec.
+2. Hacer solo exceptions.spec.ts ahora y dejar campaign.spec.ts para cuando el formulario esté arreglado.
+3. Escribir campaign.spec.ts con selectores por posición o por name del DOM. Lo desaconsejo y va contra tu regla.
+
+Con tu respuesta empiezo por 12C.1. Si eliges la 1, el cambio del frontend va antes que el spec.
+
+**Ajuste**
+Opción 1 con este orden. (1) Sigue ahora con exceptions.spec.ts y deja campaign.spec.ts en 12C.6 como bloqueado por el formulario. Los tres casos que cambian estado van al final, tras los de solo lectura, y se saltan con el motivo si el API no muestra las filas sembradas. (2) El arreglo del formulario lo haré yo en un bloque aparte, desde una sesión de frontend; no toques frontend/. (3) Anota en 12C.6 el motivo exacto del bloqueo y la lista de controles sin nombre accesible. Continúa con 12C.1 y para al terminar con git show --stat de todos los commits y cómo ejecutarlos.
