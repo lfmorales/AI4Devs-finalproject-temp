@@ -1,0 +1,47 @@
+E2E token: 59 minutes left (at least 10 are required).
+
+Running 35 tests using 1 worker
+
+  ✓   1 [chromium] › tests/campaign.spec.ts:33:7 › registering a campaign of three months › calculates the split, shows what the backend registers and lists the campaign (1.6s)
+  ✓   2 [chromium] › tests/campaign.spec.ts:68:7 › registering a campaign of three months › a line with its own dates shows only the months it touches (636ms)
+  ✓   3 [chromium] › tests/campaign.spec.ts:87:7 › what the form refuses before sending › a manual split that does not add up blocks the submission, and the reset restores the proportional one (615ms)
+  ✓   4 [chromium] › tests/campaign.spec.ts:110:7 › what the form refuses before sending › a negative CPM shows its message and sends nothing (533ms)
+  ✓   5 [chromium] › tests/campaign.spec.ts:123:7 › what the form refuses before sending › line dates outside the campaign's are refused in the browser, beside the line (517ms)
+  ✓   6 [chromium] › tests/campaign.spec.ts:141:7 › what the backend refuses, shown beside the line › a volume too small for its months shows volume_too_small_for_flights in Spanish in the line (471ms)
+  ✓   7 [chromium] › tests/campaign.spec.ts:163:7 › a campaign without a price (needs a previous month that is still open) › CPM 0 registers, and the margin of the previous month labels it «Sin venta» with a dash (932ms)
+  ✓   8 [chromium] › tests/exceptions.spec.ts:18:7 › the exception queue, reading › «Abiertas» has the rows of GET /api/ingestion-exceptions?status=open (288ms)
+  ✓   9 [chromium] › tests/exceptions.spec.ts:29:7 › the exception queue, reading › «Resueltas» shows the resolved rows of the API with their note (334ms)
+  ✓  10 [chromium] › tests/exceptions.spec.ts:42:9 › the exception queue, reading › the filter › finds by catalogue name without accents or case (380ms)
+  ✓  11 [chromium] › tests/exceptions.spec.ts:60:9 › the exception queue, reading › the filter › finds by external pair and by DSP (308ms)
+  ✓  12 [chromium] › tests/exceptions.spec.ts:83:9 › the exception queue, reading › the filter › shows the no-match state, and «Limpiar filtros» brings every row back (335ms)
+  ✓  13 [chromium] › tests/exceptions.spec.ts:99:9 › the exception queue, reading › the filter › the type selector keeps only the chosen type (344ms)
+  ✓  14 [chromium] › tests/exceptions.spec.ts:121:7 › the exception queue, failures › shows 'Acceso denegado' and drops the Excepciones link when the queue answers 403 (218ms)
+  ✓  15 [chromium] › tests/exceptions.spec.ts:132:7 › the exception queue, changing state (needs a freshly seeded database) › resolving an open row with a note takes it out of «Abiertas» without reloading (367ms)
+  ✓  16 [chromium] › tests/exceptions.spec.ts:159:7 › the exception queue, changing state (needs a freshly seeded database) › linking an unmatched row to the unmapped line of the demo campaign maps it and warns about the history (515ms)
+  ✓  17 [chromium] › tests/exceptions.spec.ts:186:7 › the exception queue, changing state (needs a freshly seeded database) › a row resolved through the API before the confirmation shows the error in Spanish, not a generic one (370ms)
+  -  18 [chromium] › tests/login.spec.ts:9:7 › the real sign-in with Cognito › signs in through the hosted UI and lands on the campaigns
+  ✓  19 [chromium] › tests/margin.spec.ts:22:7 › the margin of the previous month, pending close › shows the state, the contracted sale and the accrued revenue of every campaign as the API gives them (467ms)
+  ✓  20 [chromium] › tests/margin.spec.ts:50:7 › the margin of the current month, running › shows the state, the days and the delivery of every running flight as the API gives them (529ms)
+  ✓  21 [chromium] › tests/margin.spec.ts:75:7 › the margin of the current month, running › labels a negative margin and a flight without a sale exactly where the API raises them (502ms)
+  ✓  22 [chromium] › tests/margin.spec.ts:103:7 › the close-month button › is off with a campaign filter, with the reason (329ms)
+  ✓  23 [chromium] › tests/margin.spec.ts:117:7 › the close-month button › is off in a month with only running flights, with the reason (357ms)
+  ✓  24 [chromium] › tests/margin.spec.ts:129:7 › the close-month button › is on in a month with a flight pending close (351ms)
+  ✓  25 [chromium] › tests/margin.spec.ts:140:7 › the access to the closing › shows 'Acceso denegado' when the closing answers 403 (384ms)
+  ✓  26 [chromium] › tests/margin.spec.ts:157:7 › the closing order › names the earlier month that blocks the closing, and leaves the database able to close (491ms)
+  ✓  27 [chromium] › tests/margin.spec.ts:199:7 › the real closing › freezes the rates, closes what the API counts and changes no amount (493ms)
+  ✓  28 [chromium] › tests/margin.spec.ts:222:7 › the real closing › is idempotent: the button is off and a second closing changes nothing (308ms)
+  ✓  29 [chromium] › tests/navigation-roles.spec.ts:6:7 › the navigation of a finance user › has the five links (278ms)
+  ✓  30 [chromium] › tests/navigation-roles.spec.ts:14:7 › the navigation of a finance user › shows 'Acceso denegado' and drops the Margen link when the margin answers 403 (219ms)
+  ✓  31 [chromium] › tests/navigation-roles.spec.ts:23:7 › the navigation of a finance user › shows 'Sesión caducada' when the margin answers 401 (208ms)
+  ✓  32 [chromium] › tests/smoke.spec.ts:4:7 › without a session › the home page offers to sign in (165ms)
+  ✓  33 [chromium] › tests/smoke.spec.ts:11:7 › without a session › a guarded page asks to sign in (160ms)
+  ✓  34 [chromium] › tests/status.spec.ts:17:7 › the campaign status › lists the rows of GET /api/campaign-status, in number and in campaign (289ms)
+  ✓  35 [chromium] › tests/status.spec.ts:35:7 › the campaign status › shows the two flags of a campaign whose running flight has received no delivery (337ms)
+
+  1 skipped
+  34 passed (19.6s)
+
+To open last HTML report run:
+[36m[39m
+[36m  npx playwright show-report[39m
+[36m[39m
