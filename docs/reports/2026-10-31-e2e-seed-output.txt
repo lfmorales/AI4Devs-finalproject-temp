@@ -1,0 +1,111 @@
+ Container ai4devs-finalproject-nginx-1 Stopping 
+ Container ai4devs-finalproject-nginx-1 Stopped 
+ Container ai4devs-finalproject-nginx-1 Removing 
+ Container ai4devs-finalproject-nginx-1 Removed 
+ Container ai4devs-finalproject-frontend-1 Stopping 
+ Container ai4devs-finalproject-frontend-1 Stopped 
+ Container ai4devs-finalproject-frontend-1 Removing 
+ Container ai4devs-finalproject-frontend-1 Removed 
+ Container ai4devs-finalproject-backend-1 Stopping 
+ Container ai4devs-finalproject-backend-1 Stopped 
+ Container ai4devs-finalproject-backend-1 Removing 
+ Container ai4devs-finalproject-backend-1 Removed 
+ Container ai4devs-finalproject-db-1 Stopping 
+ Container ai4devs-finalproject-db-1 Stopped 
+ Container ai4devs-finalproject-db-1 Removing 
+ Container ai4devs-finalproject-db-1 Removed 
+ Volume ai4devs-finalproject_certbot_certs Removing 
+ Volume ai4devs-finalproject_postgres_data Removing 
+ Volume ai4devs-finalproject_certbot_webroot Removing 
+ Network ai4devs-finalproject_adops360 Removing 
+ Network ai4devs-finalproject_adops360 Removed 
+ Volume ai4devs-finalproject_postgres_data Removed 
+ Volume ai4devs-finalproject_certbot_certs Removed 
+ Volume ai4devs-finalproject_certbot_webroot Removed 
+ Network ai4devs-finalproject_adops360 Creating 
+ Volume ai4devs-finalproject_postgres_data Creating 
+ Volume ai4devs-finalproject_postgres_data Creating 
+ Volume ai4devs-finalproject_certbot_webroot Creating 
+ Volume ai4devs-finalproject_certbot_webroot Creating 
+ Network ai4devs-finalproject_adops360 Creating 
+ Volume ai4devs-finalproject_certbot_certs Creating 
+ Volume ai4devs-finalproject_certbot_certs Creating 
+ Volume ai4devs-finalproject_certbot_webroot Created 
+ Volume ai4devs-finalproject_certbot_webroot Created 
+ Volume ai4devs-finalproject_certbot_certs Created 
+ Volume ai4devs-finalproject_certbot_certs Created 
+ Volume ai4devs-finalproject_postgres_data Created 
+ Volume ai4devs-finalproject_postgres_data Created 
+ Network ai4devs-finalproject_adops360 Created 
+ Network ai4devs-finalproject_adops360 Created 
+ Container ai4devs-finalproject-db-1 Creating 
+ Container ai4devs-finalproject-db-1 Created 
+ Container ai4devs-finalproject-backend-1 Creating 
+ Container ai4devs-finalproject-backend-1 Created 
+ Container ai4devs-finalproject-frontend-1 Creating 
+ Container ai4devs-finalproject-frontend-1 Created 
+ Container ai4devs-finalproject-nginx-1 Creating 
+ Container ai4devs-finalproject-nginx-1 Created 
+ Container ai4devs-finalproject-db-1 Starting 
+ Container ai4devs-finalproject-db-1 Started 
+ Container ai4devs-finalproject-db-1 Waiting 
+ Container ai4devs-finalproject-db-1 Healthy 
+ Container ai4devs-finalproject-backend-1 Starting 
+ Container ai4devs-finalproject-backend-1 Started 
+ Container ai4devs-finalproject-frontend-1 Starting 
+ Container ai4devs-finalproject-frontend-1 Started 
+ Container ai4devs-finalproject-backend-1 Waiting 
+ Container ai4devs-finalproject-backend-1 Healthy 
+ Container ai4devs-finalproject-nginx-1 Starting 
+ Container ai4devs-finalproject-nginx-1 Started 
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> a7cfba21a0e9, Initial schema: identity, masters, campaigns, purchase orders, DSP mappings
+INFO  [alembic.runtime.migration] Running upgrade a7cfba21a0e9 -> 101d9c5bd5fb, add delivery ingestion tables
+INFO  [alembic.runtime.migration] Running upgrade 101d9c5bd5fb -> a13ff49f4f59, widen media cost to six decimals
+INFO  [alembic.runtime.migration] Running upgrade a13ff49f4f59 -> 01f18b21740e, add ignored row count to ingestion batches
+INFO  [alembic.runtime.migration] Running upgrade 01f18b21740e -> 762354975e91, make dsp mapping external pair unique per dsp
+INFO  [alembic.runtime.migration] Running upgrade 762354975e91 -> 33b042006d70, exceptions model retained delivery and zero unmatched count
+INFO  [alembic.runtime.migration] Running upgrade 33b042006d70 -> 3cd42e61ae55, add campaign line flights
+INFO  [alembic.runtime.migration] Running upgrade 3cd42e61ae55 -> 520fbde04e94, make campaign lines hang from the campaign
+INFO  [alembic.runtime.migration] Running upgrade 520fbde04e94 -> 8d8ed8823cf1, add the dsp catalog lines table
+INFO  [alembic.runtime.migration] Running upgrade 8d8ed8823cf1 -> e6a29ae62e94, record the window of each ingestion batch
+INFO  [alembic.runtime.migration] Running upgrade e6a29ae62e94 -> 439b6b8481f8, add the margin tables
+Seeding database with user email: ***@cristalizaservicios.es
+✓ Roles seeded
+✓ Holding groups seeded
+✓ Agencies seeded
+✓ Advertisers seeded
+✓ DSPs seeded
+✓ Channels seeded
+✓ Formats seeded
+✓ Campaign types seeded
+✓ Sectors seeded
+✓ Sales reps seeded
+✓ User seeded: ***@cristalizaservicios.es
+✓ Assigned operations role to ***@cristalizaservicios.es
+✓ Assigned finance role to ***@cristalizaservicios.es
+✓ Example rebate schedule seeded (fictitious)
+✓ Example platform rate seeded (fictitious)
+
+✓ Database seeded successfully
+masters created: 9
+campaigns created: 4
+campaigns existing: 0
+rebate schedules created: 1
+lines: 4
+flights: 7
+deliveries stored: 60
+masters created: 0
+campaigns created: 2
+campaigns existing: 0
+catalogue lines: 5
+mappings created: 1
+exceptions created: 5
+exceptions open: 4
+exceptions resolved: 1
+missing deliveries created: 1
+retained days: 20
+ Container ai4devs-finalproject-nginx-1 Restarting 
+ Container ai4devs-finalproject-nginx-1 Started 
+Stack ready: /api/health answers 200.
