@@ -144,9 +144,9 @@ In `frontend/features/campaigns/CreateCampaignForm.tsx` every `<label>` is a sib
 
 Controls to name (the label text stays as is): `Nombre de la campaña *`, `Nombre mostrado *`, `Agencia *`, `Anunciante *`, `Tipo de campaña *`, `Sector *`, `Comercial *`, `Fecha de inicio *`, `Fecha de fin *`, `Referencia de orden *`, `Fecha de recepción *`; and in each line `DSP *`, `Canal *`, `Formato *`, `Alcance *`, `Descripción del mercado *`, `Impresiones contratadas *`, `CPM (venta) *`. Errors: the form notices (`submitError`, `loadError`) get `role="alert"`, as every other error notice of the application does; the error of a field is tied to it with `aria-describedby` (as the catalogue's date hint does); the errors that belong to a whole line (the preview error, the manual-split problem) and the error of the list of lines get `role="alert"`.
 
-- [ ] 7B.1 Write the tests first, with the real API client over a simulated fetch: every control above is found with `getByLabel` and its exact label; in a form with two lines each line control is tied to its own label and no `id` repeats; the form notices have `role="alert"`; a field error is the accessible description of its control; the line errors have `role="alert"`; the existing form tests keep passing with their assertions untouched
-- [ ] 7B.2 Add `htmlFor` and `id` (from `useId` for the campaign controls, from the line id for the line controls), `aria-describedby` on the controls with an error and the roles named above, changing no text, order or look
-- [ ] 7B.3 Typecheck, Vitest twice with the full result line, and `docker compose build frontend`
+- [x] 7B.1 Write the tests first, with the real API client over a simulated fetch: every control above is found with `getByLabel` and its exact label; in a form with two lines each line control is tied to its own label and no `id` repeats; the form notices have `role="alert"`; a field error is the accessible description of its control; the line errors have `role="alert"`; the existing form tests keep passing with their assertions untouched
+- [x] 7B.2 Add `htmlFor` and `id` (from `useId` for the campaign controls, from the line id for the line controls), `aria-describedby` on the controls with an error and the roles named above, changing no text, order or look
+- [x] 7B.3 Typecheck, Vitest twice with the full result line, and `docker compose build frontend`
 
 ## 8. Data: Rebate Migration and Reconciliation
 

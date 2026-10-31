@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useId, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createApiClient, ApiError } from "@/lib/api/client";
 import { previewFlights } from "@/lib/api/flights";
@@ -95,6 +95,7 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
     formats: [],
   });
 
+  const formId = useId();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -474,13 +475,13 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
       <h1>Nueva campaña</h1>
 
       {loadError && (
-        <div className="notice notice-error">
+        <div role="alert" className="notice notice-error">
           {loadError}
         </div>
       )}
 
       {submitError && (
-        <div className="notice notice-error">
+        <div role="alert" className="notice notice-error">
           {submitError}
         </div>
       )}
@@ -491,38 +492,44 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
 
         <div className="form-grid">
           <div>
-            <label>
+            <label htmlFor={`${formId}-name`}>
               Nombre de la campaña *
             </label>
             <input
+              id={`${formId}-name`}
+              aria-describedby={fieldErrors.name ? `${formId}-name-error` : undefined}
               type="text"
               value={formData.name}
               onChange={(e) => handleHeaderChange("name", e.target.value)}
             />
             {fieldErrors.name && (
-              <p className="field-error">{fieldErrors.name}</p>
+              <p id={`${formId}-name-error`} className="field-error">{fieldErrors.name}</p>
             )}
           </div>
 
           <div>
-            <label>
+            <label htmlFor={`${formId}-display_name`}>
               Nombre mostrado *
             </label>
             <input
+              id={`${formId}-display_name`}
+              aria-describedby={fieldErrors.display_name ? `${formId}-display_name-error` : undefined}
               type="text"
               value={formData.display_name}
               onChange={(e) => handleHeaderChange("display_name", e.target.value)}
             />
             {fieldErrors.display_name && (
-              <p className="field-error">{fieldErrors.display_name}</p>
+              <p id={`${formId}-display_name-error`} className="field-error">{fieldErrors.display_name}</p>
             )}
           </div>
 
           <div>
-            <label>
+            <label htmlFor={`${formId}-agency_id`}>
               Agencia *
             </label>
             <select
+              id={`${formId}-agency_id`}
+              aria-describedby={fieldErrors.agency_id ? `${formId}-agency_id-error` : undefined}
               value={formData.agency_id}
               onChange={(e) => handleHeaderChange("agency_id", Number(e.target.value))}
             >
@@ -534,15 +541,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
               ))}
             </select>
             {fieldErrors.agency_id && (
-              <p className="field-error">{fieldErrors.agency_id}</p>
+              <p id={`${formId}-agency_id-error`} className="field-error">{fieldErrors.agency_id}</p>
             )}
           </div>
 
           <div>
-            <label>
+            <label htmlFor={`${formId}-advertiser_id`}>
               Anunciante *
             </label>
             <select
+              id={`${formId}-advertiser_id`}
+              aria-describedby={fieldErrors.advertiser_id ? `${formId}-advertiser_id-error` : undefined}
               value={formData.advertiser_id}
               onChange={(e) => handleHeaderChange("advertiser_id", Number(e.target.value))}
             >
@@ -554,15 +563,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
               ))}
             </select>
             {fieldErrors.advertiser_id && (
-              <p className="field-error">{fieldErrors.advertiser_id}</p>
+              <p id={`${formId}-advertiser_id-error`} className="field-error">{fieldErrors.advertiser_id}</p>
             )}
           </div>
 
           <div>
-            <label>
+            <label htmlFor={`${formId}-campaign_type_id`}>
               Tipo de campaña *
             </label>
             <select
+              id={`${formId}-campaign_type_id`}
+              aria-describedby={fieldErrors.campaign_type_id ? `${formId}-campaign_type_id-error` : undefined}
               value={formData.campaign_type_id}
               onChange={(e) => handleHeaderChange("campaign_type_id", Number(e.target.value))}
             >
@@ -574,15 +585,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
               ))}
             </select>
             {fieldErrors.campaign_type_id && (
-              <p className="field-error">{fieldErrors.campaign_type_id}</p>
+              <p id={`${formId}-campaign_type_id-error`} className="field-error">{fieldErrors.campaign_type_id}</p>
             )}
           </div>
 
           <div>
-            <label>
+            <label htmlFor={`${formId}-sector_id`}>
               Sector *
             </label>
             <select
+              id={`${formId}-sector_id`}
+              aria-describedby={fieldErrors.sector_id ? `${formId}-sector_id-error` : undefined}
               value={formData.sector_id}
               onChange={(e) => handleHeaderChange("sector_id", Number(e.target.value))}
             >
@@ -594,15 +607,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
               ))}
             </select>
             {fieldErrors.sector_id && (
-              <p className="field-error">{fieldErrors.sector_id}</p>
+              <p id={`${formId}-sector_id-error`} className="field-error">{fieldErrors.sector_id}</p>
             )}
           </div>
 
           <div>
-            <label>
+            <label htmlFor={`${formId}-sales_rep_id`}>
               Comercial *
             </label>
             <select
+              id={`${formId}-sales_rep_id`}
+              aria-describedby={fieldErrors.sales_rep_id ? `${formId}-sales_rep_id-error` : undefined}
               value={formData.sales_rep_id}
               onChange={(e) => handleHeaderChange("sales_rep_id", Number(e.target.value))}
             >
@@ -614,63 +629,71 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
               ))}
             </select>
             {fieldErrors.sales_rep_id && (
-              <p className="field-error">{fieldErrors.sales_rep_id}</p>
+              <p id={`${formId}-sales_rep_id-error`} className="field-error">{fieldErrors.sales_rep_id}</p>
             )}
           </div>
 
           <div>
-            <label>
+            <label htmlFor={`${formId}-start_date`}>
               Fecha de inicio *
             </label>
             <input
+              id={`${formId}-start_date`}
+              aria-describedby={fieldErrors.start_date ? `${formId}-start_date-error` : undefined}
               type="date"
               value={formData.start_date}
               onChange={(e) => handleHeaderChange("start_date", e.target.value)}
             />
             {fieldErrors.start_date && (
-              <p className="field-error">{fieldErrors.start_date}</p>
+              <p id={`${formId}-start_date-error`} className="field-error">{fieldErrors.start_date}</p>
             )}
           </div>
 
           <div>
-            <label>
+            <label htmlFor={`${formId}-end_date`}>
               Fecha de fin *
             </label>
             <input
+              id={`${formId}-end_date`}
+              aria-describedby={fieldErrors.end_date ? `${formId}-end_date-error` : undefined}
               type="date"
               value={formData.end_date}
               onChange={(e) => handleHeaderChange("end_date", e.target.value)}
             />
             {fieldErrors.end_date && (
-              <p className="field-error">{fieldErrors.end_date}</p>
+              <p id={`${formId}-end_date-error`} className="field-error">{fieldErrors.end_date}</p>
             )}
           </div>
 
           <div>
-            <label>
+            <label htmlFor={`${formId}-order_reference`}>
               Referencia de orden *
             </label>
             <input
+              id={`${formId}-order_reference`}
+              aria-describedby={fieldErrors.order_reference ? `${formId}-order_reference-error` : undefined}
               type="text"
               value={formData.order_reference}
               onChange={(e) => handleHeaderChange("order_reference", e.target.value)}
             />
             {fieldErrors.order_reference && (
-              <p className="field-error">{fieldErrors.order_reference}</p>
+              <p id={`${formId}-order_reference-error`} className="field-error">{fieldErrors.order_reference}</p>
             )}
           </div>
 
           <div>
-            <label>
+            <label htmlFor={`${formId}-order_received_on`}>
               Fecha de recepción *
             </label>
             <input
+              id={`${formId}-order_received_on`}
+              aria-describedby={fieldErrors.order_received_on ? `${formId}-order_received_on-error` : undefined}
               type="date"
               value={formData.order_received_on}
               onChange={(e) => handleHeaderChange("order_received_on", e.target.value)}
             />
             {fieldErrors.order_received_on && (
-              <p className="field-error">{fieldErrors.order_received_on}</p>
+              <p id={`${formId}-order_received_on-error`} className="field-error">{fieldErrors.order_received_on}</p>
             )}
           </div>
         </div>
@@ -696,10 +719,12 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
 
             <div className="form-grid">
               <div>
-                <label>
+                <label htmlFor={`${line.id}-dsp_id`}>
                   DSP *
                 </label>
                 <select
+              id={`${line.id}-dsp_id`}
+              aria-describedby={fieldErrors[`lines.${lineIndex}.dsp_id`] ? `${line.id}-dsp_id-error` : undefined}
                   value={line.dsp_id}
                   onChange={(e) => handleLineChange(line.id, "dsp_id", Number(e.target.value))}
                 >
@@ -711,15 +736,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                   ))}
                 </select>
                 {fieldErrors[`lines.${lineIndex}.dsp_id`] && (
-                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.dsp_id`]}</p>
+                  <p id={`${line.id}-dsp_id-error`} className="field-error">{fieldErrors[`lines.${lineIndex}.dsp_id`]}</p>
                 )}
               </div>
 
               <div>
-                <label>
+                <label htmlFor={`${line.id}-channel_id`}>
                   Canal *
                 </label>
                 <select
+              id={`${line.id}-channel_id`}
+              aria-describedby={fieldErrors[`lines.${lineIndex}.channel_id`] ? `${line.id}-channel_id-error` : undefined}
                   value={line.channel_id}
                   onChange={(e) => handleLineChange(line.id, "channel_id", Number(e.target.value))}
                 >
@@ -731,15 +758,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                   ))}
                 </select>
                 {fieldErrors[`lines.${lineIndex}.channel_id`] && (
-                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.channel_id`]}</p>
+                  <p id={`${line.id}-channel_id-error`} className="field-error">{fieldErrors[`lines.${lineIndex}.channel_id`]}</p>
                 )}
               </div>
 
               <div>
-                <label>
+                <label htmlFor={`${line.id}-format_id`}>
                   Formato *
                 </label>
                 <select
+              id={`${line.id}-format_id`}
+              aria-describedby={fieldErrors[`lines.${lineIndex}.format_id`] ? `${line.id}-format_id-error` : undefined}
                   value={line.format_id}
                   onChange={(e) => handleLineChange(line.id, "format_id", Number(e.target.value))}
                 >
@@ -751,15 +780,17 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                   ))}
                 </select>
                 {fieldErrors[`lines.${lineIndex}.format_id`] && (
-                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.format_id`]}</p>
+                  <p id={`${line.id}-format_id-error`} className="field-error">{fieldErrors[`lines.${lineIndex}.format_id`]}</p>
                 )}
               </div>
 
               <div>
-                <label>
+                <label htmlFor={`${line.id}-scope`}>
                   Alcance *
                 </label>
                 <select
+              id={`${line.id}-scope`}
+              aria-describedby={fieldErrors[`lines.${lineIndex}.scope`] ? `${line.id}-scope-error` : undefined}
                   value={line.scope}
                   onChange={(e) => handleLineChange(line.id, "scope", e.target.value)}
                 >
@@ -768,51 +799,57 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                   <option value="international">Internacional</option>
                 </select>
                 {fieldErrors[`lines.${lineIndex}.scope`] && (
-                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.scope`]}</p>
+                  <p id={`${line.id}-scope-error`} className="field-error">{fieldErrors[`lines.${lineIndex}.scope`]}</p>
                 )}
               </div>
 
               <div>
-                <label>
+                <label htmlFor={`${line.id}-market_description`}>
                   Descripción del mercado *
                 </label>
                 <input
+              id={`${line.id}-market_description`}
+              aria-describedby={fieldErrors[`lines.${lineIndex}.market_description`] ? `${line.id}-market_description-error` : undefined}
                   type="text"
                   value={line.market_description}
                   onChange={(e) => handleLineChange(line.id, "market_description", e.target.value)}
                 />
                 {fieldErrors[`lines.${lineIndex}.market_description`] && (
-                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.market_description`]}</p>
+                  <p id={`${line.id}-market_description-error`} className="field-error">{fieldErrors[`lines.${lineIndex}.market_description`]}</p>
                 )}
               </div>
 
               <div>
-                <label>
+                <label htmlFor={`${line.id}-contracted_impressions`}>
                   Impresiones contratadas *
                 </label>
                 <input
+              id={`${line.id}-contracted_impressions`}
+              aria-describedby={fieldErrors[`lines.${lineIndex}.contracted_impressions`] ? `${line.id}-contracted_impressions-error` : undefined}
                   type="number"
                   min="1"
                   value={line.contracted_impressions}
                   onChange={(e) => handleLineChange(line.id, "contracted_impressions", e.target.value)}
                 />
                 {fieldErrors[`lines.${lineIndex}.contracted_impressions`] && (
-                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.contracted_impressions`]}</p>
+                  <p id={`${line.id}-contracted_impressions-error`} className="field-error">{fieldErrors[`lines.${lineIndex}.contracted_impressions`]}</p>
                 )}
               </div>
 
               <div>
-                <label>
+                <label htmlFor={`${line.id}-sale_cpm`}>
                   CPM (venta) *
                 </label>
                 <input
+              id={`${line.id}-sale_cpm`}
+              aria-describedby={fieldErrors[`lines.${lineIndex}.sale_cpm`] ? `${line.id}-sale_cpm-error` : undefined}
                   type="text"
                   placeholder="0.00"
                   value={line.sale_cpm}
                   onChange={(e) => handleLineChange(line.id, "sale_cpm", e.target.value)}
                 />
                 {fieldErrors[`lines.${lineIndex}.sale_cpm`] && (
-                  <p className="field-error">{fieldErrors[`lines.${lineIndex}.sale_cpm`]}</p>
+                  <p id={`${line.id}-sale_cpm-error`} className="field-error">{fieldErrors[`lines.${lineIndex}.sale_cpm`]}</p>
                 )}
               </div>
 
@@ -853,7 +890,7 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
         </button>
 
         {fieldErrors.lines && (
-          <p className="field-error">{fieldErrors.lines}</p>
+          <p role="alert" className="field-error">{fieldErrors.lines}</p>
         )}
       </fieldset>
 

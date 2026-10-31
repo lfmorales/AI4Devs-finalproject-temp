@@ -44,7 +44,7 @@ export function FlightEditor({
           Las fechas o el volumen han cambiado: vuelve a calcular el reparto.
         </p>
       )}
-      {error && <p className="field-error">{error}</p>}
+      {error && <p role="alert" className="field-error">{error}</p>}
 
       {preview && (
         <div className="flight-preview">
@@ -88,7 +88,7 @@ export function FlightEditor({
               </button>
             </div>
           )}
-          {problem && <p className="field-error">{problem}</p>}
+          {problem && <p role="alert" className="field-error">{problem}</p>}
         </div>
       )}
     </div>

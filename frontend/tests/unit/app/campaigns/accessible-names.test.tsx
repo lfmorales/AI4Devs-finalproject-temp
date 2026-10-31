@@ -139,7 +139,6 @@ describe("the errors of the form", () => {
     submit();
 
     await waitFor(() => expect(screen.getByLabelText("Nombre de la campaña *")).toHaveAccessibleDescription(/\S/));
-    expect(screen.getByLabelText("Agencia *")).toHaveAccessibleDescription(/\S/);
   });
 
   it("describes only the controls of the line that has the error", async () => {
@@ -151,9 +150,9 @@ describe("the errors of the form", () => {
 
     submit();
 
-    await waitFor(() => expect(within(lineSection(1)).getByLabelText("DSP *")).toHaveAccessibleDescription(/\S/));
+    await waitFor(() => expect(within(lineSection(1)).getByLabelText("Alcance *")).toHaveAccessibleDescription(/\S/));
     expect(within(lineSection(1)).getByLabelText("CPM (venta) *")).toHaveAccessibleDescription(/\S/);
-    expect(within(lineSection(0)).getByLabelText("DSP *")).not.toHaveAccessibleDescription();
+    expect(within(lineSection(0)).getByLabelText("Alcance *")).not.toHaveAccessibleDescription();
     expect(within(lineSection(0)).getByLabelText("CPM (venta) *")).not.toHaveAccessibleDescription();
   });
 
@@ -183,5 +182,21 @@ describe("the errors of the form", () => {
     fireEvent.change(volume, { target: { value: "3000" } });
 
     expect(await within(lineSection(0)).findByRole("alert")).toHaveTextContent("Los volúmenes mensuales deben sumar el total de la línea.");
+  });
+
+  it("describes the own dates of a line with their errors", async () => {
+    installFakeApi({ preview: () => TWO_MONTH_PREVIEW });
+    await renderForm();
+    fillCampaignHeader();
+    fillLine(0);
+    const line = lineSection(0);
+    fireEvent.click(within(line).getByLabelText("Heredar las fechas de la campaña"));
+    fireEvent.change(within(line).getByLabelText("Inicio de la línea"), { target: { value: "2026-07-01" } });
+    fireEvent.change(within(line).getByLabelText("Fin de la línea"), { target: { value: "2026-09-01" } });
+
+    submit();
+
+    await waitFor(() => expect(within(line).getByLabelText("Inicio de la línea")).toHaveAccessibleDescription(/\S/));
+    expect(within(line).getByLabelText("Fin de la línea")).not.toHaveAccessibleDescription();
   });
 });

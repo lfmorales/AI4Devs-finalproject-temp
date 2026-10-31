@@ -43,11 +43,12 @@ export function LineDatesControl({
             </label>
             <input
               id={`${idPrefix}-start`}
+              aria-describedby={startError ? `${idPrefix}-start-error` : undefined}
               type="date"
               value={startDate}
               onChange={(e) => onDateChange("start_date", e.target.value)}
             />
-            {startError && <p className="field-error">{startError}</p>}
+            {startError && <p id={`${idPrefix}-start-error`} className="field-error">{startError}</p>}
           </div>
           <div>
             <label htmlFor={`${idPrefix}-end`}>
@@ -55,11 +56,12 @@ export function LineDatesControl({
             </label>
             <input
               id={`${idPrefix}-end`}
+              aria-describedby={endError ? `${idPrefix}-end-error` : undefined}
               type="date"
               value={endDate}
               onChange={(e) => onDateChange("end_date", e.target.value)}
             />
-            {endError && <p className="field-error">{endError}</p>}
+            {endError && <p id={`${idPrefix}-end-error`} className="field-error">{endError}</p>}
           </div>
         </div>
       )}
