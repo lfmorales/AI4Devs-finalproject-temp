@@ -1,0 +1,21 @@
+E2E token: 42 minutes left (at least 10 are required).
+
+Running 10 tests using 1 worker
+
+  ✓   1 [chromium] › tests/exceptions.spec.ts:18:7 › the exception queue, reading › «Abiertas» has the rows of GET /api/ingestion-exceptions?status=open (1.1s)
+  ✓   2 [chromium] › tests/exceptions.spec.ts:29:7 › the exception queue, reading › «Resueltas» shows the resolved rows of the API with their note (487ms)
+  ✓   3 [chromium] › tests/exceptions.spec.ts:42:9 › the exception queue, reading › the filter › finds by catalogue name without accents or case (456ms)
+  ✓   4 [chromium] › tests/exceptions.spec.ts:60:9 › the exception queue, reading › the filter › finds by external pair and by DSP (381ms)
+  ✓   5 [chromium] › tests/exceptions.spec.ts:83:9 › the exception queue, reading › the filter › shows the no-match state, and «Limpiar filtros» brings every row back (355ms)
+  ✓   6 [chromium] › tests/exceptions.spec.ts:99:9 › the exception queue, reading › the filter › the type selector keeps only the chosen type (418ms)
+  ✓   7 [chromium] › tests/exceptions.spec.ts:121:7 › the exception queue, failures › shows 'Acceso denegado' and drops the Excepciones link when the queue answers 403 (241ms)
+  ✓   8 [chromium] › tests/exceptions.spec.ts:132:7 › the exception queue, changing state (needs a freshly seeded database) › resolving an open row with a note takes it out of «Abiertas» without reloading (509ms)
+  ✓   9 [chromium] › tests/exceptions.spec.ts:159:7 › the exception queue, changing state (needs a freshly seeded database) › linking an unmatched row to the unmapped line of the demo campaign maps it and warns about the history (606ms)
+  ✓  10 [chromium] › tests/exceptions.spec.ts:186:7 › the exception queue, changing state (needs a freshly seeded database) › a row resolved through the API before the confirmation shows the error in Spanish, not a generic one (685ms)
+
+  10 passed (8.3s)
+
+To open last HTML report run:
+[36m[39m
+[36m  npx playwright show-report[39m
+[36m[39m
