@@ -15,25 +15,25 @@
  Container ai4devs-finalproject-db-1 Removing 
  Container ai4devs-finalproject-db-1 Removed 
  Volume ai4devs-finalproject_certbot_certs Removing 
- Volume ai4devs-finalproject_postgres_data Removing 
  Volume ai4devs-finalproject_certbot_webroot Removing 
  Network ai4devs-finalproject_adops360 Removing 
- Network ai4devs-finalproject_adops360 Removed 
- Volume ai4devs-finalproject_postgres_data Removed 
+ Volume ai4devs-finalproject_postgres_data Removing 
  Volume ai4devs-finalproject_certbot_certs Removed 
  Volume ai4devs-finalproject_certbot_webroot Removed 
- Network ai4devs-finalproject_adops360 Creating 
- Volume ai4devs-finalproject_postgres_data Creating 
- Volume ai4devs-finalproject_postgres_data Creating 
+ Volume ai4devs-finalproject_postgres_data Removed 
+ Network ai4devs-finalproject_adops360 Removed 
  Volume ai4devs-finalproject_certbot_webroot Creating 
- Volume ai4devs-finalproject_certbot_webroot Creating 
+ Volume ai4devs-finalproject_certbot_certs Creating 
+ Volume ai4devs-finalproject_postgres_data Creating 
  Network ai4devs-finalproject_adops360 Creating 
  Volume ai4devs-finalproject_certbot_certs Creating 
- Volume ai4devs-finalproject_certbot_certs Creating 
- Volume ai4devs-finalproject_certbot_webroot Created 
- Volume ai4devs-finalproject_certbot_webroot Created 
+ Volume ai4devs-finalproject_postgres_data Creating 
+ Volume ai4devs-finalproject_certbot_webroot Creating 
+ Network ai4devs-finalproject_adops360 Creating 
  Volume ai4devs-finalproject_certbot_certs Created 
  Volume ai4devs-finalproject_certbot_certs Created 
+ Volume ai4devs-finalproject_certbot_webroot Created 
+ Volume ai4devs-finalproject_certbot_webroot Created 
  Volume ai4devs-finalproject_postgres_data Created 
  Volume ai4devs-finalproject_postgres_data Created 
  Network ai4devs-finalproject_adops360 Created 
