@@ -83,3 +83,17 @@ def test_the_system_rate_of_the_migration_is_left_alone(rolled_back_session):
     system = rolled_back_session.scalars(select(PlatformRateSettingRecord).where(PlatformRateSettingRecord.level == "system")).all()
 
     assert [row.rate_per_thousand for row in system] == [Decimal("1.00")]
+
+
+def test_the_seed_creates_the_trading_role_row_once(rolled_back_session):
+    rolled_back_session.query(UserRoleRecord).filter(
+        UserRoleRecord.role_id.in_(select(RoleRecord.id).where(RoleRecord.name == "trading"))
+    ).delete(synchronize_session=False)
+    rolled_back_session.query(RoleRecord).filter(RoleRecord.name == "trading").delete(synchronize_session=False)
+
+    seed(rolled_back_session, EMAIL)
+    seed(rolled_back_session, EMAIL)
+
+    assert rolled_back_session.scalar(
+        select(func.count()).select_from(RoleRecord).where(RoleRecord.name == "trading")
+    ) == 1

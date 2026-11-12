@@ -1,7 +1,7 @@
 """Seed development database with minimal data.
 
 This script idempotently loads:
-- Roles: operations, business, finance
+- Roles: operations, business, finance, trading
 - Master data: holding groups, agencies, advertisers, DSPs, channels, formats, campaign types, sectors, sales reps
 - Developer user: email from SEED_USER_EMAIL env var, assigned the operations and finance roles
 - Margin example data (fictitious): one rebate schedule for the default group and one platform rate
@@ -28,7 +28,7 @@ def seed(session: Session, seed_email: str) -> None:
     # 1. Seed roles (if not exist)
     session.execute(text("""
         INSERT INTO roles (name) VALUES
-        ('operations'), ('business'), ('finance')
+        ('operations'), ('business'), ('finance'), ('trading')
         ON CONFLICT (name) DO NOTHING
     """))
     print("✓ Roles seeded")

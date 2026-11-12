@@ -6,7 +6,7 @@ email, the roles or the text of an error.
 
 Exit codes: 0 done; 1 the database failed; 2 invalid arguments; 3 DATABASE_URL is missing.
 
-Run: python -m scripts.grant_roles <email> <role> [<role> ...]    (roles: operations, business, finance)
+Run: python -m scripts.grant_roles <email> <role> [<role> ...]    (roles: operations, business, finance, trading)
 """
 
 import argparse
@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from app.infrastructure.persistence.database import build_engine, build_session_factory
 
 EXIT_OK, EXIT_FAILED, EXIT_INVALID_ARGUMENTS, EXIT_NOT_CONFIGURED = 0, 1, 2, 3
-ROLES = ("operations", "business", "finance")
+ROLES = ("operations", "business", "finance", "trading")
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 

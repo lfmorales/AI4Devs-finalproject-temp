@@ -43,8 +43,8 @@
 
 ## 9. Role `trading`
 
-- [ ] 9.1 Write failing tests that `RoleName` has `trading`, that the migration inserts its row, and that `grant_roles` and the seeds accept it
-- [ ] 9.2 Implement the enum, an Alembic migration that inserts the role, the script and the seeds, and verify the tests pass
+- [x] 9.1 Write failing tests that `RoleName` has `trading`, that the migration inserts its row, and that `grant_roles` and the seeds accept it
+- [x] 9.2 Implement the enum, an Alembic migration that inserts the role, the script and the seeds, and verify the tests pass
 
 ## 10. Access Matrix
 

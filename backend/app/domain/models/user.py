@@ -9,6 +9,7 @@ class RoleName(StrEnum):
     OPERATIONS = "operations"
     BUSINESS = "business"
     FINANCE = "finance"
+    TRADING = "trading"
 
 
 @dataclass(frozen=True)

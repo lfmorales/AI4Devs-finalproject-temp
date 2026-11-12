@@ -127,3 +127,10 @@ def test_a_database_failure_exits_with_one_and_leaks_no_detail(rolled_back_sessi
     assert code == EXIT_FAILED
     assert EMAIL not in "\n".join(lines)
     assert "password" not in "\n".join(lines)
+
+
+def test_it_grants_the_trading_role(rolled_back_session):
+    code, _ = _run(rolled_back_session, EMAIL, "trading")
+
+    assert code == EXIT_OK
+    assert _roles_of(rolled_back_session, EMAIL) == {"trading"}

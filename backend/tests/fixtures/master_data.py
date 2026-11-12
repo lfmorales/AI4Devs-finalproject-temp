@@ -13,7 +13,8 @@ def seed_master_data(session: Session):
 
     # Reset sequences to ensure consistent IDs across tests
     # This is needed because sequences continue incrementing even when transactions rollback
-    session.execute(text("ALTER SEQUENCE roles_id_seq RESTART WITH 1"))
+    # The migrations insert the trading role, so the roles sequence restarts after the rows that exist.
+    session.execute(text("SELECT setval('roles_id_seq', COALESCE((SELECT max(id) FROM roles), 0) + 1, false)"))
     session.execute(text("ALTER SEQUENCE holding_groups_id_seq RESTART WITH 1"))
     session.execute(text("ALTER SEQUENCE agencies_id_seq RESTART WITH 1"))
     session.execute(text("ALTER SEQUENCE advertisers_id_seq RESTART WITH 1"))
@@ -29,7 +30,8 @@ def seed_master_data(session: Session):
         INSERT INTO roles (name) VALUES
         ('operations'),
         ('business'),
-        ('finance')
+        ('finance'),
+        ('trading')
         ON CONFLICT (name) DO NOTHING
     """))
 
