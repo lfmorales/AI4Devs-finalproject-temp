@@ -19,8 +19,8 @@
 
 ## 4. Composite Verifier
 
-- [ ] 4.1 Write failing tests that an unknown `iss` gives 401 with no user lookup, that each issuer validates its own tokens and that a token for another audience is rejected
-- [ ] 4.2 Implement the composite behind `IdentityTokenVerifier` and verify the tests pass
+- [x] 4.1 Write failing tests that an unknown `iss` gives 401 with no user lookup, that each issuer validates its own tokens and that a token for another audience is rejected
+- [x] 4.2 Implement the composite behind `IdentityTokenVerifier` and verify the tests pass
 
 ## 5. Wiring and Environment
 
