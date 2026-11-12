@@ -10,7 +10,7 @@
 
 ## 2. Configuration
 
-- [ ] 2.1 Write failing tests that `Settings` reads a list of issuers (issuer, audience, key address, user claim, optional scope) and still derives `cognito_issuer` and `cognito_jwks_url`, then implement it and verify `tests/test_config.py` passes
+- [x] 2.1 Write failing tests that `Settings` reads a list of issuers (issuer, audience, key address, user claim, optional scope) and still derives `cognito_issuer` and `cognito_jwks_url`, then implement it and verify `tests/test_config.py` passes
 
 ## 3. Generic Token Verifier
 
