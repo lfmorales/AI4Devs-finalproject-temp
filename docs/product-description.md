@@ -122,14 +122,15 @@ Concretely, the product replaces the OneDrive workbook, the manual daily report 
 
 ## 3. Users and roles
 
-Three functional roles — **Business**, **Operations**, **Finance** — plus **Admin**. A user may hold several roles; the current team is small enough that this is the normal case rather than the exception.
+Four functional roles — **Business**, **Operations**, **Finance**, **Trading** — plus **Admin**. Operations has global control and Finance is the reviewer. A user may hold several roles; the current team is small enough that this is the normal case rather than the exception.
 
 Access rules assumed for phase 1 (pending confirmation):
 
 - Operations and Finance see all campaigns.
-- Business sees all campaigns but cost and margin figures are restricted to Finance and Admin.
+- Business sees all campaigns but cost and margin figures are restricted to Operations, Finance and Admin.
+- Trading reads the daily delivery status only, with no cost, revenue, rebate or margin figure.
 - No external access for agencies or advertisers.
-- Authentication through an AWS Cognito User Pool. Cognito answers *who is this*; roles live only in the application database, so authorisation stays the application's own responsibility. See [Base Standards §6](./base-standards.md#6-authorization-model).
+- Authentication through Microsoft Entra ID, with Cognito kept as a second issuer for development and the end-to-end tests. The provider answers *who is this*; roles live only in the application database, so authorisation stays the application's own responsibility. See [Base Standards §6](./base-standards.md#6-authorization-model).
 
 ## 4. Domain model
 
@@ -603,7 +604,8 @@ Ordered by how much they move the numbers.
 - **An active campaign is flagged `no data received` as soon as D-1 is missing**, checked after the nightly ingestion. The tighter threshold is deliberate: a DSP running late produces a flag that clears itself the next night, whereas a wider window hides a real outage for a day. *(PO, 2026-09-21)*
 - An agency carrying a rebate exception accrues volume on its own counter and is carved out of its group's, per channel. The accumulation key is `(group, agency | null, channel, year)`. *(PO, 2026-09-21)*
 - The rebate is normally negotiated with the holding group, but an individual agency within a group may carry its own exception, which overrides the group's schedule for that agency only. No such rows exist in the 2023, 2024 or 2026 tables, so exceptions are created in the application rather than migrated. *(PO, 2026-09-21)*
-- Authentication is AWS Cognito, not Microsoft Entra ID. Roles stay in the application database. *(PO, 2026-09-21)*
+- Authentication is Microsoft Entra ID, with Cognito kept for development and the end-to-end tests. Roles stay in the application database. *(PO, 2026-11-12; supersedes the 2026-09-21 decision that chose Cognito)*
+- Operations has global control and sees the margin; Finance is the reviewer and no longer writes rebate schedules or platform rates. Trading is a new role that reads the delivery status only. *(PO, 2026-11-12)*
 
 - The 136 finished campaign-months with no delivery did not execute and are discarded on migration; their 111,572 € of accrued rebate is reversed. *(PO, 2026-09-15)*
 - A rate change restates the whole current year; a volume-driven bracket crossing is marginal and forward-only. *(PO, 2026-09-17)*

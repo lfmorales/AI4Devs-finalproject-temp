@@ -27,13 +27,14 @@ alwaysApply: true
 
 AdOps360 centralises the management of GeoQ's out-of-home and digital advertising campaigns. It replaces a chain of spreadsheets on OneDrive, manual report downloads and Qlik Sense dashboards with a single system of record.
 
-Three functional roles use it, and **a user may hold several of them at once**:
+Four functional roles use it, and **a user may hold several of them at once**:
 
 | Role | What they do in the system |
 |---|---|
-| Operations | Register campaigns from the purchase order, map them to the DSP, work ingestion exceptions |
+| Operations | Global control: register campaigns from the purchase order, map them to the DSP, work ingestion exceptions, read the margin and close months, maintain rebate schedules and platform rates, activate and deactivate users |
 | Business | Manage the commercial offer that becomes a purchase order, read campaign status |
-| Finance | Read margins, rebate accruals and period roll-ups |
+| Finance | Reviewer: read margins, rebate accruals and period roll-ups, and close months |
+| Trading | Read the daily delivery status, without any cost, revenue, rebate or margin figure |
 
 The system integrates three concerns:
 
@@ -63,7 +64,9 @@ The economic model, the domain entities and the decisions behind them are specif
 - Managed database services are deliberately not used for the MVP, to keep deployment to a single machine.
 
 ### Authentication
-- **AWS Cognito (User Pool)** handles credentials, tokens and session.
+- **Microsoft Entra ID** handles credentials, tokens and session, with every user in the company tenant.
+- **AWS Cognito (User Pool)** is kept as a second configured issuer for development and the end-to-end tests.
+- The backend accepts tokens only from the configured issuers (issuer, audience, key address, user identifier claim and, optionally, a mandatory scope each). Tenant and application identifiers live only in `.env`.
 - **Authorisation remains the application's own responsibility** (see §6).
 
 ### File storage
@@ -99,24 +102,26 @@ Internal layout of `backend/` and `frontend/` is defined in [Backend Standards](
 
 ## 6. Authorization Model
 
-Authentication and authorisation are deliberately split. **Cognito answers "who is this?"; the application answers "what may they do?"**
+Authentication and authorisation are deliberately split. **The identity provider answers "who is this?"; the application answers "what may they do?"**
 
 ### Identity
 
-A user authenticates against the Cognito User Pool and presents a JWT. The backend validates the token against the pool's public keys and reads the **email claim**, which is the join key to the local `users` table.
+A user authenticates against a configured issuer (Entra ID, or Cognito in development) and presents a JWT. The backend validates the token against that issuer's public keys and joins it to the local `users` table by the pair **(issuer, subject)**: `oid` for Entra, `sub` for Cognito. The **email claim** is used only on the first access, to link a registered user that has no link yet.
 
 ```
-Cognito User Pool ──token (email claim)──> users.email ──> user_roles ──> roles
+Issuer ──token (issuer, subject)──> users ──> user_roles ──> roles
 ```
 
-`users.email` is unique and is the only link between Cognito and the local model. Two operational consequences follow and must be handled explicitly:
+`users.email` is unique, and the (issuer, subject) pair is unique once stored. Authentication never creates a user. Operational consequences that must be handled explicitly:
 
-- A user who authenticates successfully but has no matching `users` row is **authenticated but unauthorised**. The request is rejected; it must not auto-provision a user.
-- If an email changes in Cognito, the corresponding `users` row must be updated, or the user loses all roles. Email changes are therefore an administrative operation, not a self-service one.
+- A user who authenticates successfully but has no matching `users` row, by pair or by email, is **authenticated but unauthorised**. The request is rejected; it must not auto-provision a user.
+- The first access of a registered user with no link stores the pair. A user already linked to a different pair is rejected and the link is not changed. If the token carries no email and the pair is not linked, the user is treated as not registered.
+- Once linked, a change of email at the provider does not lose the user's roles. Before the link exists, the `users` row must carry the same email as the provider.
+- Operations can set a user inactive; it takes effect on the next request, whatever the token says.
 
 ### Roles
 
-Roles live **only in the database**. Cognito holds no role information, so there is one source of truth and nothing to keep in sync.
+Roles live **only in the database**. The identity provider holds no role information that the application reads (a `roles` claim in an Entra token is ignored), so there is one source of truth and nothing to keep in sync.
 
 A user may hold several roles simultaneously, so the relationship is modelled as a **bridge table, never as a single column on `users`**:
 
@@ -125,7 +130,7 @@ users                 user_roles                 roles
 -----                 ----------                 -----
 id (PK)         ┌──── user_id (FK)               id (PK)
 email (unique) ─┘     role_id (FK) ──────────┐   name
-                      PK (user_id, role_id)  └── (operations | business | finance)
+                      PK (user_id, role_id)  └── (operations | business | finance | trading)
 ```
 
 ### Enforcement
@@ -135,7 +140,7 @@ Every endpoint declares the role or roles it requires, and the requirement is ch
 - Authorisation is enforced **at the endpoint**, not in the frontend. Role-guarded routes in Next.js are a usability measure that hides what a user cannot use; they are not a security control and must never be the only check.
 - A user holding any one of an endpoint's accepted roles is authorised. Roles are additive, never exclusive.
 - Failing authorisation returns a distinct outcome from failing authentication: an invalid or missing token is rejected as unauthenticated, while a valid token without the required role is rejected as forbidden.
-- Endpoints that expose cost or margin figures are restricted to the Finance role, per the access rules in [Product Description](./product-description.md).
+- Endpoints that expose cost or margin figures are restricted to the Operations and Finance roles, per the access rules in [Product Description](./product-description.md). The roles each route accepts are the access matrix of the `identity/access-matrix` specification.
 
 ## 7. Deployment
 
