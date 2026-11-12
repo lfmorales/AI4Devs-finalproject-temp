@@ -91,4 +91,4 @@
 
 ## 19. Key Download Hardening
 
-- [ ] 19.1 Limitar la recarga de claves y su tiempo de espera, con test
+- [ ] 19.1 Limit the key reload rate and the download timeout, with a test

@@ -41,7 +41,7 @@ Constraints that shape the approach: authentication stays behind the `IdentityTo
 - [A first-access link by email could attach an identity to the wrong person if two tenants share an address] → the link needs a configured issuer; an existing link is never overwritten.
 - [Finance loses the writes of schedules and platform rates] → breaking by intent; the existing finance tests change with the matrix.
 - [An Entra access token does not carry `email` by default] → see Entra configuration requirement below.
-- [Una kid desconocida hace que PyJWKClient vuelva a descargar el conjunto de claves en cada petición; alguien sin sesión puede forzar descargas] → antes de desplegar, limitar la frecuencia de recarga y acortar el tiempo de espera de la descarga.
+- [An unknown kid makes PyJWKClient download the key set again on every request; someone without a session can force downloads] → before deploying, limit how often the keys are reloaded and shorten the download timeout.
 
 ## Entra Configuration Requirement
 
