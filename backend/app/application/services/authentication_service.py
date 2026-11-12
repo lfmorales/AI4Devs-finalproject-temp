@@ -15,6 +15,9 @@ class AuthenticationService:
 
     def authenticate(self, token: str) -> User:
         identity = self._token_verifier.verify(token)
+        # Provisional: the authentication task replaces this with the lookup by issuer and subject.
+        if identity.email is None:
+            raise UnregisteredUserError("Authenticated identity carries no email")
         user = self._user_repository.get_by_email(identity.email)
         if user is None:
             raise UnregisteredUserError("Authenticated user is not registered")

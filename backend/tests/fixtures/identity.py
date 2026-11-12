@@ -45,4 +45,4 @@ class FakeIdentityTokenVerifier(IdentityTokenVerifier):
         email = self._emails_by_token.get(token)
         if email is None:
             raise InvalidIdentityTokenError("Token is not valid")
-        return VerifiedIdentity(subject=f"sub-{email}", email=email)
+        return VerifiedIdentity(issuer="https://emisor-de-prueba.example.com", subject=f"sub-{email}", email=email)

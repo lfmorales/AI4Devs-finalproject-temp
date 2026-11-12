@@ -14,8 +14,8 @@
 
 ## 3. Generic Token Verifier
 
-- [ ] 3.1 Write failing tests with synthetic tokens and a simulated key address for issuer, audience, key address and subject claim configurable, a missing mandatory scope rejected, and an Entra identity token rejected
-- [ ] 3.2 Generalise the verifier, move the Cognito identity-token and verified-email checks to the Cognito entry, and verify the tests of 3.1 and `test_cognito_token_verifier.py` pass
+- [x] 3.1 Write failing tests with synthetic tokens and a simulated key address for issuer, audience, key address and subject claim configurable, a missing mandatory scope rejected, and an Entra identity token rejected
+- [x] 3.2 Generalise the verifier, move the Cognito identity-token and verified-email checks to the Cognito entry, and verify the tests of 3.1 and `test_cognito_token_verifier.py` pass
 
 ## 4. Composite Verifier
 

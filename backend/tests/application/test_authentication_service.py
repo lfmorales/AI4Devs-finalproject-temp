@@ -7,7 +7,8 @@ from app.domain.exceptions import (
     MissingRoleError,
     UnregisteredUserError,
 )
-from app.domain.models.user import RoleName
+from app.domain.models.user import RoleName, VerifiedIdentity
+from app.domain.services.identity_token_verifier import IdentityTokenVerifier
 from tests.fixtures.identity import (
     FakeIdentityTokenVerifier,
     InMemoryUserRepository,
@@ -79,3 +80,18 @@ def test_authorize_rejects_empty_role_requirement_instead_of_treating_it_as_open
 
     with pytest.raises(ValueError):
         AuthenticationService.authorize(user, accepted_roles=[])
+
+
+class _VerifierWithoutEmail(IdentityTokenVerifier):
+    def verify(self, token: str) -> VerifiedIdentity:
+        return VerifiedIdentity(issuer="https://emisor-de-prueba.example.com", subject="identificador-de-prueba", email=None)
+
+
+def test_authenticate_rejects_an_identity_without_email_as_not_registered() -> None:
+    # Provisional: the authentication task replaces this with the lookup by issuer and subject.
+    service = AuthenticationService(
+        token_verifier=_VerifierWithoutEmail(), user_repository=InMemoryUserRepository([build_user()])
+    )
+
+    with pytest.raises(UnregisteredUserError):
+        service.authenticate("any-token")

@@ -15,8 +15,10 @@ class RoleName(StrEnum):
 class VerifiedIdentity:
     """Who the identity provider says the caller is. Grants nothing by itself."""
 
+    issuer: str
     subject: str
-    email: str
+    # Entra may issue a token without an email claim.
+    email: str | None
 
 
 @dataclass(frozen=True)
