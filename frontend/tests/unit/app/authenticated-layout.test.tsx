@@ -12,7 +12,7 @@ vi.mock("next/navigation", () => ({
 describe("AuthenticatedLayout", () => {
   it("renders children when user is authenticated", () => {
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
@@ -49,7 +49,7 @@ describe("AuthenticatedLayout", () => {
 
   it("shows access denied page when there is a 403 error", () => {
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };

@@ -18,7 +18,7 @@ vi.mock("next/navigation", () => ({ usePathname: () => "/margin" }));
 
 function renderLayout(children: React.ReactNode) {
   const value: AuthContextValue = {
-    session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+    session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
     signIn: vi.fn(),
     signOut: vi.fn(),
   };

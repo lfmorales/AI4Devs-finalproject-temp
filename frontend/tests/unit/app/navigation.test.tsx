@@ -21,7 +21,7 @@ vi.mock("@/lib/auth/user-manager", () => ({
 vi.mock("next/navigation", () => ({ usePathname: () => "/status" }));
 
 function renderLayout(children: React.ReactNode, session: AuthContextValue["session"] = {
-  status: "authenticated", email: "user@example.com", idToken: "token",
+  status: "authenticated", email: "user@example.com", bearerToken: "token",
 }, signOut: AuthContextValue["signOut"] = vi.fn()) {
   const value: AuthContextValue = { session, signIn: vi.fn(), signOut };
   return render(
@@ -51,7 +51,7 @@ describe("the navigation of the authenticated layout", () => {
   it("signs out through the auth context when the button is pressed", async () => {
     const user = userEvent.setup();
     const signOut = vi.fn();
-    renderLayout(<div>content</div>, { status: "authenticated", email: "user@example.com", idToken: "token" }, signOut);
+    renderLayout(<div>content</div>, { status: "authenticated", email: "user@example.com", bearerToken: "token" }, signOut);
 
     await user.click(screen.getByRole("button", { name: "Cerrar sesión" }));
 

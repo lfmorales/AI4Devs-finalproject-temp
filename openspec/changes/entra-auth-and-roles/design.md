@@ -45,6 +45,7 @@ Constraints that shape the approach: authentication stays behind the `IdentityTo
 - The first-access link trusts the email claim of the Entra token, which Entra does not verify. In a single-tenant deployment with pre-registered users and an issuer pinned to the company tenant, the exposure is limited to those who can edit mail attributes, and it applies only to the first access: once linked, only the subject counts.
 - A user has a single (issuer, subject) link. A user linked to Cognito is rejected with identity_link_conflict when presenting an Entra token, and vice versa. In production only Entra is used. In development, reset-data.sh recreates the database; to unlink by hand, set both columns to NULL. If both issuers must work against one database, move to a table of identities.
 - Activating and deactivating users leaves no audit trail yet; record who changed what and when before production.
+- The post-logout redirect URI of the Entra registration must include the application origin, besides the callback URL.
 
 ## Entra Configuration Requirement
 

@@ -55,6 +55,11 @@ services:
         NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID}
         NEXT_PUBLIC_COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID}
         NEXT_PUBLIC_COGNITO_DOMAIN: ${COGNITO_DOMAIN}
+        # Sign-in provider of the browser: "cognito" (empty means cognito) or "entra". The Entra identifiers are optional,
+        # needed only with "entra", and are the same ones the backend reads. Never version real values.
+        NEXT_PUBLIC_AUTH_PROVIDER: ${NEXT_PUBLIC_AUTH_PROVIDER:-}
+        NEXT_PUBLIC_ENTRA_TENANT_ID: ${ENTRA_TENANT_ID:-}
+        NEXT_PUBLIC_ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID:-}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
         # "true" blurs every Adform campaign and line name (screenshots, demos). Empty shows them.
         NEXT_PUBLIC_MASK_NAMES: ${NEXT_PUBLIC_MASK_NAMES:-}

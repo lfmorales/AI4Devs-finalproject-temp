@@ -81,7 +81,7 @@ export const TWO_MONTH_PREVIEW: FakeReply = {
 export async function renderForm(onAuthError?: (kind: "unauthenticated" | "forbidden") => void) {
   process.env.NEXT_PUBLIC_API_URL = API_URL;
   const auth: AuthContextValue = {
-    session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+    session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
     signIn: vi.fn(),
     signOut: vi.fn(),
   };

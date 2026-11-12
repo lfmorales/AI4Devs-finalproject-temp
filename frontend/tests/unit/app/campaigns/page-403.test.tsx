@@ -34,7 +34,7 @@ describe("CampaignsPage 403 Forbidden", () => {
 
   it("displays AccessDeniedPage when API returns 403 forbidden with real fetch", async () => {
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };

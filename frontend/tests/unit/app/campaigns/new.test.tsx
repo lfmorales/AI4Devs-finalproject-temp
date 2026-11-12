@@ -80,7 +80,7 @@ describe("CreateCampaignPage", () => {
 
   it("loads and displays master data dropdowns", async () => {
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
@@ -106,7 +106,7 @@ describe("CreateCampaignPage", () => {
 
   it("has one default campaign line", async () => {
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
@@ -127,7 +127,7 @@ describe("CreateCampaignPage", () => {
   it("allows adding a new campaign line", async () => {
     const user = userEvent.setup();
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
@@ -151,7 +151,7 @@ describe("CreateCampaignPage", () => {
   it("allows removing a campaign line if more than one exists", async () => {
     const user = userEvent.setup();
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
@@ -180,7 +180,7 @@ describe("CreateCampaignPage", () => {
 
   it("prevents removing the last campaign line", async () => {
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
@@ -205,7 +205,7 @@ describe("CreateCampaignPage", () => {
     const user = userEvent.setup();
 
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
@@ -227,7 +227,7 @@ describe("CreateCampaignPage", () => {
 
   it("CreateCampaignPage provides onAuthError callback for handling 403 forbidden", async () => {
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };

@@ -11,7 +11,7 @@ vi.mock("next/navigation", () => ({ usePathname: () => pathname() }));
 function renderAt(path: string | null) {
   pathname.mockReturnValue(path);
   const value: AuthContextValue = {
-    session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+    session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
     signIn: vi.fn(), signOut: vi.fn(),
   };
   render(<AuthContext.Provider value={value}><AuthenticatedLayout><div>content</div></AuthenticatedLayout></AuthContext.Provider>);

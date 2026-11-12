@@ -39,7 +39,7 @@ describe("CampaignsPage", () => {
     mockGet.mockImplementation(() => new Promise(() => {})); // Never resolves
 
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
@@ -80,7 +80,7 @@ describe("CampaignsPage", () => {
     mockGet.mockResolvedValue(campaigns);
 
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
@@ -104,7 +104,7 @@ describe("CampaignsPage", () => {
     mockGet.mockResolvedValue([]);
 
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
@@ -124,7 +124,7 @@ describe("CampaignsPage", () => {
     mockGet.mockRejectedValue(new Error("Failed to load campaigns"));
 
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
@@ -152,7 +152,7 @@ describe("CampaignsPage", () => {
     mockGet.mockRejectedValue(forbiddenError);
 
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };

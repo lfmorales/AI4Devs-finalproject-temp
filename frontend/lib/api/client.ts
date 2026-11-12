@@ -1,3 +1,4 @@
+import { bearerTokenOf, readAuthProvider } from "@/lib/auth/auth-provider";
 import { getUserManager } from "@/lib/auth/user-manager";
 
 /** The three failure cases the UI handles differently: re-authenticate, explain, or retry. */
@@ -107,10 +108,11 @@ export function createApiClient({ baseUrl }: { baseUrl: string }): ApiClient {
     const headers = new Headers(init.headers);
     headers.set("Accept", "application/json");
 
-    // Get token from oidc-client-ts UserManager
+    // Get the user from oidc-client-ts UserManager; the provider decides which of its tokens is the Bearer
     const user = await getUserManager().getUser();
-    if (user && !user.expired && user.id_token) {
-      headers.set("Authorization", `Bearer ${user.id_token}`);
+    const token = user && !user.expired ? bearerTokenOf(user, readAuthProvider()) : null;
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
     }
 
     const response = await fetch(`${baseUrl}${path}`, { ...init, headers });

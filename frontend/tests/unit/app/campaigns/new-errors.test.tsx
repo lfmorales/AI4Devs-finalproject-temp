@@ -75,7 +75,7 @@ describe("CreateCampaignPage - Error Handling", () => {
     mockPost.mockRejectedValueOnce(mockError);
 
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
@@ -104,7 +104,7 @@ describe("CreateCampaignPage - Error Handling", () => {
     );
 
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };

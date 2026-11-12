@@ -70,7 +70,7 @@ describe("CreateCampaignPage - Zod Validation", () => {
     const user = userEvent.setup();
 
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
@@ -106,7 +106,7 @@ describe("CreateCampaignPage - Zod Validation", () => {
     mockPost.mockRejectedValueOnce(mockError);
 
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
@@ -127,7 +127,7 @@ describe("CreateCampaignPage - Zod Validation", () => {
 
   it("maps nested line errors to field paths like lines.0.sale_cpm", async () => {
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };

@@ -54,7 +54,7 @@ export function installRoutes(routes: Record<string, Route>): RecordedRequest[] 
 
 export function renderAuthenticated(ui: ReactElement) {
   const value: AuthContextValue = {
-    session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+    session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
     signIn: vi.fn(),
     signOut: vi.fn(),
   };

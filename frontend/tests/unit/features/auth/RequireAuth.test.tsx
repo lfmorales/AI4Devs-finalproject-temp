@@ -36,7 +36,7 @@ describe("RequireAuth", () => {
   });
 
   it("renders the protected content for an authenticated user", () => {
-    renderWithSession({ status: "authenticated", email: "ops@example.com", idToken: "token" });
+    renderWithSession({ status: "authenticated", email: "ops@example.com", bearerToken: "token" });
 
     expect(screen.getByText("Protected content")).toBeInTheDocument();
   });

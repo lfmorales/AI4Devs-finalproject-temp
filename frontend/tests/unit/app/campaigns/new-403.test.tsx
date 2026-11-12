@@ -49,7 +49,7 @@ describe("CreateCampaignPage 403 Forbidden", () => {
     // This verifies the component structure exists for handling forbidden errors.
 
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };

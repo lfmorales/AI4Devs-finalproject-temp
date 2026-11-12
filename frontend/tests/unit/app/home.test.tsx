@@ -57,7 +57,7 @@ describe("HomePage", () => {
 
   it("redirects to campaigns when authenticated", () => {
     const authValue: AuthContextValue = {
-      session: { status: "authenticated", email: "user@example.com", idToken: "token" },
+      session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
       signOut: vi.fn(),
     };
