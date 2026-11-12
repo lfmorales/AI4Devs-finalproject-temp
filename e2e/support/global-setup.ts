@@ -2,6 +2,7 @@ import { join } from "node:path";
 
 import { BASE_URL } from "../playwright.config";
 import { checkComposeProject } from "./compose-project";
+import { restoreRolesIfBackedUp } from "./roles";
 import { minutesLeft, readToken } from "./token";
 
 /** Silent renew starts shortly before the token expires and would end the injected session mid-run. */
@@ -19,6 +20,13 @@ async function status(path: string): Promise<number> {
  */
 export default async function globalSetup(): Promise<void> {
   const problems: string[] = [];
+
+  // A previous run that changed the development user's roles and was killed leaves them saved: put them back first.
+  try {
+    if (restoreRolesIfBackedUp()) console.warn("Warning: restored the roles of the development user left by an interrupted run.");
+  } catch (error) {
+    problems.push(`The roles of the development user, saved by an interrupted run, could not be restored: ${(error as Error).message}`);
+  }
 
   try {
     const health = await status("/api/health");

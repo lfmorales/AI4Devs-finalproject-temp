@@ -46,6 +46,7 @@ Constraints that shape the approach: authentication stays behind the `IdentityTo
 - A user has a single (issuer, subject) link. A user linked to Cognito is rejected with identity_link_conflict when presenting an Entra token, and vice versa. In production only Entra is used. In development, reset-data.sh recreates the database; to unlink by hand, set both columns to NULL. If both issuers must work against one database, move to a table of identities.
 - Activating and deactivating users leaves no audit trail yet; record who changed what and when before production.
 - The post-logout redirect URI of the Entra registration must include the application origin, besides the callback URL.
+- With Entra, the session lasts as long as the access token (about an hour) and is not renewed silently, so a long form can be lost at expiry. Silent renewal needs offline_access and is out of scope.
 
 ## Entra Configuration Requirement
 

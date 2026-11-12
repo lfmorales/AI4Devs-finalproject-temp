@@ -62,7 +62,7 @@
 
 - [x] 12.1 Write failing Vitest tests that the provider is chosen by environment variable, that Entra requests `api://<client>/access_as_user` with `openid profile email` and sends the access token, and that Cognito still sends the identity token
 - [x] 12.2 Split `cognito-config.ts` by provider, update `AuthProvider` and `lib/api/client.ts`, and verify the tests pass
-- [ ] 12.3 Add `operations` and `trading` sessions to `e2e/support/fixtures.ts` and a navigation spec per role, and verify they pass against the stack
+- [x] 12.3 Add `operations` and `trading` sessions to `e2e/support/fixtures.ts` and a navigation spec per role, and verify they pass against the stack
 
 ## 13. Review and Update Existing Unit Tests (MANDATORY)
 

@@ -2,7 +2,9 @@ import { expect, failApiCalls, test } from "../support/fixtures";
 
 const LINKS = ["Campañas", "Estado", "Margen", "Excepciones", "Catálogo Adform"];
 
-test.describe("the navigation of a finance user", () => {
+// The session is the development user's, who holds operations and finance (see roles-matrix.spec.ts for the other
+// profiles). Under the access matrix finance alone sees three links, so the five links belong to operations.
+test.describe("the navigation of the development user, who holds operations and finance", () => {
   test("has the five links", async ({ financeSession: page }) => {
     await page.goto("/status");
 
