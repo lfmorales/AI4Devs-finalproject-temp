@@ -14,6 +14,10 @@ class UnregisteredUserError(DomainError):
     """The identity is valid but has no local user. Users are never auto-provisioned."""
 
 
+class IdentityConflictError(DomainError):
+    """The (issuer, subject) pair already belongs to another user, so it cannot be linked again."""
+
+
 class InactiveUserError(DomainError):
     """The local user exists but has been deactivated."""
 

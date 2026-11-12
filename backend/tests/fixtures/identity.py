@@ -5,8 +5,9 @@ and without a database.
 """
 
 from collections.abc import Iterable
+from dataclasses import replace
 
-from app.domain.exceptions import InvalidIdentityTokenError
+from app.domain.exceptions import IdentityConflictError, InvalidIdentityTokenError
 from app.domain.models.user import RoleName, User, VerifiedIdentity
 from app.domain.repositories.user_repository import UserRepository
 from app.domain.services.identity_token_verifier import IdentityTokenVerifier
@@ -29,10 +30,30 @@ def build_user(
 
 class InMemoryUserRepository(UserRepository):
     def __init__(self, users: Iterable[User] = ()) -> None:
-        self._users_by_email: dict[str, User] = {user.email.lower(): user for user in users}
+        self._users_by_email: dict[str, User] = {}
+        for user in users:
+            self.add(user)
+
+    def add(self, user: User) -> None:
+        self._users_by_email[user.email.lower()] = user
 
     def get_by_email(self, email: str) -> User | None:
         return self._users_by_email.get(email.lower())
+
+    def get_by_identity(self, issuer: str, subject: str) -> User | None:
+        for user in self._users_by_email.values():
+            if (user.identity_issuer, user.identity_subject) == (issuer, subject):
+                return user
+        return None
+
+    def link_identity(self, user_id: int, issuer: str, subject: str) -> bool:
+        user = next((candidate for candidate in self._users_by_email.values() if candidate.id == user_id), None)
+        if user is None or user.identity_issuer is not None:
+            return False
+        if self.get_by_identity(issuer, subject) is not None:
+            raise IdentityConflictError("Identity already linked to another user")
+        self.add(replace(user, identity_issuer=issuer, identity_subject=subject))
+        return True
 
 
 class FakeIdentityTokenVerifier(IdentityTokenVerifier):

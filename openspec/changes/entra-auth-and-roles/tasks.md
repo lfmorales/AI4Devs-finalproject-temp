@@ -33,7 +33,7 @@
 
 ## 7. Repository by Identifier
 
-- [ ] 7.1 Write failing tests, shared by the real and the in-memory repositories, for lookup by pair, lookup by email and storing a link; then implement both
+- [x] 7.1 Write failing tests, shared by the real and the in-memory repositories, for lookup by pair, lookup by email and storing a link; then implement both
 
 ## 8. Authentication Service
 
