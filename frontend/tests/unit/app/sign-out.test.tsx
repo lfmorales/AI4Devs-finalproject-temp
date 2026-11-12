@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import AuthenticatedLayout from "@/app/(authenticated)/layout";
 import StatusPage from "@/app/(authenticated)/status/page";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
-import { installRoutes, reply } from "../../helpers/api-pages";
+import { installRoutes, reply, rolesRoutes } from "../../helpers/api-pages";
 
 // A stand-in for oidc-client-ts that behaves like the real one where it matters here: removeUser raises userUnloaded.
 const manager = vi.hoisted(() => {
@@ -62,7 +62,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe("signing out", () => {
   it("is a voluntary exit: no session-expired page, and the sign-in button is offered", async () => {
     const user = userEvent.setup();
-    installRoutes({ "GET /campaign-status": () => reply(200, []) });
+    installRoutes({ ...rolesRoutes(), "GET /campaign-status": () => reply(200, []) });
     renderApp();
     await screen.findByText("No hay campañas en curso");
 
@@ -77,7 +77,7 @@ describe("signing out", () => {
 
 describe("losing the session without signing out", () => {
   it("still shows the session-expired page when the API answers 401", async () => {
-    installRoutes({ "GET /campaign-status": () => reply(401, { code: "invalid_token", message: "x" }) });
+    installRoutes({ ...rolesRoutes(), "GET /campaign-status": () => reply(401, { code: "invalid_token", message: "x" }) });
 
     renderApp();
 
@@ -86,7 +86,7 @@ describe("losing the session without signing out", () => {
   });
 
   it("still shows the session-expired page when the user is unloaded by the library", async () => {
-    installRoutes({ "GET /campaign-status": () => reply(200, []) });
+    installRoutes({ ...rolesRoutes(), "GET /campaign-status": () => reply(200, []) });
     renderApp();
     await screen.findByText("No hay campañas en curso");
 

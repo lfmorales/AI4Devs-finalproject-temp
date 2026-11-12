@@ -8,7 +8,7 @@ import DspCatalogPage from "@/app/(authenticated)/dsp-catalog/page";
 import ExceptionsPage from "@/app/(authenticated)/exceptions/page";
 import StatusPage from "@/app/(authenticated)/status/page";
 import { AuthContext, type AuthContextValue } from "@/lib/auth/AuthContext";
-import { installRoutes, reply } from "../../helpers/api-pages";
+import { installRoutes, reply, rolesRoutes } from "../../helpers/api-pages";
 
 const removeUser = vi.fn();
 
@@ -37,11 +37,12 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.unstubAllGlobals());
 
 describe("the navigation of the authenticated layout", () => {
-  it("links campaigns, status, exceptions and the Adform catalogue, and has the sign-out button", () => {
+  it("links campaigns, status, exceptions and the Adform catalogue, and has the sign-out button", async () => {
+    installRoutes(rolesRoutes());
     renderLayout(<div>content</div>);
 
     const nav = screen.getByRole("navigation", { name: "Principal" });
-    expect(within(nav).getByRole("link", { name: "Campañas" })).toHaveAttribute("href", "/campaigns");
+    expect(await within(nav).findByRole("link", { name: "Campañas" })).toHaveAttribute("href", "/campaigns");
     expect(within(nav).getByRole("link", { name: "Estado" })).toHaveAttribute("href", "/status");
     expect(within(nav).getByRole("link", { name: "Excepciones" })).toHaveAttribute("href", "/exceptions");
     expect(within(nav).getByRole("link", { name: "Catálogo Adform" })).toHaveAttribute("href", "/dsp-catalog");
@@ -51,6 +52,7 @@ describe("the navigation of the authenticated layout", () => {
   it("signs out through the auth context when the button is pressed", async () => {
     const user = userEvent.setup();
     const signOut = vi.fn();
+    installRoutes(rolesRoutes());
     renderLayout(<div>content</div>, { status: "authenticated", email: "user@example.com", bearerToken: "token" }, signOut);
 
     await user.click(screen.getByRole("button", { name: "Cerrar sesión" }));
@@ -65,8 +67,8 @@ describe("the navigation of the authenticated layout", () => {
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
   });
 
-  it("shows every link until the backend says no, whatever the token holds", async () => {
-    installRoutes({ "GET /campaign-status": () => reply(200, []) });
+  it("shows the links of the roles until the backend says no, whatever the token holds", async () => {
+    installRoutes({ ...rolesRoutes(), "GET /campaign-status": () => reply(200, []) });
 
     renderLayout(<StatusPage />);
 
@@ -76,7 +78,7 @@ describe("the navigation of the authenticated layout", () => {
   });
 
   it("hides the exceptions link once the exception queue answers 403, and keeps the others", async () => {
-    installRoutes({ "GET /ingestion-exceptions?status=open": forbidden });
+    installRoutes({ ...rolesRoutes(), "GET /ingestion-exceptions?status=open": forbidden });
 
     renderLayout(<ExceptionsPage />);
 
@@ -88,7 +90,7 @@ describe("the navigation of the authenticated layout", () => {
   });
 
   it("hides the catalogue link once the catalogue answers 403, and keeps the others", async () => {
-    installRoutes({ "GET /dsp-catalog?limit=50&offset=0": forbidden });
+    installRoutes({ ...rolesRoutes(), "GET /dsp-catalog?limit=50&offset=0": forbidden });
 
     renderLayout(<DspCatalogPage />);
 
@@ -99,7 +101,7 @@ describe("the navigation of the authenticated layout", () => {
   });
 
   it("hides the status link once the status page answers 403", async () => {
-    installRoutes({ "GET /campaign-status": forbidden });
+    installRoutes({ ...rolesRoutes(), "GET /campaign-status": forbidden });
 
     renderLayout(<StatusPage />);
 
@@ -110,7 +112,7 @@ describe("the navigation of the authenticated layout", () => {
   });
 
   it("hides the campaigns link once the campaigns page answers 403", async () => {
-    installRoutes({ "GET /campaigns": forbidden });
+    installRoutes({ ...rolesRoutes(), "GET /campaigns": forbidden });
 
     renderLayout(<CampaignsPage />);
 
@@ -120,7 +122,7 @@ describe("the navigation of the authenticated layout", () => {
   });
 
   it("does not hide a link after a 401, which is about the session and not about roles", async () => {
-    installRoutes({ "GET /campaign-status": () => reply(401, { code: "invalid_token", message: "x" }) });
+    installRoutes({ ...rolesRoutes(), "GET /campaign-status": () => reply(401, { code: "invalid_token", message: "x" }) });
 
     renderLayout(<StatusPage />);
 
@@ -129,7 +131,7 @@ describe("the navigation of the authenticated layout", () => {
   });
 
   it("leaves a single sign-out button on the campaigns page", async () => {
-    installRoutes({ "GET /campaigns": () => reply(200, []) });
+    installRoutes({ ...rolesRoutes(), "GET /campaigns": () => reply(200, []) });
 
     renderLayout(<CampaignsPage />);
 

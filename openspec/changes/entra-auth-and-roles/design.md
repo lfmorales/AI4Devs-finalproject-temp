@@ -36,6 +36,8 @@ Constraints that shape the approach: authentication stays behind the `IdentityTo
 
 **D9. Identifiers.** Tenant and application identifiers only in `.env`; placeholders everywhere else.
 
+**D10. Navigation by role.** The navigation is driven by the roles from GET /users/me, loaded once per session and kept in memory. The 403 handling stays as a safety net. A change of roles applies on the next page load.
+
 ## Risks / Trade-offs
 
 - [A first-access link by email could attach an identity to the wrong person if two tenants share an address] → the link needs a configured issuer; an existing link is never overwritten.

@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import AuthenticatedLayout from "@/app/(authenticated)/layout";
 import MarginPage from "@/app/(authenticated)/margin/page";
 import { AuthContext, type AuthContextValue } from "@/lib/auth/AuthContext";
-import { installRoutes, reply } from "../../../helpers/api-pages";
+import { installRoutes, reply, rolesRoutes } from "../../../helpers/api-pages";
 import { campaign, flight, line, margin } from "../../../helpers/margin-data";
 
 vi.mock("@/lib/auth/user-manager", () => ({
@@ -32,26 +32,26 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.unstubAllGlobals());
 
 describe("the margin link", () => {
-  it("is in the navigation of the authenticated layout, pointing to the margin page", () => {
-    installRoutes({ "GET /margin": () => reply(200, margin()) });
+  it("is in the navigation of the authenticated layout, pointing to the margin page", async () => {
+    installRoutes({ ...rolesRoutes(), "GET /margin": () => reply(200, margin()) });
 
     renderLayout(<div>content</div>);
 
     const nav = screen.getByRole("navigation", { name: "Principal" });
-    expect(within(nav).getByRole("link", { name: "Margen" })).toHaveAttribute("href", "/margin");
+    expect(await within(nav).findByRole("link", { name: "Margen" })).toHaveAttribute("href", "/margin");
   });
 
-  it("is shown while the page has not been refused: roles are not decoded in the browser", async () => {
-    installRoutes({ "GET /margin": () => reply(200, margin()) });
+  it("is shown while the page has not been refused, for a user whose roles open it", async () => {
+    installRoutes({ ...rolesRoutes(), "GET /margin": () => reply(200, margin()) });
 
     renderLayout(<MarginPage />);
 
     await screen.findByRole("region", { name: "Totales del periodo" });
-    expect(within(screen.getByRole("navigation", { name: "Principal" })).getByRole("link", { name: "Margen" })).toBeInTheDocument();
+    expect(await within(screen.getByRole("navigation", { name: "Principal" })).findByRole("link", { name: "Margen" })).toBeInTheDocument();
   });
 
   it("disappears once the backend answers 403, and the other links stay", async () => {
-    installRoutes({ "GET /margin": forbidden });
+    installRoutes({ ...rolesRoutes(), "GET /margin": forbidden });
 
     renderLayout(<MarginPage />);
 
@@ -65,7 +65,7 @@ describe("the margin link", () => {
 
 describe("a user without the finance role", () => {
   it("sees 'Acceso denegado' with a message about the margin, and no figure", async () => {
-    installRoutes({ "GET /margin": forbidden });
+    installRoutes({ ...rolesRoutes(), "GET /margin": forbidden });
 
     renderLayout(<MarginPage />);
 
@@ -78,7 +78,7 @@ describe("a user without the finance role", () => {
 
 describe("an expired session", () => {
   it("leads to 'Sesión caducada' when the page answers 401", async () => {
-    installRoutes({ "GET /margin": unauthenticated });
+    installRoutes({ ...rolesRoutes(), "GET /margin": unauthenticated });
 
     renderLayout(<MarginPage />);
 
@@ -109,7 +109,7 @@ describe("the closing and the access", () => {
   }
 
   it("leads to 'Acceso denegado' and hides the link when the closing answers 403", async () => {
-    installRoutes(routesWithClosing(forbidden));
+    installRoutes({ ...rolesRoutes(), ...routesWithClosing(forbidden) });
 
     renderLayout(<MarginPage />);
     await closeAugust();
@@ -120,7 +120,7 @@ describe("the closing and the access", () => {
   });
 
   it("leads to 'Sesión caducada' when the closing answers 401", async () => {
-    installRoutes(routesWithClosing(unauthenticated));
+    installRoutes({ ...rolesRoutes(), ...routesWithClosing(unauthenticated) });
 
     renderLayout(<MarginPage />);
     await closeAugust();

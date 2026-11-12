@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import HomePage from "@/app/page";
 import { AuthContext, type AuthContextValue } from "@/lib/auth/AuthContext";
+import { installRoutes, rolesRoutes } from "../../helpers/api-pages";
 
 // Mock useRouter
 const mockPush = vi.fn();
@@ -14,6 +15,12 @@ vi.mock("next/navigation", () => ({
     replace: mockReplace,
   }),
 }));
+
+vi.mock("@/lib/auth/user-manager", () => ({
+  getUserManager: () => ({ getUser: vi.fn().mockResolvedValue({ id_token: "token", expired: false }), removeUser: vi.fn() }),
+}));
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("HomePage", () => {
   it("shows loading indicator when session is loading", () => {
@@ -55,7 +62,8 @@ describe("HomePage", () => {
     expect(mockSignIn).toHaveBeenCalledWith("/campaigns");
   });
 
-  it("redirects to campaigns when authenticated", () => {
+  it("redirects to campaigns when authenticated and holding operations", async () => {
+    installRoutes(rolesRoutes(["operations"]));
     const authValue: AuthContextValue = {
       session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
@@ -68,6 +76,6 @@ describe("HomePage", () => {
       </AuthContext.Provider>
     );
 
-    expect(mockReplace).toHaveBeenCalledWith("/campaigns");
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/campaigns"));
   });
 });

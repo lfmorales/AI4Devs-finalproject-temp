@@ -39,7 +39,7 @@ const allowedFor = (roles: RoleName[]): Page[] => PAGES.filter((page) => roles.s
 
 test.describe("the pages each profile may open, with the roles held in the database", () => {
   for (const profile of PROFILES) {
-    test(`${profile.name}: the links shown, 'Acceso denegado' on the rest, also by direct URL`, async ({ financeSession: page }) => {
+    test(`${profile.name}: the links shown on sign-in, 'Acceso denegado' on the rest by direct URL`, async ({ financeSession: page }) => {
       const allowed = allowedFor(profile.roles);
       const refused = PAGES.filter((candidate) => !allowed.includes(candidate));
 
@@ -52,20 +52,20 @@ test.describe("the pages each profile may open, with the roles held in the datab
         expect((await start).status()).toBe(200);
         await expect(navigation).toBeVisible();
 
-        // The navigation hides a page only after the backend has refused it, so each page is opened through its link.
-        for (const target of PAGES.filter((candidate) => candidate.path !== "/status")) {
-          const response = page.waitForResponse(target.api);
-          await navigation.getByRole("link", { name: target.link }).click();
-          expect((await response).status(), `${target.path} for ${profile.name}`).toBe(allowed.includes(target) ? 200 : 403);
-          if (!allowed.includes(target)) await expect(page.getByRole("heading", { name: "Acceso denegado" })).toBeVisible();
-        }
-
+        // The navigation shows, as soon as the session starts, exactly the links the roles of the profile open.
         await expect(navigation.getByRole("link")).toHaveCount(allowed.length);
         for (const target of PAGES) {
           await expect(navigation.getByRole("link", { name: target.link })).toHaveCount(allowed.includes(target) ? 1 : 0);
         }
 
-        // A direct URL to a page the profile may not open shows the same refusal, in a fresh page load.
+        // Each page the profile may open is reached through its link and the backend serves it.
+        for (const target of allowed.filter((candidate) => candidate.path !== "/status")) {
+          const response = page.waitForResponse(target.api);
+          await navigation.getByRole("link", { name: target.link }).click();
+          expect((await response).status(), `${target.path} for ${profile.name}`).toBe(200);
+        }
+
+        // A page the profile may not open has no link, so it is reached by direct URL only: the backend still refuses it.
         for (const target of refused) {
           await page.goto(target.path);
           await expect(page.getByRole("heading", { name: "Acceso denegado" })).toBeVisible();

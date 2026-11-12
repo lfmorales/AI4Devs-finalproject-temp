@@ -7,6 +7,8 @@ import type { ReactElement } from "react";
 import { vi } from "vitest";
 
 import { AuthContext, type AuthContextValue } from "@/lib/auth/AuthContext";
+import { ROLES, type Role } from "@/lib/auth/navigation";
+import { RolesContext } from "@/lib/auth/RolesContext";
 
 export const API_URL = "http://localhost/api";
 
@@ -52,13 +54,27 @@ export function installRoutes(routes: Record<string, Route>): RecordedRequest[] 
   return requests;
 }
 
-export function renderAuthenticated(ui: ReactElement) {
+/** The route of GET /users/me answering the given roles (all four by default), for tests that mount the layout. */
+export function rolesRoutes(roles: readonly Role[] = ROLES): Record<string, Route> {
+  return { "GET /users/me": () => reply(200, { roles }) };
+}
+
+/**
+ * Renders a page inside an authenticated session. The session holds `roles` (all four by default); `null` leaves
+ * them not yet known, as while GET /users/me is loading.
+ */
+export function renderAuthenticated(ui: ReactElement, { roles = ROLES }: { roles?: readonly Role[] | null } = {}) {
   const value: AuthContextValue = {
     session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
     signIn: vi.fn(),
     signOut: vi.fn(),
   };
-  return render(<AuthContext.Provider value={value}>{ui}</AuthContext.Provider>);
+  const known = roles === null ? ({ status: "loading" } as const) : ({ status: "ready", roles } as const);
+  return render(
+    <AuthContext.Provider value={value}>
+      <RolesContext.Provider value={known}>{ui}</RolesContext.Provider>
+    </AuthContext.Provider>,
+  );
 }
 
 /** The text of a cell with every kind of whitespace (including no-break spaces) collapsed to one space. */

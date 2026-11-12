@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createApiClient, type ApiError } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { useReportForbidden } from "@/lib/auth/ForbiddenPages";
+import { useHasAnyRole } from "@/lib/auth/RolesContext";
 import { SessionExpiredPage } from "@/lib/components/SessionExpiredPage";
 import { AccessDeniedPage } from "@/lib/components/AccessDeniedPage";
 
@@ -24,6 +25,7 @@ type PageState = "list" | "session-expired" | "access-denied";
 
 export default function CampaignsPage() {
   const { session } = useAuth();
+  const canCreate = useHasAnyRole("operations");
   const [campaigns, setCampaigns] = useState<Campaign[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,7 +84,7 @@ export default function CampaignsPage() {
       <div className="page-header">
         <h1>Campañas</h1>
         <div>
-          <Link className="btn btn-primary" href="/campaigns/new">Nueva campaña</Link>
+          {canCreate && <Link className="btn btn-primary" href="/campaigns/new">Nueva campaña</Link>}
         </div>
       </div>
 
@@ -95,9 +97,11 @@ export default function CampaignsPage() {
       {campaigns && campaigns.length === 0 && !error && (
         <div className="empty-state">
           <p>Todavía no hay campañas registradas.</p>
-          <p>
-            Crea la primera campaña haciendo clic en "Nueva campaña".
-          </p>
+          {canCreate && (
+            <p>
+              Crea la primera campaña haciendo clic en "Nueva campaña".
+            </p>
+          )}
         </div>
       )}
 

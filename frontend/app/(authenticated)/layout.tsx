@@ -7,15 +7,10 @@ import Link from "next/link";
 
 import { useAuth } from "@/lib/auth/AuthContext";
 import { ForbiddenPagesProvider, useForbiddenPages } from "@/lib/auth/ForbiddenPages";
+import { visibleLinks } from "@/lib/auth/navigation";
+import { RolesProvider, useRoles } from "@/lib/auth/RolesContext";
+import { RolesNotice } from "@/lib/auth/RolesNotice";
 import { SessionExpiredPage } from "@/lib/components/SessionExpiredPage";
-
-const LINKS = [
-  { href: "/campaigns", label: "Campañas" },
-  { href: "/status", label: "Estado" },
-  { href: "/margin", label: "Margen" },
-  { href: "/exceptions", label: "Excepciones" },
-  { href: "/dsp-catalog", label: "Catálogo Adform" },
-];
 
 /** The link of the section the path is in: the path itself or anything below it. */
 function isCurrent(pathname: string | null, href: string): boolean {
@@ -25,11 +20,13 @@ function isCurrent(pathname: string | null, href: string): boolean {
 function Navigation() {
   const { hidden } = useForbiddenPages();
   const { signOut } = useAuth();
+  const roles = useRoles();
   const pathname = usePathname();
+  const links = roles.status === "ready" ? visibleLinks(roles.roles, hidden) : [];
 
   return (
     <nav aria-label="Principal">
-      {LINKS.filter((link) => !hidden.has(link.href)).map((link) => (
+      {links.map((link) => (
         <Link key={link.href} href={link.href} aria-current={isCurrent(pathname, link.href) ? "page" : undefined}>{link.label}</Link>
       ))}
       <button type="button" onClick={() => void signOut()}>
@@ -37,6 +34,13 @@ function Navigation() {
       </button>
     </nav>
   );
+}
+
+/** The page, unless the roles failed to load or there are none: then only the notice, which the pages cannot answer. */
+function Content({ children }: { children: ReactNode }) {
+  const roles = useRoles();
+  if (roles.status === "error" || roles.status === "no_profile") return <RolesNotice state={roles} />;
+  return <>{children}</>;
 }
 
 export default function AuthenticatedLayout({ children }: { children: ReactNode }) {
@@ -71,9 +75,11 @@ export default function AuthenticatedLayout({ children }: { children: ReactNode 
   }
 
   return (
-    <ForbiddenPagesProvider>
-      <Navigation />
-      {children}
-    </ForbiddenPagesProvider>
+    <RolesProvider>
+      <ForbiddenPagesProvider>
+        <Navigation />
+        <Content>{children}</Content>
+      </ForbiddenPagesProvider>
+    </RolesProvider>
   );
 }

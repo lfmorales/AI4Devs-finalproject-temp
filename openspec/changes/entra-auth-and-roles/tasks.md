@@ -64,7 +64,7 @@
 - [x] 12.2 Split `cognito-config.ts` by provider, update `AuthProvider` and `lib/api/client.ts`, and verify the tests pass
 - [x] 12.3 Add `operations` and `trading` sessions to `e2e/support/fixtures.ts` and a navigation spec per role, and verify they pass against the stack
 - [x] 12.4 Add `GET /users/me`, which answers the caller's roles from the database, with its spec scenarios, its row in the access matrix and its API tests
-- [ ] 12.5 Use the roles of `GET /users/me` in the frontend to show only the links and the buttons the user may use, replacing the links hidden after a 403 and the buttons shown to profiles that would receive 403
+- [x] 12.5 Use the roles of `GET /users/me` in the frontend to show only the links and the buttons the user may use, replacing the links hidden after a 403 and the buttons shown to profiles that would receive 403
 
 ## 13. Review and Update Existing Unit Tests (MANDATORY)
 
@@ -97,3 +97,7 @@
 - [ ] 19.1 Limit the key reload rate and the download timeout, with a test
 - [ ] 19.2 Insert all four roles from a migration, idempotently, so a fresh database does not depend on the seed script
 - [ ] 19.3 Remove CognitoTokenVerifier and count_active_with_role, which nothing uses in production, with their tests
+
+## 20. Test Fixtures
+
+- [ ] 20.1 Extract the token and key helpers shared by the identity API tests into tests/fixtures

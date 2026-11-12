@@ -1,11 +1,14 @@
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import AuthenticatedLayout from "@/app/(authenticated)/layout";
 import { AuthContext, type AuthContextValue } from "@/lib/auth/AuthContext";
 import { useReportForbidden } from "@/lib/auth/ForbiddenPages";
+import { installRoutes, rolesRoutes } from "../../helpers/api-pages";
 
-vi.mock("@/lib/auth/user-manager", () => ({ getUserManager: () => ({ getUser: vi.fn(), removeUser: vi.fn() }) }));
+vi.mock("@/lib/auth/user-manager", () => ({ getUserManager: () => ({ getUser: vi.fn().mockResolvedValue({ id_token: "token", expired: false }), removeUser: vi.fn() }) }));
+
+afterEach(() => vi.unstubAllGlobals());
 vi.mock("next/navigation", () => ({ usePathname: () => "/status" }));
 
 const ALL_PAGES = ["/campaigns", "/status", "/margin", "/exceptions", "/dsp-catalog"] as const;
@@ -36,8 +39,13 @@ function Refused({ path }: { path: string }) {
   return null;
 }
 
+/**
+ * The safety net: a session whose roles open every link, as when the roles are stale, and a backend that refuses
+ * the pages the profile may not open. The links of the refused pages must go.
+ */
 function renderAs(roles: Role[]) {
   const allowed = pagesOf(roles);
+  installRoutes(rolesRoutes());
   const value: AuthContextValue = {
     session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
     signIn: vi.fn(),
@@ -53,7 +61,7 @@ function renderAs(roles: Role[]) {
   return within(screen.getByRole("navigation", { name: "Principal" }));
 }
 
-describe("the navigation once the backend has refused the pages a profile may not open", () => {
+describe("the navigation, as a safety net, once the backend has refused the pages a profile may not open", () => {
   it.each([
     [["operations"], ["Campañas", "Estado", "Margen", "Excepciones", "Catálogo Adform"]],
     [["finance"], ["Campañas", "Estado", "Margen"]],
@@ -62,10 +70,10 @@ describe("the navigation once the backend has refused the pages a profile may no
     [["finance", "trading"], ["Campañas", "Estado", "Margen"]],
     [["business", "trading"], ["Campañas", "Estado"]],
     [["business", "finance"], ["Campañas", "Estado", "Margen"]],
-  ] as [Role[], string[]][])("for %s shows %j", (roles, expected) => {
+  ] as [Role[], string[]][])("for %s shows %j", async (roles, expected) => {
     const nav = renderAs(roles);
 
-    expect(nav.getAllByRole("link").map((link) => link.textContent)).toEqual(expected);
+    await waitFor(() => expect(nav.getAllByRole("link").map((link) => link.textContent)).toEqual(expected));
     for (const page of ALL_PAGES) {
       const shown = nav.queryByRole("link", { name: LABELS[page] }) !== null;
       expect(shown).toBe(expected.includes(LABELS[page]));

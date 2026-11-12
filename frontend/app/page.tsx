@@ -4,25 +4,38 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { useAuth } from "@/lib/auth/AuthContext";
+import { firstPageFor } from "@/lib/auth/navigation";
+import { RolesProvider, useRoles } from "@/lib/auth/RolesContext";
+import { RolesNotice } from "@/lib/auth/RolesNotice";
+
+/** Sends the signed-in user to the first screen their roles open. */
+function RedirectToFirstPage() {
+  const roles = useRoles();
+  const router = useRouter();
+  const target = roles.status === "ready" ? firstPageFor(roles.roles) : null;
+
+  useEffect(() => {
+    if (target !== null) router.replace(target);
+  }, [target, router]);
+
+  if (roles.status === "error" || roles.status === "no_profile") return <RolesNotice state={roles} />;
+  // Loading, or the redirect in progress
+  return null;
+}
 
 export default function HomePage() {
   const { session, signIn } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (session.status === "authenticated") {
-      // Redirect authenticated users to campaigns list
-      router.replace("/campaigns");
-    }
-  }, [session.status, router]);
 
   if (session.status === "loading") {
     return <p role="status" className="notice notice-info">Checking your session…</p>;
   }
 
   if (session.status === "authenticated") {
-    // Redirect in progress
-    return null;
+    return (
+      <RolesProvider>
+        <RedirectToFirstPage />
+      </RolesProvider>
+    );
   }
 
   // Unauthenticated: show login page

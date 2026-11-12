@@ -7,6 +7,7 @@ import { closeMonth, getMargin, marginPath, type MarginResponse } from "@/lib/ap
 import { createApiClient, type ApiError } from "@/lib/api/client";
 import { useApiCall } from "@/lib/api/useApiCall";
 import { useReportForbidden } from "@/lib/auth/ForbiddenPages";
+import { useHasAnyRole } from "@/lib/auth/RolesContext";
 import { AccessDeniedPage } from "@/lib/components/AccessDeniedPage";
 import { SessionExpiredPage } from "@/lib/components/SessionExpiredPage";
 import { CloseMonthDialog } from "./CloseMonthDialog";
@@ -53,6 +54,8 @@ export function MarginPage() {
   const hintId = useId();
   const nothingToCloseId = useId();
   const campaignFilterId = useId();
+
+  const canClose = useHasAnyRole("operations", "finance");
 
   const filters = toFilters(fields);
   const { state } = useApiCall(`${marginPath(filters)}#${reloads}`, (client) => getMargin(client, filters));
@@ -131,20 +134,22 @@ export function MarginPage() {
           </select>
         </div>
         <button type="button" disabled={!hasActiveFilter(fields)} onClick={() => setFields(NO_FILTERS)}>Limpiar filtros</button>
-        <div>
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={target === null || campaignFiltered || nothingToClose || submitting}
-            aria-describedby={campaignFiltered ? campaignFilterId : target === null ? hintId : nothingToClose ? nothingToCloseId : undefined}
-            onClick={() => setDialogOpen(true)}
-          >
-            Cerrar mes
-          </button>
-          {campaignFiltered && <p id={campaignFilterId} className="hint">{REMOVE_CAMPAIGN_FILTER}</p>}
-          {!campaignFiltered && target === null && <p id={hintId} className="hint">Elige año y mes para cerrar un mes</p>}
-          {nothingToClose && <p id={nothingToCloseId} className="hint">{NOTHING_TO_CLOSE}</p>}
-        </div>
+        {canClose && (
+          <div>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={target === null || campaignFiltered || nothingToClose || submitting}
+              aria-describedby={campaignFiltered ? campaignFilterId : target === null ? hintId : nothingToClose ? nothingToCloseId : undefined}
+              onClick={() => setDialogOpen(true)}
+            >
+              Cerrar mes
+            </button>
+            {campaignFiltered && <p id={campaignFilterId} className="hint">{REMOVE_CAMPAIGN_FILTER}</p>}
+            {!campaignFiltered && target === null && <p id={hintId} className="hint">Elige año y mes para cerrar un mes</p>}
+            {nothingToClose && <p id={nothingToCloseId} className="hint">{NOTHING_TO_CLOSE}</p>}
+          </div>
+        )}
       </div>
 
       {outcome?.kind === "success" && (

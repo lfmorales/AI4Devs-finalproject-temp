@@ -1,16 +1,23 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { AuthContext, type AuthContextValue } from "@/lib/auth/AuthContext";
 import AuthenticatedLayout from "@/app/(authenticated)/layout";
+import { installRoutes, rolesRoutes } from "../../helpers/api-pages";
 
 vi.mock("next/navigation", () => ({
   usePathname: vi.fn(() => "/test-path"),
 }));
+vi.mock("@/lib/auth/user-manager", () => ({
+  getUserManager: () => ({ getUser: vi.fn().mockResolvedValue({ id_token: "token", expired: false }), removeUser: vi.fn() }),
+}));
+
+beforeEach(() => installRoutes(rolesRoutes()));
+afterEach(() => vi.unstubAllGlobals());
 
 describe("AuthenticatedLayout", () => {
-  it("renders children when user is authenticated", () => {
+  it("renders children when user is authenticated", async () => {
     const authValue: AuthContextValue = {
       session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
@@ -25,7 +32,7 @@ describe("AuthenticatedLayout", () => {
       </AuthContext.Provider>
     );
 
-    expect(screen.getByText("Campaign Page Content")).toBeInTheDocument();
+    expect(await screen.findByText("Campaign Page Content")).toBeInTheDocument();
   });
 
   it("shows session expired page when session was lost involuntarily", () => {
@@ -47,7 +54,7 @@ describe("AuthenticatedLayout", () => {
     expect(screen.queryByText("Campaign Page Content")).not.toBeInTheDocument();
   });
 
-  it("shows access denied page when there is a 403 error", () => {
+  it("shows access denied page when there is a 403 error", async () => {
     const authValue: AuthContextValue = {
       session: { status: "authenticated", email: "user@example.com", bearerToken: "token" },
       signIn: vi.fn(),
@@ -65,7 +72,7 @@ describe("AuthenticatedLayout", () => {
 
     // When 403 error occurs, AccessDeniedPage should be shown
     // This is tested in practice through the API error handling
-    expect(screen.getByText("Campaign Page Content")).toBeInTheDocument();
+    expect(await screen.findByText("Campaign Page Content")).toBeInTheDocument();
   });
 
   it("does not show session expired when user explicitly signed out", () => {
