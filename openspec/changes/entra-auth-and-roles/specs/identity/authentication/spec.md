@@ -36,18 +36,18 @@ The system SHALL keep for the Cognito issuer the requirement of an identity toke
 - **WHEN** a Cognito identity token has `email_verified` other than true
 - **THEN** the request is rejected with 401
 
-### Requirement: Roles come from the token for Entra and from the database for Cognito
+### Requirement: Roles come only from the database
 
-The system SHALL take the roles of a request from the `roles` claim of the token for an Entra issuer, keeping only known role names, and from the user's stored roles for a Cognito issuer. The two sources SHALL NOT be combined.
+The system SHALL take the roles of every request from the user's stored roles, whatever the issuer of the token, and SHALL ignore any role information the token carries, including the `roles` claim of an Entra token.
 
-#### Scenario: Entra roles are read from the token
+#### Scenario: A token whose roles differ from the database is authorised with the database roles
 - **WHEN** an Entra token carries `roles` with `finance` and the user's stored roles are `operations`
-- **THEN** the request is authorised as `finance` only
+- **THEN** the request is authorised as `operations` only
 
-#### Scenario: An Entra token without a known role gets no access
-- **WHEN** an Entra token carries no known role
+#### Scenario: A user without roles is forbidden everywhere
+- **WHEN** a valid token belongs to a registered user with no stored role
 - **THEN** every protected route answers 403
 
 #### Scenario: Several roles are composed
-- **WHEN** a token carries two known roles
+- **WHEN** a user holds two stored roles
 - **THEN** a route is allowed if either role is accepted by it

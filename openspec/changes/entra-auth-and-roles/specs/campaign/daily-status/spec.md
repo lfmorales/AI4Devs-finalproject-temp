@@ -1,6 +1,32 @@
-## MODIFIED Requirements
+## RENAMED Requirements
+
+- FROM: `### Requirement: Cost and margin figures are restricted to finance`
+- TO: `### Requirement: Cost and margin figures are restricted to operations and finance`
+
+## REMOVED Requirements
 
 ### Requirement: The daily status is read through one endpoint for operations and business
+**Reason**: The name and the scenario title say operations and business, but the endpoint is now open to four roles.
+**Migration**: Read the replacement requirement of the same capability; the endpoint, the row contents and the figures are unchanged.
+
+## MODIFIED Requirements
+
+### Requirement: Cost and margin figures are restricted to operations and finance
+
+The system SHALL withhold cost and margin figures from users who hold neither the `operations` nor the `finance` role, in the API response and not only in the interface.
+
+#### Scenario: A business user sees delivery but not cost
+- **WHEN** a user holding `business`, and neither `operations` nor `finance`, reads the daily status
+- **THEN** campaigns and their delivery are returned
+- **AND** no cost or margin field is present in the response
+
+#### Scenario: Calling the API directly does not bypass the restriction
+- **WHEN** a user holding neither `operations` nor `finance` requests a cost or margin resource directly
+- **THEN** the request is rejected as forbidden
+
+## ADDED Requirements
+
+### Requirement: The daily status is read through one endpoint for operations, business, finance and trading
 
 The system SHALL expose the daily status at `GET /api/campaign-status` to users holding the `operations`, `business`, `finance` or `trading` role, with one row per flight whose window contains D-1 and whose campaign has status `active`, where D is the day the request is made. Each row SHALL carry the campaign (id and name), the agency (id and name), the line number, the flight (campaign period and window), the contracted volume of the flight, the delivered volume (the line's impressions from the flight's start to D-1), their ratio, the pacing (expected to date, deviation, days remaining until the flight's last day and the `pacing_flag`) and the `missing_data_flag`. Pacing SHALL be calculated by the pure pacing function. The delivered volume SHALL be aggregated in the database, without bringing delivery rows into the application.
 
@@ -27,20 +53,7 @@ The system SHALL expose the daily status at `GET /api/campaign-status` to users 
 - **WHEN** the daily status is read
 - **THEN** no field of the response, however nested, is a cost or margin figure
 
-#### Scenario: Reading the daily status requires operations or business
+#### Scenario: Reading the daily status requires one of the four roles
 - **WHEN** a user holding none of the four roles reads the daily status
 - **THEN** the request is rejected as forbidden
 - **AND** a request without a valid token is rejected as unauthenticated
-
-### Requirement: Cost and margin figures are restricted to finance
-
-The system SHALL withhold cost and margin figures from users who hold neither the `operations` nor the `finance` role, in the API response and not only in the interface.
-
-#### Scenario: A business user sees delivery but not cost
-- **WHEN** a user holding `business`, and neither `operations` nor `finance`, reads the daily status
-- **THEN** campaigns and their delivery are returned
-- **AND** no cost or margin field is present in the response
-
-#### Scenario: Calling the API directly does not bypass the restriction
-- **WHEN** a user holding neither `operations` nor `finance` requests a cost or margin resource directly
-- **THEN** the request is rejected as forbidden

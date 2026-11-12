@@ -25,10 +25,6 @@ The system SHALL accept on each existing route the roles below and no others.
 - **WHEN** a user with only `trading` calls any route outside the delivery status
 - **THEN** the request is rejected with 403
 
-### Requirement: Cost and margin figures are returned only to operations and finance
-
-The system SHALL return cost, revenue, rebate and margin figures only to users holding `operations` or `finance`, and SHALL NOT return them, even hidden, to users holding only `business` or `trading`.
-
 #### Scenario: Business and trading receive no money fields
 - **WHEN** a user with only `business`, or only `trading`, reads the delivery status
 - **THEN** no cost, revenue, rebate or margin field appears in the response

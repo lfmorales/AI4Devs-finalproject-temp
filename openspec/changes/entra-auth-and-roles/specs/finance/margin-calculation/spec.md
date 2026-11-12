@@ -1,6 +1,11 @@
+## RENAMED Requirements
+
+- FROM: `### Requirement: Margin access is restricted to finance`
+- TO: `### Requirement: Margin access is restricted to operations and finance`
+
 ## MODIFIED Requirements
 
-### Requirement: Margin access is restricted to finance
+### Requirement: Margin access is restricted to operations and finance
 
 The system SHALL restrict every cost and margin figure to users holding the `operations` or the `finance` role, enforced at the endpoint.
 

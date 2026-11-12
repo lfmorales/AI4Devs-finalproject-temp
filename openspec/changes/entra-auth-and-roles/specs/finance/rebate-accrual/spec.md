@@ -1,6 +1,12 @@
-## MODIFIED Requirements
+## REMOVED Requirements
 
 ### Requirement: Closing a month freezes the rates of its flights
+**Reason**: The scenario title "Only finance may close" is no longer true: operations may also close a month.
+**Migration**: Read the replacement requirement `Closing a month freezes the rates of every flight it covers`; the closing behaviour is unchanged.
+
+## ADDED Requirements
+
+### Requirement: Closing a month freezes the rates of every flight it covers
 
 The system SHALL expose `POST /margin/closings`, restricted to the `operations` and `finance` roles, taking a year and a month, which SHALL resolve and freeze in `applied_rates` the rates of every flight that ended in that month, one row per flight with a foreign key to the flight, and SHALL be idempotent.
 
@@ -43,7 +49,7 @@ The system SHALL expose `POST /margin/closings`, restricted to the `operations` 
 - **THEN** the counter's position before the first new flight is the `position_after` of the latest frozen flight of that counter
 - **AND** the frozen flights are not priced again
 
-#### Scenario: Only finance may close
+#### Scenario: Only operations and finance may close
 - **WHEN** a user holding neither `operations` nor `finance` requests a closing
 - **THEN** the request is rejected as forbidden
 - **AND** a request without a valid token is rejected as unauthenticated

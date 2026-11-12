@@ -20,6 +20,10 @@ The system SHALL identify a registered user by the pair formed by the issuer and
 - **WHEN** the email matches a user already linked to a different pair
 - **THEN** the request is rejected with 403 and the stored link does not change
 
+#### Scenario: An unlinked identity without an email is forbidden
+- **WHEN** a valid token carries no email and its pair is not linked to any user
+- **THEN** the request is rejected with 403 `user_not_registered` and nothing is stored
+
 ### Requirement: Users are never created by authentication
 
 The system SHALL NOT create a user when an authenticated identity matches none.

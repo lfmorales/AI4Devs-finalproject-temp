@@ -1,6 +1,11 @@
+## RENAMED Requirements
+
+- FROM: `### Requirement: Reporting access is restricted to finance`
+- TO: `### Requirement: Reporting access is restricted to operations and finance`
+
 ## MODIFIED Requirements
 
-### Requirement: Reporting access is restricted to finance
+### Requirement: Reporting access is restricted to operations and finance
 
 The system SHALL restrict margin reporting to users holding the `operations` or the `finance` role.
 

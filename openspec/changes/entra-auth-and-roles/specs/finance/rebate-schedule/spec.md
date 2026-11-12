@@ -1,6 +1,12 @@
-## MODIFIED Requirements
+## REMOVED Requirements
 
 ### Requirement: Schedules and platform rates are created by finance through the API
+**Reason**: Creating schedules and platform rates moves from finance to operations, so the name and the scenario titles are no longer true.
+**Migration**: Read the replacement requirement of the same capability; finance keeps reading the margin and closing months, and no longer writes these two resources.
+
+## ADDED Requirements
+
+### Requirement: Schedules and platform rates are created by operations through the API
 
 The system SHALL let a user with the `operations` role create a rebate schedule with its brackets (`POST /margin/rebate-schedules`) and set a platform rate at any level (`POST /margin/platform-rates`), SHALL take every amount as a decimal string and refuse a JSON number, SHALL answer a schedule that overlaps another of its key with 409 `schedule_overlaps_existing` and a reference to something that does not exist with 422 `reference_not_found`, and SHALL stamp each platform rate with its author and time.
 
@@ -24,6 +30,6 @@ The system SHALL let a user with the `operations` role create a rebate schedule 
 - **WHEN** operations sets a platform rate
 - **THEN** the response is 201 and the row holds the author and the time
 
-#### Scenario: Only finance may create them
+#### Scenario: Only operations may create them
 - **WHEN** a user without `operations`, finance included, posts either
 - **THEN** the response is 403 and nothing is stored

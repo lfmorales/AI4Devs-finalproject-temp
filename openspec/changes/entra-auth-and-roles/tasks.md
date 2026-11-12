@@ -1,10 +1,12 @@
+> Reports go in `docs/reports/`, as in the previous deliveries. This differs from the rule in `openspec/config.yaml`, which asks for `specs/<change-name>/reports/`.
+
 ## 0. Setup: Create Feature Branch (MANDATORY - FIRST STEP)
 
 - [ ] 0.1 Create or switch to feature branch `feature/entra-auth-and-roles` and verify `git branch --show-current` reports it
 
 ## 1. Rules and Documentation First
 
-- [ ] 1.1 Update `CLAUDE.md` §6 and `docs/product-description.md` with the issuers, the `trading` role, operations as global control and the cost-figure rule, once the Open Questions of `design.md` are decided; verify with a read-through of both files against the specs of this change
+- [x] 1.1 Update `CLAUDE.md` (`docs/base-standards.md`: §3, §4, §6) and `docs/product-description.md` with the issuers, the `trading` role, operations as global control, finance as reviewer and the cost-figure rule; verify with a read-through of both files against the specs of this change
 
 ## 2. Configuration
 
@@ -35,8 +37,8 @@
 
 ## 8. Authentication Service
 
-- [ ] 8.1 Write failing tests for lookup by pair, fall back to email for an unlinked user, link on first access, a linked user found with a changed email, a conflicting link rejected with 403 and unchanged, an unregistered identity rejected with 403 `user_not_registered` and no user created
-- [ ] 8.2 Write failing tests that Entra roles come from the token limited to known names, that stored roles are ignored for Entra and used for Cognito, that no known role gives 403 everywhere, and that two roles compose
+- [ ] 8.1 Write failing tests for lookup by pair, fall back to email for an unlinked user, link on first access, a linked user found with a changed email, a conflicting link rejected with 403 and unchanged, an unregistered identity rejected with 403 `user_not_registered` and no user created, and an unlinked identity whose token carries no email rejected with 403 `user_not_registered` and nothing stored
+- [ ] 8.2 Write failing tests that the roles of a request are the stored ones for both issuers, that an Entra token whose `roles` claim differs from the database is authorised with the database roles, that a user without roles gets 403 on every protected route, and that two stored roles compose
 - [ ] 8.3 Implement 8.1 and 8.2 in the service and verify all pass without a database
 
 ## 9. Role `trading`
@@ -68,7 +70,7 @@
 
 ## 14. Run Unit Tests and Verify Database State (MANDATORY)
 
-- [ ] 14.1 Capture the database state, run the targeted tests and then the full backend and frontend suites, re-check the state and restore any change, and create the report at `specs/entra-auth-and-roles/reports/YYYY-MM-DD-step-14-unit-test-and-db-verification.md`
+- [ ] 14.1 Capture the database state, run the targeted tests and then the full backend and frontend suites, re-check the state and restore any change, and create the report at `docs/reports/YYYY-MM-DD-step-14-unit-test-and-db-verification.md`
 
 ## 15. Manual Endpoint Testing with curl (MANDATORY - AGENT MUST EXECUTE)
 
@@ -80,7 +82,7 @@
 
 ## 17. Manual Entra Sign-in Check
 
-- [ ] 17.1 Sign in once with the real Entra tenant, confirm the roles of the token are applied, and record the result in a report of the change (no identifier in the report)
+- [ ] 17.1 Sign in once with the real Entra tenant, confirm the user is authorised with the roles stored in the database, and record the result in a report under `docs/reports/` (no identifier in the report)
 
 ## 18. Update Technical Documentation (MANDATORY)
 

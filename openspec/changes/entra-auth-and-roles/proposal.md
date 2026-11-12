@@ -1,6 +1,6 @@
 ## Why
 
-AdOps360 moves to Microsoft Entra ID as its identity provider, with every user in the company tenant. Cognito stays for development and the end-to-end tests, so the backend must accept tokens from more than one issuer. The business also needs a `trading` profile, and operations becomes the global control profile that sees the margin and maintains the rebate and platform-rate data.
+AdOps360 moves to Microsoft Entra ID as its identity provider, with every user in the company tenant. Cognito stays for development and the end-to-end tests, so the backend must accept tokens from more than one issuer. The business also needs a `trading` profile, and operations becomes the global control profile that sees the margin and maintains the rebate and platform-rate data, and finance becomes the reviewer.
 
 **Phase 1** per `docs/product-description.md` §6: this is cross-cutting access work on top of the phase 1 views, and it adds no domain entity of the economic model.
 
@@ -9,10 +9,10 @@ AdOps360 moves to Microsoft Entra ID as its identity provider, with every user i
 - **Configurable token issuers.** A list of allowed issuers, each with issuer, audience, key address, the claim that identifies the user and, optionally, a mandatory scope. The current Cognito variables are kept. A token whose `iss` is not on the list is rejected.
 - **Entra access tokens** (version 2) must carry the scope `access_as_user`; identity tokens are rejected. Cognito keeps its identity-token, verified-email and client-audience checks.
 - **Stable user identity.** A user is linked to the pair (issuer, subject): `oid` for Entra, `sub` for Cognito. The first access links a registered user with no link by email; a conflicting link is rejected. Authentication never creates users.
-- **Roles by issuer.** For Entra the roles come from the `roles` claim of the token; for Cognito from `user_roles`, as today. The two sources are never combined.
+- **Roles come only from the database**, for every issuer. The Entra token only authenticates; its `roles` claim is ignored. A first access with no email in the token and no stored link is rejected as not registered.
 - **New role `trading`.**
 - **Active switch.** An endpoint for operations, and an option of the administration script, set a user active or inactive; it takes effect on the next request.
-- **Access matrix** applied to the existing routes. **BREAKING**: finance loses `POST /margin/rebate-schedules` and `POST /margin/platform-rates`, and operations gains the margin reads and the month closing. Cost, revenue, rebate and margin figures are returned only to operations and finance.
+- **Access matrix** applied to the existing routes. **BREAKING**: finance loses `POST /margin/rebate-schedules` and `POST /margin/platform-rates`, and operations gains the margin reads and the month closing. Cost, revenue, rebate and margin figures are returned only to operations and finance; the daily status carries none of them for any role.
 - **Frontend** chooses the provider by environment variable: Entra sends the access token and requests `api://<client>/access_as_user`; Cognito keeps sending the identity token.
 - Tenant and application identifiers live only in `.env`; documents and tests use placeholders.
 
