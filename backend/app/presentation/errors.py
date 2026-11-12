@@ -41,15 +41,18 @@ from app.domain.exceptions import (
     UnsupportedCurrencyError,
     DuplicateCampaignNameError,
     DuplicateOrderReferenceError,
+    CannotDeactivateSelfError,
     IdentityConflictError,
     IdentityProviderUnavailableError,
     InactiveUserError,
     InvalidIdentityTokenError,
+    LastActiveOperationsUserError,
     MissingRoleError,
     PreviousMonthOpenError,
     RebateRuleError,
     SystemPlatformRateMissingError,
     UnregisteredUserError,
+    UserNotFoundError,
 )
 from app.presentation.schemas.errors import ErrorResponse
 
@@ -74,6 +77,11 @@ _ERROR_MAPPINGS: dict[type[DomainError], _ErrorMapping] = {
     InactiveUserError: _ErrorMapping(403, "user_inactive", "User is inactive"),
     IdentityConflictError: _ErrorMapping(403, "identity_link_conflict", "Identity is linked to another account"),
     MissingRoleError: _ErrorMapping(403, "missing_role", "User lacks the required role"),
+    UserNotFoundError: _ErrorMapping(404, "user_not_found", "The user does not exist"),
+    CannotDeactivateSelfError: _ErrorMapping(409, "cannot_deactivate_self", "You cannot deactivate your own account"),
+    LastActiveOperationsUserError: _ErrorMapping(
+        409, "last_active_operations_user", "The last active operations user cannot be deactivated"
+    ),
     DuplicateCampaignNameError: _ErrorMapping(
         409, "duplicate_campaign_name", "A campaign with this name already exists"
     ),
@@ -193,20 +201,25 @@ async def _rebate_rule_handler(request: Request, error: Exception) -> JSONRespon
     return JSONResponse(status_code=status_code, content=ErrorResponse(code=error.code, message=message).model_dump())
 
 
+# Routes whose validation and routing errors answer {"code","message"}. For /users it also keeps the body the caller
+# sent, which holds an email, out of the response: FastAPI's default 422 would echo it.
+_FIXED_BODY_ROUTE_PREFIXES = ("/margin", "/users")
+
+
 def _is_margin_route(request: Request) -> bool:
-    """Whether the request is for a route under /margin, whatever prefix a proxy adds in front."""
+    """Whether the request is for a route under /margin or /users, whatever prefix a proxy adds in front."""
     path = request.scope["path"]
     root_path = request.scope.get("root_path", "")
     if root_path and path.startswith(root_path):
         path = path[len(root_path):]
-    return path == "/margin" or path.startswith("/margin/")
+    return any(path == prefix or path.startswith(prefix + "/") for prefix in _FIXED_BODY_ROUTE_PREFIXES)
 
 
 _HTTP_ERROR_CODES = {404: "not_found", 405: "method_not_allowed"}
 
 
 async def _validation_error_handler(request: Request, error: Exception) -> JSONResponse:
-    """Margin routes answer {"code","message"}; the older routes keep FastAPI's {"detail": ...}."""
+    """Margin and user routes answer {"code","message"}; the older routes keep FastAPI's {"detail": ...}."""
     assert isinstance(error, RequestValidationError)
     if not _is_margin_route(request):
         return await request_validation_exception_handler(request, error)

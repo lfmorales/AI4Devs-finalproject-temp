@@ -46,8 +46,28 @@ class InMemoryUserRepository(UserRepository):
                 return user
         return None
 
+    def set_active(self, user_id: int, active: bool, *, keep_one_active_with_role: RoleName | None = None) -> bool:
+        user = self._find_by_id(user_id)
+        if user is None:
+            return False
+        if not active and keep_one_active_with_role is not None:
+            others = [
+                other for other in self._users_by_email.values()
+                if other.id != user_id and other.is_active and keep_one_active_with_role in other.roles
+            ]
+            if not others:
+                return False
+        self.add(replace(user, is_active=active))
+        return True
+
+    def count_active_with_role(self, role: RoleName) -> int:
+        return sum(1 for user in self._users_by_email.values() if user.is_active and role in user.roles)
+
+    def _find_by_id(self, user_id: int) -> User | None:
+        return next((candidate for candidate in self._users_by_email.values() if candidate.id == user_id), None)
+
     def link_identity(self, user_id: int, issuer: str, subject: str) -> bool:
-        user = next((candidate for candidate in self._users_by_email.values() if candidate.id == user_id), None)
+        user = self._find_by_id(user_id)
         if user is None or user.identity_issuer is not None:
             return False
         if self.get_by_identity(issuer, subject) is not None:

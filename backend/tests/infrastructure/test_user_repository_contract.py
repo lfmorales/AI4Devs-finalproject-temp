@@ -169,3 +169,68 @@ def test_the_repository_stays_usable_after_a_conflict(harness: Harness) -> None:
 
     assert harness.repository.link_identity(second_id, ISSUER, "sujeto-libre") is True
     assert harness.repository.get_by_identity(ISSUER, "sujeto-libre") is not None
+
+
+# --- The active state ---
+
+
+def test_set_active_deactivates_and_reactivates_a_user(harness: Harness) -> None:
+    user_id = harness.add_user("ops@example.com")
+
+    assert harness.repository.set_active(user_id, False) is True
+    deactivated = harness.repository.get_by_email("ops@example.com")
+    assert deactivated is not None and deactivated.is_active is False
+
+    assert harness.repository.set_active(user_id, True) is True
+    reactivated = harness.repository.get_by_email("ops@example.com")
+    assert reactivated is not None and reactivated.is_active is True
+
+
+def test_set_active_with_the_state_the_user_already_has_still_reports_success(harness: Harness) -> None:
+    user_id = harness.add_user("ops@example.com")
+
+    assert harness.repository.set_active(user_id, True) is True
+
+
+def test_set_active_reports_false_for_an_id_that_does_not_exist(harness: Harness) -> None:
+    assert harness.repository.set_active(99999, False) is False
+
+
+def test_count_active_with_role_counts_only_active_holders_of_that_role(harness: Harness) -> None:
+    harness.add_user("ops1@example.com", roles=[RoleName.OPERATIONS])
+    second = harness.add_user("ops2@example.com", roles=[RoleName.OPERATIONS, RoleName.FINANCE])
+    harness.add_user("fin@example.com", roles=[RoleName.FINANCE])
+    before = harness.repository.count_active_with_role(RoleName.OPERATIONS)
+
+    harness.repository.set_active(second, False)
+
+    assert harness.repository.count_active_with_role(RoleName.OPERATIONS) == before - 1
+
+
+def test_the_guard_refuses_to_deactivate_the_last_active_holder_of_the_role(harness: Harness) -> None:
+    only = harness.add_user("only@example.com", roles=[RoleName.TRADING])
+    assert harness.repository.count_active_with_role(RoleName.TRADING) == 1
+
+    changed = harness.repository.set_active(only, False, keep_one_active_with_role=RoleName.TRADING)
+
+    assert changed is False
+    user = harness.repository.get_by_email("only@example.com")
+    assert user is not None and user.is_active is True
+
+
+def test_the_guard_allows_the_deactivation_while_another_holder_stays_active(harness: Harness) -> None:
+    first = harness.add_user("first@example.com", roles=[RoleName.TRADING])
+    harness.add_user("second@example.com", roles=[RoleName.TRADING])
+
+    assert harness.repository.set_active(first, False, keep_one_active_with_role=RoleName.TRADING) is True
+    # Now the second one is the last: it cannot go.
+    second = harness.repository.get_by_email("second@example.com")
+    assert second is not None
+    assert harness.repository.set_active(second.id, False, keep_one_active_with_role=RoleName.TRADING) is False
+
+
+def test_the_guard_never_blocks_a_reactivation(harness: Harness) -> None:
+    user_id = harness.add_user("only@example.com", roles=[RoleName.TRADING])
+    harness.repository.set_active(user_id, False)
+
+    assert harness.repository.set_active(user_id, True, keep_one_active_with_role=RoleName.TRADING) is True

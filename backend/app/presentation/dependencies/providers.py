@@ -24,6 +24,7 @@ from app.application.services.line_mapping_removal_service import LineMappingRem
 from app.application.services.margin_closing_service import MarginClosingService
 from app.application.services.margin_masters_service import MarginMastersService
 from app.application.services.margin_query_service import MarginQueryService
+from app.application.services.user_activation_service import UserActivationService
 from app.config import get_settings
 from app.domain.exceptions import DspNotConfiguredError
 from app.domain.services.local_calendar import local_today, utc_now
@@ -91,6 +92,12 @@ def get_authentication_service(
         token_verifier=_token_verifier(),
         user_repository=SqlAlchemyUserRepository(session),
     )
+
+
+def get_user_activation_service(
+    session: Annotated[Session, Depends(get_db_session)],
+) -> UserActivationService:
+    return UserActivationService(SqlAlchemyUserRepository(session))
 
 
 @lru_cache

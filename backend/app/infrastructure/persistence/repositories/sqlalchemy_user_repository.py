@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.domain.exceptions import IdentityConflictError
 from app.domain.models.user import RoleName, User
 from app.domain.repositories.user_repository import UserRepository
-from app.infrastructure.persistence.models.identity import UserRecord
+from app.infrastructure.persistence.models.identity import RoleRecord, UserRecord, UserRoleRecord
 
 IDENTITY_PAIR_CONSTRAINT = "uq_users_identity_issuer_subject"
 
@@ -47,6 +47,37 @@ class SqlAlchemyUserRepository(UserRepository):
                 raise IdentityConflictError("Identity already linked to another user") from None
             raise
         return stored
+
+    def set_active(self, user_id: int, active: bool, *, keep_one_active_with_role: RoleName | None = None) -> bool:
+        if not active and keep_one_active_with_role is not None:
+            # Locks every active holder of the role, in id order, for the rest of this transaction. A simultaneous
+            # deactivation waits here, and when it resumes it sees the state this one committed, so the last
+            # holder cannot be removed twice over. (A plain EXISTS in the UPDATE would read the same old snapshot.)
+            holders = self._session.scalars(
+                select(UserRecord.id)
+                .join(UserRoleRecord, UserRoleRecord.user_id == UserRecord.id)
+                .join(RoleRecord, RoleRecord.id == UserRoleRecord.role_id)
+                .where(RoleRecord.name == keep_one_active_with_role.value, UserRecord.is_active.is_(True))
+                .order_by(UserRecord.id)
+                .with_for_update(of=UserRecord)
+            ).all()
+            if not any(holder != user_id for holder in holders):
+                self._session.rollback()
+                return False
+        result = self._session.execute(update(UserRecord).where(UserRecord.id == user_id).values(is_active=active))
+        self._session.commit()
+        return bool(result.rowcount == 1)  # type: ignore[attr-defined]
+
+    def count_active_with_role(self, role: RoleName) -> int:
+        return int(
+            self._session.scalar(
+                select(func.count(UserRecord.id))
+                .join(UserRoleRecord, UserRoleRecord.user_id == UserRecord.id)
+                .join(RoleRecord, RoleRecord.id == UserRoleRecord.role_id)
+                .where(RoleRecord.name == role.value, UserRecord.is_active.is_(True))
+            )
+            or 0
+        )
 
     @staticmethod
     def _to_user(record: UserRecord | None) -> User | None:

@@ -55,8 +55,8 @@
 
 ## 11. Active Switch
 
-- [ ] 11.1 Write failing tests for the endpoint: operations sets a user inactive and active, an inactive user's next request with a still valid token is 403 `user_inactive`, and a user WITHOUT `operations` is forbidden
-- [ ] 11.2 Implement the endpoint and the `grant_roles` option, and verify the tests pass
+- [x] 11.1 Write failing tests for the endpoint: operations sets a user inactive and active, an inactive user's next request with a still valid token is 403 `user_inactive`, and a user WITHOUT `operations` is forbidden
+- [x] 11.2 Implement the endpoint and the `set_user_active.py` script, and verify the tests pass
 
 ## 12. Frontend and E2E
 

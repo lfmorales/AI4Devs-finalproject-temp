@@ -26,7 +26,7 @@ Constraints that shape the approach: authentication stays behind the `IdentityTo
 
 **D4. Link on first access.** The authentication service looks up by pair, then by email for a user with no link, and stores the pair in the same request. A user already linked to another pair is rejected with 403 and left unchanged. Nothing creates users.
 
-**D5. Active switch.** `is_active` is kept. A new endpoint for operations changes it, and `scripts/grant_roles.py` gets an option for it. The check on every request is what makes it immediate.
+**D5. Active switch.** `is_active` is kept. A new endpoint for operations, `POST /users/activation`, changes it, and a new script, `scripts/set_user_active.py`, does the same for whoever administers the database. The endpoint refuses to deactivate the caller and the last active operations user, deciding the second under row locks in the transaction of the change. The check on every request is what makes it immediate.
 
 **D6. Token the API receives.** With Entra the frontend sends the access token and requests `api://<client>/access_as_user` plus `openid profile email`; with Cognito it sends the identity token. The provider is chosen by an environment variable, and the `cognito-config.ts` logic is split by provider.
 
@@ -44,6 +44,7 @@ Constraints that shape the approach: authentication stays behind the `IdentityTo
 - [An unknown kid makes PyJWKClient download the key set again on every request; someone without a session can force downloads] → before deploying, limit how often the keys are reloaded and shorten the download timeout.
 - The first-access link trusts the email claim of the Entra token, which Entra does not verify. In a single-tenant deployment with pre-registered users and an issuer pinned to the company tenant, the exposure is limited to those who can edit mail attributes, and it applies only to the first access: once linked, only the subject counts.
 - A user has a single (issuer, subject) link. A user linked to Cognito is rejected with identity_link_conflict when presenting an Entra token, and vice versa. In production only Entra is used. In development, reset-data.sh recreates the database; to unlink by hand, set both columns to NULL. If both issuers must work against one database, move to a table of identities.
+- Activating and deactivating users leaves no audit trail yet; record who changed what and when before production.
 
 ## Entra Configuration Requirement
 

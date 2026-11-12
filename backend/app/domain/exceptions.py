@@ -18,6 +18,18 @@ class IdentityConflictError(DomainError):
     """The (issuer, subject) pair already belongs to another user, so it cannot be linked again."""
 
 
+class UserNotFoundError(DomainError):
+    """No user has the email an operation was asked to act on."""
+
+
+class CannotDeactivateSelfError(DomainError):
+    """A user tried to deactivate their own account."""
+
+
+class LastActiveOperationsUserError(DomainError):
+    """Deactivating this user would leave the system without an active operations user."""
+
+
 class InactiveUserError(DomainError):
     """The local user exists but has been deactivated."""
 
