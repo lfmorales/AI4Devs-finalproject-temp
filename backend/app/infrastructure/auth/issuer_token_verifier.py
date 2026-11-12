@@ -12,6 +12,8 @@ from app.domain.services.identity_token_verifier import IdentityTokenVerifier
 # Only an asymmetric algorithm: never "none" and never a shared-secret one.
 _ALGORITHMS = ["RS256"]
 _COMMON_REQUIRED_CLAIMS = ["exp", "iat", "iss", "aud"]
+# Tolerance for clock drift between this host and the issuer (Docker on macOS drifts), for iat, nbf and exp.
+_CLOCK_LEEWAY_SECONDS = 30
 
 
 class SigningKeyProvider(Protocol):
@@ -57,6 +59,11 @@ class IssuerTokenVerifier(IdentityTokenVerifier):
     """Verifies the bearer tokens of ONE configured issuer against that issuer's keys."""
 
     def __init__(self, issuer: TokenIssuer, jwks_client: SigningKeyProvider | None = None) -> None:
+        if issuer.kind not in _RULES_BY_KIND:
+            raise ValueError(f"Unknown token issuer kind: {issuer.kind}")
+        # Without a mandatory scope an Entra identity token, which has no scp claim, would pass.
+        if issuer.kind == "entra" and issuer.required_scope is None:
+            raise ValueError("An Entra issuer needs a required scope")
         self._issuer = issuer
         # PyJWKClient caches the key set and refetches it when an unknown kid appears.
         self._jwks_client = jwks_client or PyJWKClient(issuer.jwks_url)
@@ -76,6 +83,7 @@ class IssuerTokenVerifier(IdentityTokenVerifier):
                 algorithms=_ALGORITHMS,
                 audience=self._issuer.audience,
                 issuer=self._issuer.issuer,
+                leeway=_CLOCK_LEEWAY_SECONDS,
                 options={"require": [*_COMMON_REQUIRED_CLAIMS, self._issuer.user_claim]},
             )
         except jwt.PyJWTError as error:

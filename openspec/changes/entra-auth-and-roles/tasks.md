@@ -88,3 +88,7 @@
 
 - [ ] 18.1 Update `docs/deploy.md` and `.env.example` documentation for the issuer variables and the Entra application settings, with placeholders only
 - [ ] 18.2 Verify `openspec validate entra-auth-and-roles` passes before archiving
+
+## 19. Key Download Hardening
+
+- [ ] 19.1 Limitar la recarga de claves y su tiempo de espera, con test

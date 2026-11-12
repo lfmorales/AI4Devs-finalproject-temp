@@ -201,3 +201,45 @@ def test_an_entra_roles_claim_is_ignored() -> None:
 
     assert not hasattr(identity, "roles")
     assert identity.subject == "identificador-de-prueba"
+
+
+# --- Clock skew tolerance ---
+
+
+@pytest.mark.parametrize("issuer", ISSUERS)
+@pytest.mark.parametrize(
+    ("claim", "offset_seconds", "accepted"),
+    [
+        pytest.param("iat", 10, True, id="issued-10-seconds-in-the-future"),
+        pytest.param("iat", 300, False, id="issued-5-minutes-in-the-future"),
+        pytest.param("exp", -10, True, id="expired-10-seconds-ago"),
+        pytest.param("exp", -300, False, id="expired-5-minutes-ago"),
+    ],
+)
+def test_clock_skew_is_tolerated_only_within_a_few_seconds(
+    issuer: TokenIssuer, claim: str, offset_seconds: int, accepted: bool
+) -> None:
+    token = _token(issuer, {claim: int(time.time()) + offset_seconds})
+
+    if accepted:
+        assert _verifier(issuer).verify(token).subject == "identificador-de-prueba"
+    else:
+        with pytest.raises(InvalidIdentityTokenError):
+            _verifier(issuer).verify(token)
+
+
+# --- Construction errors ---
+
+
+def test_an_entra_issuer_without_a_required_scope_is_refused_at_construction() -> None:
+    issuer_without_scope = TokenIssuer(**{**ENTRA.__dict__, "required_scope": None})
+
+    with pytest.raises(ValueError, match="scope"):
+        _verifier(issuer_without_scope)
+
+
+def test_an_unknown_issuer_kind_is_refused_at_construction() -> None:
+    unknown_kind = TokenIssuer(**{**COGNITO.__dict__, "kind": "otro"})  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="otro"):
+        _verifier(unknown_kind)
