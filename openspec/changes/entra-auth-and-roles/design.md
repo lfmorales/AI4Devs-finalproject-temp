@@ -42,6 +42,8 @@ Constraints that shape the approach: authentication stays behind the `IdentityTo
 - [Finance loses the writes of schedules and platform rates] → breaking by intent; the existing finance tests change with the matrix.
 - [An Entra access token does not carry `email` by default] → see Entra configuration requirement below.
 - [An unknown kid makes PyJWKClient download the key set again on every request; someone without a session can force downloads] → before deploying, limit how often the keys are reloaded and shorten the download timeout.
+- The first-access link trusts the email claim of the Entra token, which Entra does not verify. In a single-tenant deployment with pre-registered users and an issuer pinned to the company tenant, the exposure is limited to those who can edit mail attributes, and it applies only to the first access: once linked, only the subject counts.
+- A user has a single (issuer, subject) link. A user linked to Cognito is rejected with identity_link_conflict when presenting an Entra token, and vice versa. In production only Entra is used. In development, reset-data.sh recreates the database; to unlink by hand, set both columns to NULL. If both issuers must work against one database, move to a table of identities.
 
 ## Entra Configuration Requirement
 
