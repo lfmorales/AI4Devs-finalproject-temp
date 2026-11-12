@@ -1,4 +1,4 @@
-"""POST /margin/closings: freezes the rates of the flights that ended in a month; finance only."""
+"""POST /margin/closings: freezes the rates of the flights that ended in a month; operations and finance only."""
 
 from datetime import date
 
@@ -102,22 +102,37 @@ def test_the_counts_are_integers_not_floats(finance_client, test_db_session):
     assert all(type(body[key]) is int for key in ("year", "month", "closed", "already_closed"))
 
 
-@pytest.mark.parametrize("roles", [("operations",), ("business",), ("operations", "business"), ()])
-def test_a_user_without_finance_is_forbidden_and_nothing_is_written(client_for_roles, test_db_session, roles):
+@pytest.mark.parametrize(
+    ("role", "status"), [("operations", 200), ("finance", 200), ("business", 403), ("trading", 403)]
+)
+def test_each_role_gets_the_outcome_of_the_access_matrix(client_for_roles, test_db_session, role, status):
     _august_with_three_lines(test_db_session)
-    client = client_for_roles(*roles)
+    client = client_for_roles(role)
     client.app.dependency_overrides[providers.get_today] = lambda: D
 
     response = _close(client)
 
-    assert response.status_code == 403
-    assert set(response.json()) == {"code", "message"}
+    assert response.status_code == status
+    if status == 403:
+        assert set(response.json()) == {"code", "message"}
+        assert _count(test_db_session) == 0
+    else:
+        assert _count(test_db_session) == 3
+
+
+@pytest.mark.parametrize("roles", [(), ("business", "trading")])
+def test_a_user_without_operations_or_finance_is_forbidden_and_nothing_is_written(client_for_roles, test_db_session, roles):
+    _august_with_three_lines(test_db_session)
+    client = client_for_roles(*roles)
+    client.app.dependency_overrides[providers.get_today] = lambda: D
+
+    assert _close(client).status_code == 403
     assert _count(test_db_session) == 0
 
 
-def test_a_user_holding_finance_among_other_roles_may_close(client_for_roles, test_db_session):
+def test_a_user_holding_an_accepted_role_among_others_may_close(client_for_roles, test_db_session):
     _august_with_three_lines(test_db_session)
-    client = client_for_roles("operations", "finance")
+    client = client_for_roles("trading", "finance")
     client.app.dependency_overrides[providers.get_today] = lambda: D
 
     assert _close(client).status_code == 200

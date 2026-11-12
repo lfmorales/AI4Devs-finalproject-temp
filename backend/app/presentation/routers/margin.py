@@ -31,7 +31,7 @@ router = APIRouter(prefix="/margin", tags=["margin"])
 @router.post("/closings", response_model=ClosingResponse)
 def close_month(
     body: ClosingRequest,
-    user: Annotated[User, Depends(require_roles(RoleName.FINANCE))],
+    user: Annotated[User, Depends(require_roles(RoleName.OPERATIONS, RoleName.FINANCE))],
     service: Annotated[MarginClosingService, Depends(get_margin_closing_service)],
 ) -> ClosingResponse:
     """Freeze the rates of the flights that ended in a month. Idempotent. Requires: finance role."""
@@ -41,7 +41,7 @@ def close_month(
 
 @router.get("", response_model=MarginResponse)
 def get_margin(
-    _user: Annotated[User, Depends(require_roles(RoleName.FINANCE))],
+    _user: Annotated[User, Depends(require_roles(RoleName.OPERATIONS, RoleName.FINANCE))],
     service: Annotated[MarginQueryService, Depends(get_margin_query_service)],
     year: Annotated[int | None, Query(ge=2000, le=2100)] = None,
     month: Annotated[int | None, Query(ge=1, le=12)] = None,
@@ -54,7 +54,7 @@ def get_margin(
 @router.post("/rebate-schedules", response_model=RebateScheduleResponse, status_code=status.HTTP_201_CREATED)
 def create_rebate_schedule(
     body: RebateScheduleRequest,
-    _user: Annotated[User, Depends(require_roles(RoleName.FINANCE))],
+    _user: Annotated[User, Depends(require_roles(RoleName.OPERATIONS))],
     service: Annotated[MarginMastersService, Depends(get_margin_masters_service)],
 ) -> RebateScheduleResponse:
     """Create a rebate schedule with its brackets. Requires: finance role."""
@@ -73,7 +73,7 @@ def create_rebate_schedule(
 @router.post("/platform-rates", response_model=PlatformRateResponse, status_code=status.HTTP_201_CREATED)
 def set_platform_rate(
     body: PlatformRateRequest,
-    user: Annotated[User, Depends(require_roles(RoleName.FINANCE))],
+    user: Annotated[User, Depends(require_roles(RoleName.OPERATIONS))],
     service: Annotated[MarginMastersService, Depends(get_margin_masters_service)],
 ) -> PlatformRateResponse:
     """Set a platform rate at a level; the latest setting of a level and key is the one in force. Requires: finance."""

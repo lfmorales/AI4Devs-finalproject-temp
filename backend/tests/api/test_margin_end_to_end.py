@@ -11,8 +11,8 @@ from tests.fixtures.margin_data import group_of, set_volume
 
 
 @pytest.fixture
-def finance(client_for_roles):
-    return client_for_roles("finance")
+def operations(client_for_roles):
+    return client_for_roles("operations")
 
 
 def _flat_schedule(client, group_id: int, rate: str) -> None:
@@ -28,7 +28,7 @@ def _only_flight(body: dict) -> dict:
     return flight
 
 
-def test_a_closed_month_gives_the_margin_of_the_specs_worked_example(finance, test_db_session):
+def test_a_closed_month_gives_the_margin_of_the_specs_worked_example(operations, test_db_session):
     """726,202 impressions at 5.00 EUR; 25 % rebate; 700,000 delivered at 1.00 EUR per thousand; media cost 1,200.00.
 
     The media cost is a placeholder: real cost only exists in Adform.
@@ -36,11 +36,11 @@ def test_a_closed_month_gives_the_margin_of_the_specs_worked_example(finance, te
     line_id = insert_campaign_line(test_db_session)
     set_volume(test_db_session, line_id, 726_202, "5.00")
     insert_delivery(test_db_session, line_id, date(2026, 8, 10), 700_000, insert_ingestion_batch(test_db_session), Decimal("1200.00"))
-    _flat_schedule(finance, group_of(test_db_session, line_id), "0.25")
-    finance.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
+    _flat_schedule(operations, group_of(test_db_session, line_id), "0.25")
+    operations.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
 
-    assert finance.post("/margin/closings", json={"year": 2026, "month": 8}).json()["closed"] == 1
-    body = finance.get("/margin").json()
+    assert operations.post("/margin/closings", json={"year": 2026, "month": 8}).json()["closed"] == 1
+    body = operations.get("/margin").json()
     flight = _only_flight(body)
 
     assert flight["state"] == "closed" and flight["provisional"] is False
@@ -51,20 +51,20 @@ def test_a_closed_month_gives_the_margin_of_the_specs_worked_example(finance, te
             "3631.01", "1200.00", "907.75", "700.00", "823.26")
 
 
-def test_the_same_figures_are_read_before_the_month_is_closed(finance, test_db_session):
+def test_the_same_figures_are_read_before_the_month_is_closed(operations, test_db_session):
     line_id = insert_campaign_line(test_db_session)
     set_volume(test_db_session, line_id, 726_202, "5.00")
     insert_delivery(test_db_session, line_id, date(2026, 8, 10), 700_000, insert_ingestion_batch(test_db_session), Decimal("1200.00"))
-    _flat_schedule(finance, group_of(test_db_session, line_id), "0.25")
-    finance.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
+    _flat_schedule(operations, group_of(test_db_session, line_id), "0.25")
+    operations.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
 
-    flight = _only_flight(finance.get("/margin").json())
+    flight = _only_flight(operations.get("/margin").json())
 
     assert flight["state"] == "pending_close" and flight["provisional"] is True
     assert flight["margin"] == "823.26"
 
 
-def test_a_running_flight_ten_days_into_thirty_is_pro_rated_and_provisional(finance, test_db_session):
+def test_a_running_flight_ten_days_into_thirty_is_pro_rated_and_provisional(operations, test_db_session):
     """300,000 impressions at 5.00 EUR over 1-30 September; a flat 20 % rebate; 90,000 delivered, media cost 150.00.
 
     On the 10th (as_of): revenue 1,500.00 x 10 / 30 = 500.00; rebate 300.00 x 10 / 30 = 100.00; platform
@@ -74,10 +74,10 @@ def test_a_running_flight_ten_days_into_thirty_is_pro_rated_and_provisional(fina
     replace_flights(test_db_session, line_id, [(date(2026, 9, 1), date(2026, 9, 30))])
     set_volume(test_db_session, line_id, 300_000, "5.00")
     insert_delivery(test_db_session, line_id, date(2026, 9, 5), 90_000, insert_ingestion_batch(test_db_session), Decimal("150.00"))
-    _flat_schedule(finance, group_of(test_db_session, line_id), "0.20")
-    finance.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 11)
+    _flat_schedule(operations, group_of(test_db_session, line_id), "0.20")
+    operations.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 11)
 
-    body = finance.get("/margin").json()
+    body = operations.get("/margin").json()
     flight = _only_flight(body)
 
     assert flight["state"] == "running" and flight["provisional"] is True
@@ -86,15 +86,15 @@ def test_a_running_flight_ten_days_into_thirty_is_pro_rated_and_provisional(fina
     assert body["totals"]["provisional"] is True
 
 
-def test_the_margin_percentage_is_present_at_every_level_as_a_two_decimal_string(finance, test_db_session):
+def test_the_margin_percentage_is_present_at_every_level_as_a_two_decimal_string(operations, test_db_session):
     line_id = insert_campaign_line(test_db_session)
     set_volume(test_db_session, line_id, 726_202, "5.00")
     insert_delivery(test_db_session, line_id, date(2026, 8, 10), 700_000, insert_ingestion_batch(test_db_session), Decimal("1200.00"))
-    _flat_schedule(finance, group_of(test_db_session, line_id), "0.25")
-    finance.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
-    finance.post("/margin/closings", json={"year": 2026, "month": 8})
+    _flat_schedule(operations, group_of(test_db_session, line_id), "0.25")
+    operations.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
+    operations.post("/margin/closings", json={"year": 2026, "month": 8})
 
-    body = finance.get("/margin").json()
+    body = operations.get("/margin").json()
 
     assert _only_flight(body)["margin_pct"] == "22.67"  # 823.26 / 3,631.01
     assert body["campaigns"][0]["lines"][0]["totals"]["margin_pct"] == "22.67"

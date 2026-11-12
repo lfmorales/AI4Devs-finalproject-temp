@@ -50,7 +50,7 @@
 
 - [ ] 10.1 Write failing tests rewriting `test_route_protection.py` around the matrix: margin routes accept operations and finance, schedule and platform-rate writes accept operations only, the delivery status accepts the four roles, and `trading` is forbidden on every other route
 - [ ] 10.2 Change `require_roles` in `margin.py`, `masters.py`, `campaigns.py` and `campaign_status.py` to the matrix and verify the tests of 10.1 pass
-- [ ] 10.3 Rewrite the negative cases of `test_margin_endpoint.py`, `test_margin_closings_endpoint.py` and `test_margin_masters_endpoints.py` so that a user WITHOUT the accepted roles is forbidden on `GET /margin`, `POST /margin/closings`, `POST /margin/rebate-schedules` and `POST /margin/platform-rates`, and that finance alone is forbidden on the two writes
+- [x] 10.3 Rewrite the negative cases of `test_margin_endpoint.py`, `test_margin_closings_endpoint.py` and `test_margin_masters_endpoints.py` so that a user WITHOUT the accepted roles is forbidden on `GET /margin`, `POST /margin/closings`, `POST /margin/rebate-schedules` and `POST /margin/platform-rates`, and that finance alone is forbidden on the two writes
 - [ ] 10.4 Write failing tests that the delivery status for a user with only `business` or only `trading` contains no cost, revenue, rebate or margin field, then verify the existing response satisfies them
 
 ## 11. Active Switch
@@ -93,3 +93,4 @@
 ## 19. Key Download Hardening
 
 - [ ] 19.1 Limit the key reload rate and the download timeout, with a test
+- [ ] 19.2 Insert all four roles from a migration, idempotently, so a fresh database does not depend on the seed script

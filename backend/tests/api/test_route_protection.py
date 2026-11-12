@@ -136,16 +136,31 @@ def test_the_margin_routes_are_the_four_of_this_change():
     }
 
 
-@pytest.mark.parametrize(("path", "route", "inherited", "method"), _margin_cases())
-def test_a_margin_route_accepts_finance_and_only_finance(path, route, inherited, method):
-    assert _accepted_roles(route, inherited) == frozenset({RoleName.FINANCE})
+MARGIN_MATRIX = {
+    ("/margin", "GET"): frozenset({RoleName.OPERATIONS, RoleName.FINANCE}),
+    ("/margin/closings", "POST"): frozenset({RoleName.OPERATIONS, RoleName.FINANCE}),
+    ("/margin/rebate-schedules", "POST"): frozenset({RoleName.OPERATIONS}),
+    ("/margin/platform-rates", "POST"): frozenset({RoleName.OPERATIONS}),
+}
+ALL_ROLES = (RoleName.OPERATIONS, RoleName.FINANCE, RoleName.BUSINESS, RoleName.TRADING)
 
 
 @pytest.mark.parametrize(("path", "route", "inherited", "method"), _margin_cases())
-@pytest.mark.parametrize("roles", [("operations",), ("business",), ("operations", "business"), ()])
-def test_a_user_without_finance_gets_no_margin_field_from_a_margin_route(client_for_roles, path, route, inherited, method, roles):
-    response = _call(client_for_roles(*roles), path, route, method)
+def test_a_margin_route_declares_exactly_the_roles_of_the_access_matrix(path, route, inherited, method):
+    assert _accepted_roles(route, inherited) == MARGIN_MATRIX[(path, method)]
 
-    assert response.status_code == 403
-    assert set(response.json()) == {"code", "message"}
-    assert not any(word in response.text.lower() for word in ("revenue", "rebate", "margin", "cost", "platform"))
+
+@pytest.mark.parametrize("role", ALL_ROLES, ids=lambda role: role.value)
+@pytest.mark.parametrize(("path", "route", "inherited", "method"), _margin_cases())
+def test_each_role_gets_the_outcome_of_the_access_matrix_on_a_margin_route(
+    client_for_roles, path, route, inherited, method, role
+):
+    response = _call(client_for_roles(role.value), path, route, method)
+
+    if role in MARGIN_MATRIX[(path, method)]:
+        # The guard lets the request through; what follows (here a 422 for the missing body) is not its business.
+        assert response.status_code not in (401, 403)
+    else:
+        assert response.status_code == 403
+        assert set(response.json()) == {"code", "message"}
+        assert not any(word in response.text.lower() for word in ("revenue", "rebate", "margin", "cost", "platform"))

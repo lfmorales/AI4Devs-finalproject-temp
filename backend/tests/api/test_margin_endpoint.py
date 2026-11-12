@@ -1,4 +1,4 @@
-"""GET /margin: campaigns, lines and flights with totals; closed, pending close, running; finance only."""
+"""GET /margin: campaigns, lines and flights with totals; closed, pending close, running; operations and finance only."""
 
 from datetime import date
 from decimal import Decimal
@@ -226,15 +226,27 @@ def test_an_invalid_filter_is_code_and_message_only(client_for_roles, test_db_se
     assert response.json()["code"] == "validation_error"
 
 
-@pytest.mark.parametrize("roles", [("operations",), ("business",), ("operations", "business"), ()])
-def test_a_user_without_finance_gets_403_and_no_margin_field(client_for_roles, test_db_session, roles):
+@pytest.mark.parametrize(
+    ("role", "status"), [("operations", 200), ("finance", 200), ("business", 403), ("trading", 403)]
+)
+def test_each_role_gets_the_outcome_of_the_access_matrix_and_the_forbidden_ones_see_no_margin_field(
+    client_for_roles, test_db_session, role, status
+):
     insert_campaign_line(test_db_session)
 
-    response = _client(client_for_roles, SEPTEMBER_FIRST, roles).get("/margin")
+    response = _client(client_for_roles, SEPTEMBER_FIRST, (role,)).get("/margin")
 
-    assert response.status_code == 403
-    assert set(response.json()) == {"code", "message"}
-    assert not any(word in response.text.lower() for word in ("revenue", "rebate", "margin", "cost"))
+    assert response.status_code == status
+    if status == 403:
+        assert set(response.json()) == {"code", "message"}
+        assert not any(word in response.text.lower() for word in ("revenue", "rebate", "margin", "cost"))
+
+
+@pytest.mark.parametrize("roles", [(), ("business", "trading")])
+def test_a_user_without_operations_or_finance_gets_403(client_for_roles, test_db_session, roles):
+    insert_campaign_line(test_db_session)
+
+    assert _client(client_for_roles, SEPTEMBER_FIRST, roles).get("/margin").status_code == 403
 
 
 def test_a_request_without_a_token_is_unauthenticated(client):
@@ -244,10 +256,10 @@ def test_a_request_without_a_token_is_unauthenticated(client):
     assert set(response.json()) == {"code", "message"}
 
 
-def test_a_user_holding_finance_among_other_roles_reads_the_margin(client_for_roles, test_db_session):
+def test_a_user_holding_an_accepted_role_among_others_reads_the_margin(client_for_roles, test_db_session):
     insert_campaign_line(test_db_session)
 
-    assert _client(client_for_roles, SEPTEMBER_FIRST, ("operations", "finance")).get("/margin").status_code == 200
+    assert _client(client_for_roles, SEPTEMBER_FIRST, ("trading", "operations")).get("/margin").status_code == 200
 
 
 def test_delivery_is_aggregated_in_the_database_and_no_delivery_row_reaches_the_application(client_for_roles, test_db_session):

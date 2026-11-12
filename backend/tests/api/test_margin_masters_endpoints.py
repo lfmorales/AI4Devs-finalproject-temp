@@ -1,4 +1,4 @@
-"""POST /margin/rebate-schedules and POST /margin/platform-rates: finance creates the rebate and rate data."""
+"""POST /margin/rebate-schedules and POST /margin/platform-rates: operations creates the rebate and rate data; finance cannot."""
 
 from datetime import date
 from decimal import Decimal
@@ -20,7 +20,7 @@ TABLE = [{"lower": "0", "upper": "100000", "rate": "0.15"}, {"lower": "100000", 
 def world(client_for_roles, test_db_session):
     line_id = insert_campaign_line(test_db_session)
     line = test_db_session.get(CampaignLineRecord, line_id)
-    client = client_for_roles("finance")
+    client = client_for_roles("operations")
     client.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
     return client, {
         "line_id": line_id, "group_id": group_of(test_db_session, line_id), "agency_id": agency_of(test_db_session, line_id),
@@ -161,7 +161,7 @@ def test_a_platform_rate_is_set_with_its_author_and_time(world, test_db_session)
 
     assert response.status_code == 201
     row = test_db_session.get(PlatformRateSettingRecord, response.json()["id"])
-    author = test_db_session.scalars(select(UserRecord).where(UserRecord.email == "roles_finance@example.com")).one()
+    author = test_db_session.scalars(select(UserRecord).where(UserRecord.email == "roles_operations@example.com")).one()
     assert (row.level, row.agency_id, row.rate_per_thousand, row.created_by) == ("agency", ids["agency_id"], Decimal("1.40"), author.id)
     assert row.created_at is not None
     assert response.json()["rate_per_thousand"] == "1.400000" and response.json()["created_by"] == author.id
@@ -228,17 +228,40 @@ BODIES = [
 
 
 @pytest.mark.parametrize(("path", "body"), BODIES)
-@pytest.mark.parametrize("roles", [("operations",), ("business",), ("operations", "business"), ()])
-def test_a_user_without_finance_is_forbidden_and_nothing_is_stored(client_for_roles, test_db_session, path, body, roles):
+@pytest.mark.parametrize(
+    ("role", "status"), [("operations", 201), ("finance", 403), ("business", 403), ("trading", 403)]
+)
+def test_each_role_gets_the_outcome_of_the_access_matrix_and_only_operations_stores(
+    client_for_roles, test_db_session, path, body, role, status
+):
     line_id = insert_campaign_line(test_db_session)
     ids = {"group_id": group_of(test_db_session, line_id)}
-    client = client_for_roles(*roles)
+    client = client_for_roles(role)
+    client.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
     before = (_schedules(test_db_session), test_db_session.scalar(select(func.count()).select_from(PlatformRateSettingRecord)))
 
     response = client.post(path, json=body(ids))
 
+    assert response.status_code == status
+    after = (_schedules(test_db_session), test_db_session.scalar(select(func.count()).select_from(PlatformRateSettingRecord)))
+    if status == 403:
+        assert set(response.json()) == {"code", "message"}
+        assert not any(word in response.text.lower() for word in ("revenue", "rebate", "margin", "cost", "platform"))
+        assert after == before
+    else:
+        assert after != before
+
+
+@pytest.mark.parametrize(("path", "body"), BODIES)
+@pytest.mark.parametrize("roles", [(), ("finance", "business", "trading")])
+def test_a_user_without_operations_is_forbidden_and_nothing_is_stored(client_for_roles, test_db_session, path, body, roles):
+    line_id = insert_campaign_line(test_db_session)
+    ids = {"group_id": group_of(test_db_session, line_id)}
+    before = (_schedules(test_db_session), test_db_session.scalar(select(func.count()).select_from(PlatformRateSettingRecord)))
+
+    response = client_for_roles(*roles).post(path, json=body(ids))
+
     assert response.status_code == 403
-    assert set(response.json()) == {"code", "message"}
     assert (_schedules(test_db_session), test_db_session.scalar(select(func.count()).select_from(PlatformRateSettingRecord))) == before
 
 
