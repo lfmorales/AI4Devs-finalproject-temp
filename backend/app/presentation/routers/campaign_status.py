@@ -13,8 +13,8 @@ router = APIRouter(prefix="/campaign-status", tags=["campaign-status"])
 
 @router.get("", response_model=list[CampaignStatusResponse])
 def list_campaign_status(
-    _user: Annotated[User, Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS))],
+    _user: Annotated[User, Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE, RoleName.TRADING))],
     service: Annotated[CampaignStatusService, Depends(get_campaign_status_service)],
 ) -> list[CampaignStatusResponse]:
-    """The daily status: one row per running flight of an active campaign. Requires: operations or business role."""
+    """The daily status: one row per running flight of an active campaign. Requires: operations, business, finance or trading role."""
     return [CampaignStatusResponse.from_row(row) for row in service.list_status()]

@@ -149,16 +149,16 @@ def get_campaign_list_repo(
 @router.get(
     "",
     response_model=list[CampaignListResponse],
-    dependencies=[Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS))]
+    dependencies=[Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE))]
 )
 async def list_campaigns(
-    current_user: Annotated[User, Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS))],
+    current_user: Annotated[User, Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE))],
     repo: CampaignRepositoryImpl = Depends(get_campaign_list_repo),
 ):
     """
     List all campaigns (simplified view).
 
-    Requires: operations or business role
+    Requires: operations, business or finance role
 
     Returns: Campaign list (without periods/lines for performance)
     """

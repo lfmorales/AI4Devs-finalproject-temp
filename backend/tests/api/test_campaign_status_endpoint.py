@@ -1,8 +1,13 @@
-"""GET /campaign-status: running flights of active campaigns, flags, ordering, no cost, operations and business only."""
+"""GET /campaign-status: running flights of active campaigns, flags, ordering, no cost, open to operations, business, finance and trading."""
 
+from collections.abc import Callable
 from datetime import date
+from typing import cast
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.presentation.dependencies import providers
 from app.presentation.schemas.campaign_status import CampaignStatusResponse
@@ -172,16 +177,33 @@ def test_no_field_of_the_response_is_a_cost_figure(business_client, test_db_sess
     assert not [n for n in returned | declared if any(word in n.lower() for word in COST_WORDS)]
 
 
-@pytest.mark.parametrize("roles", [("operations",), ("business",), ("operations", "business")])
-def test_operations_and_business_may_read_the_status(client_for_roles, roles):
-    client = client_for_roles(*roles)
-    client.app.dependency_overrides[providers.get_today] = lambda: TODAY
+@pytest.mark.parametrize("role", ["operations", "business", "finance", "trading"])
+def test_each_of_the_four_roles_may_read_the_status_and_gets_no_money_field(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session, role: str
+) -> None:
+    line = insert_campaign_line(test_db_session)
+    insert_delivery(test_db_session, line, date(2026, 8, 10), 40_000, insert_ingestion_batch(test_db_session))
+    client = client_for_roles(role)
+    cast(FastAPI, client.app).dependency_overrides[providers.get_today] = lambda: TODAY
 
-    assert client.get("/campaign-status").status_code == 200
+    response = client.get("/campaign-status")
+
+    assert response.status_code == 200
+    rows = response.json()
+    assert rows
+
+    def names_in(value: object) -> set[str]:
+        if isinstance(value, dict):
+            return set(value) | {name for item in value.values() for name in names_in(item)}
+        if isinstance(value, list):
+            return {name for item in value for name in names_in(item)}
+        return set()
+
+    assert not [name for name in names_in(rows) if any(word in name.lower() for word in COST_WORDS)]
 
 
-@pytest.mark.parametrize("roles", [("finance",), ()])
-def test_a_user_with_neither_role_is_forbidden(client_for_roles, roles):
+@pytest.mark.parametrize("roles", [()])
+def test_a_user_without_any_role_is_forbidden(client_for_roles: Callable[..., TestClient], roles: tuple[str, ...]) -> None:
     response = client_for_roles(*roles).get("/campaign-status")
 
     assert response.status_code == 403

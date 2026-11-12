@@ -1,6 +1,9 @@
 import pytest
 import logging
+from collections.abc import Callable
 from datetime import date
+
+from fastapi.testclient import TestClient
 
 logger = logging.getLogger(__name__)
 
@@ -426,9 +429,16 @@ def test_register_campaign_without_operations_role(authenticated_client_no_opera
     assert data.get("code") == "missing_role", f"Expected code=missing_role, got {data}"
 
 
-def test_list_campaigns_without_operations_or_business_role(authenticated_client_no_operations_role):
-    """Test that GET /campaigns without operations or business role returns 403."""
-    response = authenticated_client_no_operations_role.get("/campaigns")
+def test_list_campaigns_with_only_the_trading_role_is_forbidden(client_for_roles: Callable[..., TestClient]) -> None:
+    """GET /campaigns is open to operations, business and finance; trading gets 403."""
+    response = client_for_roles("trading").get("/campaigns")
+
     assert response.status_code == 403, f"Expected 403, got {response.status_code}: {response.text}"
-    data = response.json()
-    assert data.get("code") == "missing_role", f"Expected code=missing_role, got {data}"
+    assert response.json().get("code") == "missing_role"
+
+
+def test_list_campaigns_is_open_to_finance(authenticated_client_no_operations_role: TestClient) -> None:
+    """The fixture user holds only finance: reading the campaigns is allowed to the reviewer."""
+    response = authenticated_client_no_operations_role.get("/campaigns")
+
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"

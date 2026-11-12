@@ -4,8 +4,12 @@ The list of routes and the role each one requires are read from the application,
 route without a role requirement fails the suite instead of going unnoticed.
 """
 
+from collections.abc import Callable
+from typing import Any
+
 import pytest
 from fastapi.routing import APIRoute
+from fastapi.testclient import TestClient
 
 from app.domain.models.user import RoleName
 from app.main import create_app
@@ -73,24 +77,41 @@ def test_the_routes_found_are_the_ones_the_application_publishes():
     assert found == published
 
 
-def test_the_routes_of_this_change_are_among_those_checked():
-    checked = {
-        (path, method) for path, route, _ in _protected_routes() for method in route.methods
+OPERATIONS = frozenset({RoleName.OPERATIONS})
+READERS = frozenset({RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE})
+MARGIN_READERS = frozenset({RoleName.OPERATIONS, RoleName.FINANCE})
+EVERYONE = frozenset({RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE, RoleName.TRADING})
+ALL_ROLES = (RoleName.OPERATIONS, RoleName.FINANCE, RoleName.BUSINESS, RoleName.TRADING)
+
+# The access matrix of the identity/access-matrix specification, route by route. /health is public on purpose.
+ACCESS_MATRIX: dict[tuple[str, str], frozenset[RoleName]] = {
+    ("/campaigns", "GET"): READERS,
+    ("/campaigns", "POST"): OPERATIONS,
+    **{(f"/masters/{name}", "GET"): READERS
+       for name in ("agencies", "advertisers", "dsps", "channels", "formats", "campaign-types", "sectors", "sales-reps")},
+    ("/campaign-status", "GET"): EVERYONE,
+    ("/campaign-lines/unmapped", "GET"): OPERATIONS,
+    ("/campaign-lines/{campaign_line_id}/dsp-mappings", "POST"): OPERATIONS,
+    ("/campaign-lines/{campaign_line_id}/dsp-mappings", "DELETE"): OPERATIONS,
+    ("/dsp-catalog", "GET"): OPERATIONS,
+    ("/flights/preview", "POST"): OPERATIONS,
+    ("/ingestion-exceptions", "GET"): OPERATIONS,
+    ("/ingestion-exceptions/{exception_id}/resolve", "POST"): OPERATIONS,
+    ("/ingestion-exceptions/{exception_id}/link", "POST"): OPERATIONS,
+    ("/margin", "GET"): MARGIN_READERS,
+    ("/margin/closings", "POST"): MARGIN_READERS,
+    ("/margin/rebate-schedules", "POST"): OPERATIONS,
+    ("/margin/platform-rates", "POST"): OPERATIONS,
+}
+
+
+def test_the_access_matrix_has_an_entry_for_every_route_and_no_entry_without_a_route() -> None:
+    routes = {
+        (path, method) for path, route, _ in _protected_routes() for method in (route.methods or set()) - {"HEAD", "OPTIONS"}
     }
 
-    assert ("/campaign-status", "GET") in checked
-    assert ("/ingestion-exceptions", "GET") in checked
-    assert ("/ingestion-exceptions/{exception_id}/resolve", "POST") in checked
-    assert ("/campaign-lines/{campaign_line_id}/dsp-mappings", "POST") in checked
-    assert ("/flights/preview", "POST") in checked
-    assert ("/dsp-catalog", "GET") in checked
-    assert ("/campaign-lines/unmapped", "GET") in checked
-    assert ("/campaign-lines/{campaign_line_id}/dsp-mappings", "DELETE") in checked
-    assert ("/ingestion-exceptions/{exception_id}/link", "POST") in checked
-    assert ("/margin/closings", "POST") in checked
-    assert ("/margin", "GET") in checked
-    assert ("/margin/rebate-schedules", "POST") in checked
-    assert ("/margin/platform-rates", "POST") in checked
+    assert routes - set(ACCESS_MATRIX) == set(), "routes missing from the access matrix"
+    assert set(ACCESS_MATRIX) - routes == set(), "matrix entries without a real route"
 
 
 def test_there_are_routes_to_check():
@@ -123,12 +144,10 @@ def test_a_user_holding_only_the_other_roles_is_forbidden(client_for_roles, path
     assert set(response.json()) == {"code", "message"}
 
 
-def _margin_cases() -> list:
-    return [case for case in _cases() if case.values[0] == "/margin" or case.values[0].startswith("/margin/")]
+def test_the_margin_routes_are_the_four_of_this_change() -> None:
+    margin = {key for key in ACCESS_MATRIX if key[0] == "/margin" or key[0].startswith("/margin/")}
 
-
-def test_the_margin_routes_are_the_four_of_this_change():
-    assert {(case.values[0], case.values[3]) for case in _margin_cases()} == {
+    assert margin == {
         ("/margin", "GET"),
         ("/margin/closings", "POST"),
         ("/margin/rebate-schedules", "POST"),
@@ -136,29 +155,22 @@ def test_the_margin_routes_are_the_four_of_this_change():
     }
 
 
-MARGIN_MATRIX = {
-    ("/margin", "GET"): frozenset({RoleName.OPERATIONS, RoleName.FINANCE}),
-    ("/margin/closings", "POST"): frozenset({RoleName.OPERATIONS, RoleName.FINANCE}),
-    ("/margin/rebate-schedules", "POST"): frozenset({RoleName.OPERATIONS}),
-    ("/margin/platform-rates", "POST"): frozenset({RoleName.OPERATIONS}),
-}
-ALL_ROLES = (RoleName.OPERATIONS, RoleName.FINANCE, RoleName.BUSINESS, RoleName.TRADING)
-
-
-@pytest.mark.parametrize(("path", "route", "inherited", "method"), _margin_cases())
-def test_a_margin_route_declares_exactly_the_roles_of_the_access_matrix(path, route, inherited, method):
-    assert _accepted_roles(route, inherited) == MARGIN_MATRIX[(path, method)]
+@pytest.mark.parametrize(("path", "route", "inherited", "method"), _cases())
+def test_a_route_declares_exactly_the_roles_of_the_access_matrix(
+    path: str, route: APIRoute, inherited: list[Any], method: str
+) -> None:
+    assert _accepted_roles(route, inherited) == ACCESS_MATRIX[(path, method)]
 
 
 @pytest.mark.parametrize("role", ALL_ROLES, ids=lambda role: role.value)
-@pytest.mark.parametrize(("path", "route", "inherited", "method"), _margin_cases())
-def test_each_role_gets_the_outcome_of_the_access_matrix_on_a_margin_route(
-    client_for_roles, path, route, inherited, method, role
-):
+@pytest.mark.parametrize(("path", "route", "inherited", "method"), _cases())
+def test_each_role_gets_the_outcome_of_the_access_matrix_on_every_route(
+    client_for_roles: Callable[..., TestClient], path: str, route: APIRoute, inherited: list[Any], method: str, role: RoleName
+) -> None:
     response = _call(client_for_roles(role.value), path, route, method)
 
-    if role in MARGIN_MATRIX[(path, method)]:
-        # The guard lets the request through; what follows (here a 422 for the missing body) is not its business.
+    if role in ACCESS_MATRIX[(path, method)]:
+        # The guard lets the request through; what follows (a 422 for a missing body, a 404...) is not its business.
         assert response.status_code not in (401, 403)
     else:
         assert response.status_code == 403

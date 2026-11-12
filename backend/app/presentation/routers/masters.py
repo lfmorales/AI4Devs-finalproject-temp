@@ -36,7 +36,7 @@ router = APIRouter(prefix="/masters", tags=["masters"])
 @router.get(
     "/agencies",
     response_model=list[MasterItem],
-    dependencies=[Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS))]
+    dependencies=[Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE))]
 )
 async def get_agencies(
     session: Annotated[Session, Depends(get_db_session)],
@@ -50,7 +50,7 @@ async def get_agencies(
 @router.get(
     "/advertisers",
     response_model=list[MasterItem],
-    dependencies=[Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS))]
+    dependencies=[Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE))]
 )
 async def get_advertisers(
     session: Annotated[Session, Depends(get_db_session)],
@@ -64,7 +64,7 @@ async def get_advertisers(
 @router.get(
     "/dsps",
     response_model=list[DSPItem],
-    dependencies=[Depends(require_roles(RoleName.OPERATIONS))]
+    dependencies=[Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE))]
 )
 async def get_active_dsps(
     session: Annotated[Session, Depends(get_db_session)],
@@ -78,7 +78,7 @@ async def get_active_dsps(
 @router.get(
     "/channels",
     response_model=list[MasterItem],
-    dependencies=[Depends(require_roles(RoleName.OPERATIONS))]
+    dependencies=[Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE))]
 )
 async def get_channels(
     session: Annotated[Session, Depends(get_db_session)],
@@ -92,7 +92,7 @@ async def get_channels(
 @router.get(
     "/formats",
     response_model=list[MasterItem],
-    dependencies=[Depends(require_roles(RoleName.OPERATIONS))]
+    dependencies=[Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE))]
 )
 async def get_formats(
     session: Annotated[Session, Depends(get_db_session)],
@@ -106,7 +106,7 @@ async def get_formats(
 @router.get(
     "/campaign-types",
     response_model=list[MasterItem],
-    dependencies=[Depends(require_roles(RoleName.OPERATIONS))]
+    dependencies=[Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE))]
 )
 async def get_campaign_types(
     session: Annotated[Session, Depends(get_db_session)],
@@ -120,7 +120,7 @@ async def get_campaign_types(
 @router.get(
     "/sectors",
     response_model=list[MasterItem],
-    dependencies=[Depends(require_roles(RoleName.OPERATIONS))]
+    dependencies=[Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE))]
 )
 async def get_sectors(
     session: Annotated[Session, Depends(get_db_session)],
@@ -134,7 +134,7 @@ async def get_sectors(
 @router.get(
     "/sales-reps",
     response_model=list[MasterItem],
-    dependencies=[Depends(require_roles(RoleName.OPERATIONS))]
+    dependencies=[Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE))]
 )
 async def get_sales_reps(
     session: Annotated[Session, Depends(get_db_session)],
