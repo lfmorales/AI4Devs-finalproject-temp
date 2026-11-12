@@ -28,7 +28,8 @@ from app.config import get_settings
 from app.domain.exceptions import DspNotConfiguredError
 from app.domain.services.local_calendar import local_today, utc_now
 from app.domain.services.dsp_delivery_client import DspDeliveryClient
-from app.infrastructure.auth.cognito_token_verifier import CognitoTokenVerifier
+from app.infrastructure.auth.composite_token_verifier import CompositeTokenVerifier
+from app.infrastructure.auth.issuer_token_verifier import IssuerTokenVerifier
 from app.infrastructure.dsp.adform_delivery_client import AdformDeliveryClient
 from app.infrastructure.persistence.database import build_engine, build_session_factory
 from app.infrastructure.persistence.repositories.sqlalchemy_campaign_line_query_repository import (
@@ -71,13 +72,10 @@ def _session_factory() -> sessionmaker[Session]:
 
 
 @lru_cache
-def _token_verifier() -> CognitoTokenVerifier:
-    # One instance per process, so the JWKS is fetched once and cached, not per request.
-    settings = get_settings()
-    return CognitoTokenVerifier(
-        region=settings.cognito_region,
-        user_pool_id=settings.cognito_user_pool_id,
-        client_id=settings.cognito_client_id,
+def _token_verifier() -> CompositeTokenVerifier:
+    # One instance per process, so each issuer's JWKS is fetched once and cached, not per request.
+    return CompositeTokenVerifier(
+        {issuer.issuer: IssuerTokenVerifier(issuer) for issuer in get_settings().token_issuers}
     )
 
 

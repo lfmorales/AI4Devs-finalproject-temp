@@ -24,7 +24,7 @@
 
 ## 5. Wiring and Environment
 
-- [ ] 5.1 Write a failing test that the verifier built by `providers.py` reflects the configured issuers, then wire it and add placeholders to `.env.example` and both compose files; verify no real identifier appears in tracked files
+- [x] 5.1 Write a failing test that the verifier built by `providers.py` reflects the configured issuers, then wire it and add placeholders to `.env.example` and both compose files; verify no real identifier appears in tracked files
 
 ## 6. Database: Identity Columns (migration)
 
