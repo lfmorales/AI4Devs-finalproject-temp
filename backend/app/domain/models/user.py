@@ -30,6 +30,9 @@ class User:
     full_name: str
     is_active: bool
     roles: frozenset[RoleName]
+    # The (issuer, subject) link to the identity provider; None until the user's first access.
+    identity_issuer: str | None = None
+    identity_subject: str | None = None
 
     def has_any_role(self, accepted_roles: Iterable[RoleName]) -> bool:
         # Roles are additive: holding any one accepted role is enough.

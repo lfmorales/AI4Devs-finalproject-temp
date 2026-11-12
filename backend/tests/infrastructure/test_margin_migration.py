@@ -16,7 +16,7 @@ from sqlalchemy.engine import make_url
 from tests.conftest import BACKEND_ROOT, TEST_DATABASE_URL
 
 BEFORE = "e6a29ae62e94"  # record the window of each ingestion batch
-MARGIN = "439b6b8481f8"  # the migration under test
+MARGIN = "439b6b8481f8"  # the migration under test; later migrations are not part of these tests
 SCRATCH_DB = "adops360_margin_migration_test"
 LIMITED_ROLE = "adops360_margin_limited"
 MARGIN_TABLES = {"rebate_schedules", "rebate_brackets", "platform_rate_settings", "applied_rates", "applied_rate_brackets"}
@@ -97,7 +97,7 @@ def _insert_margin_rows(engine) -> None:
 def test_upgrade_creates_the_margin_tables_and_the_system_rate_next_to_existing_data(scratch):
     config, engine, _ = scratch
 
-    command.upgrade(config, "head")
+    command.upgrade(config, MARGIN)
 
     assert MARGIN_TABLES <= _tables(engine)
     with engine.connect() as connection:
@@ -110,7 +110,7 @@ def test_upgrade_creates_the_margin_tables_and_the_system_rate_next_to_existing_
 
 def test_downgrade_one_step_drops_only_the_margin_tables_and_keeps_the_data(scratch):
     config, engine, _ = scratch
-    command.upgrade(config, "head")
+    command.upgrade(config, MARGIN)
     _insert_margin_rows(engine)
 
     command.downgrade(config, "-1")
@@ -124,10 +124,10 @@ def test_downgrade_one_step_drops_only_the_margin_tables_and_keeps_the_data(scra
 
 def test_upgrade_again_after_a_downgrade_is_clean_and_seeds_the_system_rate_once(scratch):
     config, engine, _ = scratch
-    command.upgrade(config, "head")
+    command.upgrade(config, MARGIN)
     command.downgrade(config, "-1")
 
-    command.upgrade(config, "head")
+    command.upgrade(config, MARGIN)
 
     assert MARGIN_TABLES <= _tables(engine)
     with engine.connect() as connection:
@@ -138,7 +138,7 @@ def test_the_extension_is_removed_on_downgrade_when_the_migration_created_it(scr
     config, engine, _ = scratch
     assert not _has_extension(engine)
 
-    command.upgrade(config, "head")
+    command.upgrade(config, MARGIN)
     assert _has_extension(engine)
     command.downgrade(config, "-1")
 
@@ -150,7 +150,7 @@ def test_the_extension_is_kept_on_downgrade_when_it_already_existed(scratch):
     with engine.begin() as connection:
         connection.execute(text("CREATE EXTENSION btree_gist"))
 
-    command.upgrade(config, "head")
+    command.upgrade(config, MARGIN)
     command.downgrade(config, "-1")
 
     assert _has_extension(engine)
@@ -158,7 +158,7 @@ def test_the_extension_is_kept_on_downgrade_when_it_already_existed(scratch):
 
 def test_the_append_only_triggers_go_with_the_downgrade(scratch):
     config, engine, _ = scratch
-    command.upgrade(config, "head")
+    command.upgrade(config, MARGIN)
 
     command.downgrade(config, "-1")
 
@@ -181,7 +181,7 @@ def test_without_the_privilege_the_migration_stops_with_a_message_that_says_what
     monkeypatch.setenv("DATABASE_URL", limited.render_as_string(hide_password=False))
 
     with pytest.raises(RuntimeError) as raised:
-        command.upgrade(config, "head")
+        command.upgrade(config, MARGIN)
 
     assert "btree_gist" in str(raised.value)
     assert "CREATE EXTENSION btree_gist" in str(raised.value)

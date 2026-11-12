@@ -28,8 +28,8 @@
 
 ## 6. Database: Identity Columns (migration)
 
-- [ ] 6.1 Write failing tests for the issuer and subject columns on `users` (nullable, unique on the pair, existing rows unaffected)
-- [ ] 6.2 Add the columns and generate the Alembic migration with `--autogenerate`, review it by hand, and verify `upgrade head`, `downgrade -1` and `upgrade head` on a database holding data, and the schema-sync test
+- [x] 6.1 Write failing tests for the issuer and subject columns on `users` (nullable, unique on the pair, existing rows unaffected)
+- [x] 6.2 Add the columns and generate the Alembic migration with `--autogenerate`, review it by hand, and verify `upgrade head`, `downgrade -1` and `upgrade head` on a database holding data, and the schema-sync test
 
 ## 7. Repository by Identifier
 
@@ -87,7 +87,8 @@
 ## 18. Update Technical Documentation (MANDATORY)
 
 - [ ] 18.1 Update `docs/deploy.md` and `.env.example` documentation for the issuer variables and the Entra application settings, with placeholders only
-- [ ] 18.2 Verify `openspec validate entra-auth-and-roles` passes before archiving
+- [ ] 18.2 Update README §3 and the data model documentation so they show the `identity_issuer` and `identity_subject` columns of `users`, their unique pair and the check that sets them together
+- [ ] 18.3 Verify `openspec validate entra-auth-and-roles` passes before archiving
 
 ## 19. Key Download Hardening
 
