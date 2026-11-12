@@ -16,6 +16,8 @@ The system SHALL accept on each existing route the roles below and no others.
 | Ingestion exceptions, DSP mappings, DSP catalogue, flight preview, unmapped lines | operations |
 | `GET /margin` and `POST /margin/closings` | operations, finance |
 | `POST /margin/rebate-schedules` and `POST /margin/platform-rates` | operations |
+| `POST /users/activation` | operations |
+| `GET /users/me` | operations, business, finance, trading |
 
 #### Scenario: Finance reads the margin but cannot write the schedules
 - **WHEN** a user with only `finance` reads the margin and posts a rebate schedule

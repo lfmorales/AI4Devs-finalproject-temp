@@ -15,3 +15,9 @@ class ActivationResponse(BaseModel):
 
     email: str
     is_active: bool
+
+
+class OwnRolesResponse(BaseModel):
+    """Nothing but the names of the caller's roles: no email, no identifier, no other data."""
+
+    roles: list[str]

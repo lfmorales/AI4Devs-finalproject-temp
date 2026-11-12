@@ -99,6 +99,7 @@ ACCESS_MATRIX: dict[tuple[str, str], frozenset[RoleName]] = {
     ("/ingestion-exceptions/{exception_id}/resolve", "POST"): OPERATIONS,
     ("/ingestion-exceptions/{exception_id}/link", "POST"): OPERATIONS,
     ("/users/activation", "POST"): OPERATIONS,
+    ("/users/me", "GET"): EVERYONE,
     ("/margin", "GET"): MARGIN_READERS,
     ("/margin/closings", "POST"): MARGIN_READERS,
     ("/margin/rebate-schedules", "POST"): OPERATIONS,

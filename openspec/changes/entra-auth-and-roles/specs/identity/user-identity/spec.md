@@ -95,3 +95,31 @@ The system SHALL provide `scripts/set_user_active.py`, which sets a user active 
 #### Scenario: The script reports an unknown email
 - **WHEN** the script runs with an email that matches no user
 - **THEN** it reports that the user was not found, exits with its own code and changes nothing
+
+### Requirement: A user can read its own roles
+
+The system SHALL expose `GET /users/me` to users holding the `operations`, `business`, `finance` or `trading` role, answering the names of the roles the caller holds in the database, ordered by name, and nothing else, so that the interface can show only the links and buttons the caller may use. The roles SHALL come from the database and never from the token.
+
+#### Scenario: A user with two roles receives both, ordered by name
+- **WHEN** a user holding `operations` and `finance` calls the endpoint
+- **THEN** the response lists `finance` and then `operations`
+
+#### Scenario: A user with one role receives that role
+- **WHEN** a user holding only `trading` calls the endpoint
+- **THEN** the response lists only `trading`
+
+#### Scenario: A user with no known role is forbidden
+- **WHEN** a user holding none of the four roles calls the endpoint
+- **THEN** the request is rejected with 403, as on every other protected route
+
+#### Scenario: The response carries only the roles
+- **WHEN** the endpoint answers, with success or with an error
+- **THEN** a success holds only the list of roles, and neither response holds an email, an identifier or a money figure
+
+#### Scenario: An inactive user is forbidden
+- **WHEN** a user who has been deactivated calls the endpoint with a token that is still valid
+- **THEN** the request is rejected with 403 `user_inactive`
+
+#### Scenario: A request without a valid token is unauthenticated
+- **WHEN** the endpoint is called without a valid token
+- **THEN** the request is rejected with 401
