@@ -40,3 +40,19 @@ def test_a_line_model_error_is_an_unprocessable_request_with_a_fixed_body(error_
     assert set(response.json()) == {"code", "message"}
     assert response.json()["code"] == code
     assert "internal detail" not in response.text
+
+
+def test_an_identity_link_conflict_is_a_forbidden_request_with_a_fixed_body():
+    from app.domain.exceptions import IdentityConflictError
+
+    app = FastAPI()
+    register_exception_handlers(app)
+
+    @app.get("/boom")
+    def boom() -> None:
+        raise IdentityConflictError("pair taken by user 7 in tenant-de-prueba")
+
+    response = TestClient(app, raise_server_exceptions=False).get("/boom")
+
+    assert response.status_code == 403
+    assert response.json() == {"code": "identity_link_conflict", "message": "Identity is linked to another account"}

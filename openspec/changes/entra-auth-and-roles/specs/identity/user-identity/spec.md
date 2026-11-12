@@ -18,7 +18,7 @@ The system SHALL identify a registered user by the pair formed by the issuer and
 
 #### Scenario: A conflicting link is rejected
 - **WHEN** the email matches a user already linked to a different pair
-- **THEN** the request is rejected with 403 and the stored link does not change
+- **THEN** the request is rejected with 403 `identity_link_conflict` and the stored link does not change
 
 #### Scenario: An unlinked identity without an email is forbidden
 - **WHEN** a valid token carries no email and its pair is not linked to any user

@@ -41,6 +41,7 @@ from app.domain.exceptions import (
     UnsupportedCurrencyError,
     DuplicateCampaignNameError,
     DuplicateOrderReferenceError,
+    IdentityConflictError,
     IdentityProviderUnavailableError,
     InactiveUserError,
     InvalidIdentityTokenError,
@@ -71,6 +72,7 @@ _ERROR_MAPPINGS: dict[type[DomainError], _ErrorMapping] = {
     ),
     UnregisteredUserError: _ErrorMapping(403, "user_not_registered", "User is not registered"),
     InactiveUserError: _ErrorMapping(403, "user_inactive", "User is inactive"),
+    IdentityConflictError: _ErrorMapping(403, "identity_link_conflict", "Identity is linked to another account"),
     MissingRoleError: _ErrorMapping(403, "missing_role", "User lacks the required role"),
     DuplicateCampaignNameError: _ErrorMapping(
         409, "duplicate_campaign_name", "A campaign with this name already exists"

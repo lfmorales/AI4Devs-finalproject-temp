@@ -124,6 +124,10 @@ class _RecordingUserRepository:
     def __init__(self, session: object) -> None:
         pass
 
+    def get_by_identity(self, issuer: str, subject: str) -> User | None:
+        _RecordingUserRepository.calls.append(f"{issuer}|{subject}")
+        return None
+
     def get_by_email(self, email: str) -> User | None:
         _RecordingUserRepository.calls.append(email)
         return None
@@ -165,4 +169,4 @@ def test_the_recording_repository_does_see_the_query_of_a_token_of_a_configured_
     response = TestClient(app).get("/campaign-lines/unmapped", headers={"Authorization": f"Bearer {_cognito_token()}"})
 
     assert response.status_code == 403
-    assert _RecordingUserRepository.calls == ["ops@example.com"]
+    assert _RecordingUserRepository.calls == [f"{COGNITO_ISSUER}|sujeto-cognito", "ops@example.com"]

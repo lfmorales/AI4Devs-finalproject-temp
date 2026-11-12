@@ -88,7 +88,6 @@ class _VerifierWithoutEmail(IdentityTokenVerifier):
 
 
 def test_authenticate_rejects_an_identity_without_email_as_not_registered() -> None:
-    # Provisional: the authentication task replaces this with the lookup by issuer and subject.
     service = AuthenticationService(
         token_verifier=_VerifierWithoutEmail(), user_repository=InMemoryUserRepository([build_user()])
     )

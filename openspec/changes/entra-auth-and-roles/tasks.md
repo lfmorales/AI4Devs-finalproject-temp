@@ -37,9 +37,9 @@
 
 ## 8. Authentication Service
 
-- [ ] 8.1 Write failing tests for lookup by pair, fall back to email for an unlinked user, link on first access, a linked user found with a changed email, a conflicting link rejected with 403 and unchanged, an unregistered identity rejected with 403 `user_not_registered` and no user created, and an unlinked identity whose token carries no email rejected with 403 `user_not_registered` and nothing stored
-- [ ] 8.2 Write failing tests that the roles of a request are the stored ones for both issuers, that an Entra token whose `roles` claim differs from the database is authorised with the database roles, that a user without roles gets 403 on every protected route, and that two stored roles compose
-- [ ] 8.3 Implement 8.1 and 8.2 in the service and verify all pass without a database
+- [x] 8.1 Write failing tests for lookup by pair, fall back to email for an unlinked user, link on first access, a linked user found with a changed email, a conflicting link rejected with 403 and unchanged, an unregistered identity rejected with 403 `user_not_registered` and no user created, and an unlinked identity whose token carries no email rejected with 403 `user_not_registered` and nothing stored
+- [x] 8.2 Write failing tests that the roles of a request are the stored ones for both issuers, that an Entra token whose `roles` claim differs from the database is authorised with the database roles, that a user without roles gets 403 on every protected route, and that two stored roles compose
+- [x] 8.3 Implement 8.1 and 8.2 in the service and verify all pass without a database
 
 ## 9. Role `trading`
 
