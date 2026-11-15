@@ -23,9 +23,10 @@ The system SHALL accept on each existing route the roles below and no others.
 - **WHEN** a user with only `finance` reads the margin and posts a rebate schedule
 - **THEN** the read succeeds and the write is rejected with 403
 
-#### Scenario: Trading reads the delivery status and nothing else
-- **WHEN** a user with only `trading` calls any route outside the delivery status
-- **THEN** the request is rejected with 403
+#### Scenario: Trading reads the delivery status and its own roles, and nothing else
+- **WHEN** a user with only `trading` calls each route
+- **THEN** the delivery status and `GET /users/me` succeed
+- **AND** any other route is rejected with 403
 
 #### Scenario: Business and trading receive no money fields
 - **WHEN** a user with only `business`, or only `trading`, reads the delivery status
