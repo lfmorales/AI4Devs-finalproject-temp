@@ -740,13 +740,15 @@ erDiagram
 erDiagram
     users {
         int id PK
-        string email UK "claim de Cognito"
+        string email UK "enlaza en el primer acceso"
+        string identity_issuer "nullable: UK con identity_subject"
+        string identity_subject "nullable: oid o sub"
         string full_name
         bool is_active
     }
     roles {
         int id PK
-        string name UK "operations|business|finance"
+        string name UK "operations|business|finance|trading"
     }
     user_roles {
         int user_id PK "FK a users"
@@ -849,8 +851,8 @@ erDiagram
 
 | Entidad | Propósito | Campos clave | Restricciones |
 |---|---|---|---|
-| `users` | Usuario local. Es el lado de la aplicación del modelo de identidad: Cognito autentica, esta tabla autoriza. | `id` PK · `email` · `full_name` · `is_active` | `email` **UNIQUE** y **NOT NULL**: es la única unión con Cognito, vía el *claim* `email`. Un token válido sin fila aquí es **forbidden**, nunca se autoprovisiona. |
-| `roles` | Catálogo de roles funcionales. | `id` PK · `name` | `name` UNIQUE, valores `operations`, `business`, `finance`. |
+| `users` | Usuario local. Es el lado de la aplicación del modelo de identidad: el proveedor autentica, esta tabla autoriza. | `id` PK · `email` · `identity_issuer` · `identity_subject` · `full_name` · `is_active` | `email` **UNIQUE** y **NOT NULL**. `identity_issuer` e `identity_subject` son opcionales y guardan el vínculo con la identidad (emisor y sujeto del token): **UNIQUE** sobre el par (`uq_users_identity_issuer_subject`) y un `CHECK` que obliga a que estén las dos o ninguna (`ck_users_identity_pair_complete`). El primer acceso de un usuario sin vínculo lo enlaza por el *claim* `email` y guarda el par; desde entonces entra por el par. Un token válido sin fila aquí es **forbidden**, nunca se autoprovisiona. |
+| `roles` | Catálogo de roles funcionales. | `id` PK · `name` | `name` UNIQUE, valores `operations`, `business`, `finance`, `trading`. |
 | `user_roles` | Tabla puente. Un usuario acumula varios roles a la vez, que es el caso normal en este equipo. | PK compuesta (`user_id` FK, `role_id` FK) | PK compuesta; **prohibida** una columna `role` en `users`. |
 
 Procedencia: [Base Standards §6](./docs/base-standards.md#6-authorization-model), no de los ficheros.
@@ -968,26 +970,28 @@ Los escalones 1 a 3 son la novedad: **la extraprima se negocia normalmente con e
 
 ## 4. Especificación de la API
 
-AdOps360 expone **24 operaciones**. Todas, salvo `GET /api/health`, exigen un token de Cognito y un rol (`operations`, `business` o `finance`). Los importes viajan como **cadenas decimales**, nunca como números de coma flotante.
+AdOps360 expone **26 operaciones**. Todas, salvo `GET /api/health`, exigen un token válido y un rol (`operations`, `business`, `finance` o `trading`). Los importes viajan como **cadenas decimales**, nunca como números de coma flotante.
 
 | Método y ruta | Rol | Para qué | Respuestas |
 |---|---|---|---|
 | `GET /api/health` | ninguno | Salud del servicio | 200 |
-| `GET /api/masters/*` (8 catálogos) | `operations`; dos de ellos también `business` | Desplegables: agencias, anunciantes, tipos de campaña, sectores, comerciales, DSP, canales y formatos | 200 |
+| `GET /api/masters/*` (8 catálogos) | `operations`, `business`, `finance` | Desplegables: agencias, anunciantes, tipos de campaña, sectores, comerciales, DSP, canales y formatos | 200 |
 | `POST /api/campaigns` · [§4.1](#41-post-apicampaigns--registrar-campaña) | `operations` | Registrar una campaña con sus líneas y flights | 201, 409, 422 |
-| `GET /api/campaigns` · [§4.2](#42-get-apicampaigns--listar-campañas) | `operations`, `business` | Listar campañas | 200 |
+| `GET /api/campaigns` · [§4.2](#42-get-apicampaigns--listar-campañas) | `operations`, `business`, `finance` | Listar campañas | 200 |
 | `POST /api/flights/preview` · §4.4 | `operations` | Calcular el reparto mensual antes de registrar | 200, 422 |
-| `GET /api/campaign-status` · §4.5 | `operations`, `business` | Estado diario de entrega por flight | 200 |
+| `GET /api/campaign-status` · §4.5 | `operations`, `business`, `finance`, `trading` | Estado diario de entrega por flight | 200 |
 | `GET /api/ingestion-exceptions` · §4.6 | `operations` | Cola de excepciones de la ingesta | 200, 422 |
 | `POST /api/ingestion-exceptions/{id}/resolve` · §4.6 | `operations` | Resolver una excepción con una nota | 200, 422 |
 | `POST /api/ingestion-exceptions/{id}/link` · §4.6 | `operations` | Vincular una excepción a una línea | 200, 422 |
 | `GET /api/dsp-catalog` · §4.7 | `operations` | Catálogo de líneas que Adform ha entregado | 200, 422 |
 | `GET /api/campaign-lines/unmapped` · §4.7 | `operations` | Líneas de AdOps360 sin mapeo | 200 |
 | `POST` y `DELETE /api/campaign-lines/{id}/dsp-mappings` · §4.7 | `operations` | Crear o quitar el mapeo de una línea | 201 / 200, 422 |
-| `GET /api/margin` · §4.8 | `finance` | Margen por campaña, línea y flight | 200, 422 |
-| `POST /api/margin/closings` · §4.8 | `finance` | Cerrar un mes | 200, 409, 422 |
-| `POST /api/margin/rebate-schedules` · §4.9 | `finance` | Crear una escala de extraprima | 201, 409, 422 |
-| `POST /api/margin/platform-rates` · §4.9 | `finance` | Fijar una tarifa de plataforma | 201, 422 |
+| `GET /api/margin` · §4.8 | `operations`, `finance` | Margen por campaña, línea y flight | 200, 422 |
+| `POST /api/margin/closings` · §4.8 | `operations`, `finance` | Cerrar un mes | 200, 409, 422 |
+| `POST /api/margin/rebate-schedules` · §4.9 | `operations` | Crear una escala de extraprima | 201, 409, 422 |
+| `POST /api/margin/platform-rates` · §4.9 | `operations` | Fijar una tarifa de plataforma | 201, 422 |
+| `GET /api/users/me` · §4.10 | `operations`, `business`, `finance`, `trading` | Leer los roles propios | 200 |
+| `POST /api/users/activation` · §4.10 | `operations` | Activar o desactivar un usuario | 200, 404, 409, 422 |
 
 Los ejemplos de §4.4 a §4.8 salen de la **base de demostración** (`seed_margin_demo`, `seed_exceptions_demo`): son datos sintéticos, sin ninguna campaña ni importe real.
 
@@ -1088,7 +1092,7 @@ Cada línea admite además `start_date` y `end_date` (por defecto, las de la cam
 
 ### **4.2. GET /api/campaigns — Listar campañas**
 
-**Rol requerido:** `operations` o `business`
+**Rol requerido:** `operations`, `business` o `finance`
 
 **Descripción:** Obtiene la lista de todas las campañas (vista simplificada sin períodos ni líneas por rendimiento).
 
@@ -1130,13 +1134,13 @@ curl -X GET http://localhost/api/campaigns \
 **Errores:**
 
 - **401 Unauthenticated:** Token ausente o inválido.
-- **403 Forbidden:** Token válido pero usuario sin rol `operations` o `business`. Código: `{"code": "missing_role", "message": "User lacks the required role"}`.
+- **403 Forbidden:** Token válido pero usuario sin rol `operations`, `business` o `finance`. Código: `{"code": "missing_role", "message": "User lacks the required role"}`.
 
 ---
 
 ### **4.3. GET /api/masters/agencies — Obtener lista de agencias**
 
-**Rol requerido:** `operations` (y también `business` en dos de los ocho catálogos `masters`)
+**Rol requerido:** `operations`, `business` o `finance` (los ocho catálogos `masters`)
 
 **Descripción:** Obtiene el catálogo de agencias para usar en selectores de formulario. Solo devuelve agencias activas.
 
@@ -1206,7 +1210,7 @@ curl -X POST http://localhost/api/flights/preview \
 
 ### **4.5. GET /api/campaign-status — Estado diario de entrega**
 
-**Rol requerido:** `operations` o `business`
+**Rol requerido:** `operations`, `business`, `finance` o `trading`
 
 **Descripción:** Una fila por **flight en curso**, con lo contratado, lo entregado y el ritmo. Se alimenta de la ingesta nocturna de Adform y no muestra ningún coste. Dos avisos independientes: `pacing_flag` (el ritmo se desvía de lo esperado) y `missing_data_flag` (no hay entrega donde debería haberla).
 
@@ -1308,7 +1312,7 @@ curl -X POST http://localhost/api/flights/preview \
 
 ### **4.8. Margen y cierre de mes**
 
-**Rol requerido:** `finance`
+**Rol requerido:** `operations` o `finance`
 
 **`GET /api/margin?year=2026&month=11&campaign_id=5`** (los tres parámetros son opcionales). Devuelve el margen por campaña, línea y flight, con totales en cada nivel que son la **suma exacta** del nivel inferior. Cada flight lleva su `state`: `running` (en curso: el ingreso y el rebate se devengan por los días transcurridos hasta `as_of`, que es el día anterior), `pending_close` (terminado y sin cerrar) o `closed` (con las tasas **congeladas**). `provisional` es verdadero mientras el flight no está cerrado. `contracted_revenue` es la venta de la orden de compra completa; `revenue`, la devengada. `below_cost` marca un margen final negativo, `zero_sale` un CPM de venta 0, y `margin_pct` es `null` cuando no hay ingreso.
 
@@ -1376,7 +1380,7 @@ curl -X POST http://localhost/api/flights/preview \
 
 ### **4.9. Maestros del margen**
 
-**Rol requerido:** `finance`
+**Rol requerido:** `operations`
 
 **`POST /api/margin/rebate-schedules`** (201) crea una escala de extraprima. Los tramos deben empezar en 0, ser contiguos y el último debe ser abierto, y dos escalas de la misma clave no pueden solaparse en el tiempo. Ejemplo (valores ficticios):
 
@@ -1398,6 +1402,30 @@ curl -X POST http://localhost/api/flights/preview \
 **`POST /api/margin/platform-rates`** (201) fija la tarifa de infraestructura por mil impresiones en un nivel (`system`, `agency`, `campaign_type` o `line`); gana el más específico. Ejemplo: `{"level": "campaign_type", "campaign_type_id": 2, "rate_per_thousand": "1.25"}`.
 
 **Errores** (`{"code": ..., "message": ...}`, 422, o 409 si la escala se solapa con otra): `bracket_table_empty`, `bracket_table_must_start_at_zero`, `bracket_table_not_contiguous`, `last_bracket_must_be_open`, `validity_ends_before_it_starts`, `schedule_overlaps_existing` o `reference_not_found`.
+
+---
+
+### **4.10. Usuarios: roles propios y activación**
+
+**`GET /api/users/me`** — **Rol requerido:** `operations`, `business`, `finance` o `trading`. Devuelve **solo** la lista de roles del usuario autenticado, leída de la base de datos y ordenada por nombre; ni email ni identificador. La interfaz la usa para mostrar a cada perfil solo lo que puede usar.
+
+```json
+{ "roles": ["finance", "operations"] }
+```
+
+**`POST /api/users/activation`** — **Rol requerido:** `operations`. Activa o desactiva un usuario; surte efecto en su siguiente petición, diga lo que diga su token. El email va en el cuerpo, no en la ruta, para que no llegue a los registros de acceso. Petición:
+
+```json
+{ "email": "<email>", "active": false }
+```
+
+Respuesta 200, con el email y el estado resultante, sin roles ni otros datos:
+
+```json
+{ "email": "<email>", "is_active": false }
+```
+
+**Errores** (`{"code": ..., "message": ...}`): **404** `user_not_found` (ningún usuario tiene ese email), **409** `cannot_deactivate_self` (un usuario no puede desactivarse a sí mismo) y **409** `last_active_operations_user` (no se puede desactivar al último usuario `operations` activo). Un usuario sin rol `operations` recibe **403** `missing_role`.
 
 ---
 
