@@ -65,8 +65,14 @@ class IssuerTokenVerifier(IdentityTokenVerifier):
         if issuer.kind == "entra" and issuer.required_scope is None:
             raise ValueError("An Entra issuer needs a required scope")
         self._issuer = issuer
-        # PyJWKClient caches the key set and refetches it when an unknown kid appears.
-        self._jwks_client = jwks_client or PyJWKClient(issuer.jwks_url)
+        self._jwks_client: SigningKeyProvider
+        if jwks_client is not None:
+            self._jwks_client = jwks_client
+        elif issuer.jwks_url is not None:
+            # PyJWKClient caches the key set and refetches it when an unknown kid appears.
+            self._jwks_client = PyJWKClient(issuer.jwks_url)
+        else:
+            raise ValueError(f"The issuer {issuer.issuer} has no key address and no key provider was given")
 
     def verify(self, token: str) -> VerifiedIdentity:
         try:

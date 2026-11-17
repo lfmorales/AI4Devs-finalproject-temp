@@ -1,6 +1,8 @@
+from pathlib import Path
+
 import pytest
 
-from app.config import Settings, TokenIssuer
+from app.config import TEST_ISSUER, TEST_ISSUER_AUDIENCE, Settings, TokenIssuer
 
 
 def test_settings_derive_cognito_issuer_and_jwks_url_from_region_and_user_pool(
@@ -33,6 +35,8 @@ def cognito_environment(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
     monkeypatch.setenv("COGNITO_CLIENT_ID", "example-client-id")
     monkeypatch.delenv("ENTRA_TENANT_ID", raising=False)
     monkeypatch.delenv("ENTRA_CLIENT_ID", raising=False)
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("TEST_ISSUER_PUBLIC_KEY_FILE", raising=False)
     return monkeypatch
 
 
@@ -109,3 +113,70 @@ def test_the_cognito_issuer_and_jwks_url_are_unchanged_when_entra_is_configured(
 
     assert settings.cognito_issuer == "https://cognito-idp.eu-central-1.amazonaws.com/eu-central-1_Example1"
     assert settings.cognito_jwks_url == f"{settings.cognito_issuer}/.well-known/jwks.json"
+
+
+# --- The test issuer ---
+
+ONLY_COGNITO = (
+    TokenIssuer(
+        kind="cognito",
+        issuer="https://cognito-idp.eu-central-1.amazonaws.com/eu-central-1_Example1",
+        audience="example-client-id",
+        jwks_url="https://cognito-idp.eu-central-1.amazonaws.com/eu-central-1_Example1/.well-known/jwks.json",
+        user_claim="sub",
+        required_scope=None,
+    ),
+)
+
+
+def test_the_test_issuer_constants_are_fixed() -> None:
+    assert (TEST_ISSUER, TEST_ISSUER_AUDIENCE) == ("http://localhost/test-issuer/v2.0", "api://adops360-test-issuer")
+
+
+@pytest.mark.parametrize("app_env", ["development", "test"])
+def test_the_key_in_development_and_test_adds_the_test_issuer_with_the_entra_rules(
+    cognito_environment: pytest.MonkeyPatch, app_env: str
+) -> None:
+    cognito_environment.setenv("TEST_ISSUER_PUBLIC_KEY_FILE", "/keys/test-issuer-public.pem")
+    cognito_environment.setenv("APP_ENV", app_env)
+
+    assert Settings().token_issuers == (
+        *ONLY_COGNITO,
+        TokenIssuer(
+            kind="entra",
+            issuer="http://localhost/test-issuer/v2.0",
+            audience="api://adops360-test-issuer",
+            jwks_url=None,
+            user_claim="oid",
+            required_scope="access_as_user",
+            public_key_file=Path("/keys/test-issuer-public.pem"),
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "app_env", [None, "production", "Development", " development", "test ", "staging"],
+    ids=["absent", "production", "capitalised", "leading-space", "trailing-space", "other"],
+)
+def test_the_key_with_any_other_app_env_fails_naming_both_variables(
+    cognito_environment: pytest.MonkeyPatch, app_env: str | None
+) -> None:
+    cognito_environment.setenv("TEST_ISSUER_PUBLIC_KEY_FILE", "/keys/test-issuer-public.pem")
+    if app_env is not None:
+        cognito_environment.setenv("APP_ENV", app_env)
+
+    with pytest.raises(ValueError) as raised:
+        Settings()
+
+    assert "TEST_ISSUER_PUBLIC_KEY_FILE" in str(raised.value)
+    assert "APP_ENV" in str(raised.value)
+
+
+@pytest.mark.parametrize("app_env", [None, "development", "test", "production", "anything"])
+def test_without_the_key_app_env_leaves_the_issuer_list_as_before(
+    cognito_environment: pytest.MonkeyPatch, app_env: str | None
+) -> None:
+    if app_env is not None:
+        cognito_environment.setenv("APP_ENV", app_env)
+
+    assert Settings().token_issuers == ONLY_COGNITO

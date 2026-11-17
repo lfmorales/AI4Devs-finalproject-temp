@@ -1,5 +1,9 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
+from app.presentation.dependencies.providers import build_startup_configuration
 from app.presentation.errors import register_exception_handlers
 from app.presentation.routers import (
     campaign_lines,
@@ -16,10 +20,18 @@ from app.presentation.routers import (
 )
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # Settings, the issuer list and the verifiers are built when the server starts, so an invalid or
+    # incomplete configuration stops the backend here instead of failing on the first request.
+    build_startup_configuration()
+    yield
+
+
 def create_app() -> FastAPI:
-    # Settings are read lazily by the dependencies, so the app can be built without
-    # the full environment (tests, OpenAPI generation).
-    app = FastAPI(title="AdOps360 API", version="0.1.0")
+    # Building the app reads no setting: only starting it does (the lifespan above), so the app can
+    # still be built without the full environment (tests, OpenAPI generation).
+    app = FastAPI(title="AdOps360 API", version="0.1.0", lifespan=_lifespan)
     register_exception_handlers(app)
     app.include_router(health.router)
     app.include_router(campaigns.router)

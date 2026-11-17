@@ -30,7 +30,9 @@ from app.domain.exceptions import DspNotConfiguredError
 from app.domain.services.local_calendar import local_today, utc_now
 from app.domain.services.dsp_delivery_client import DspDeliveryClient
 from app.infrastructure.auth.composite_token_verifier import CompositeTokenVerifier
+from app.config import TokenIssuer
 from app.infrastructure.auth.issuer_token_verifier import IssuerTokenVerifier
+from app.infrastructure.auth.static_key_provider import InvalidPublicKeyFileError, PemPublicKeyProvider
 from app.infrastructure.dsp.adform_delivery_client import AdformDeliveryClient
 from app.infrastructure.persistence.database import build_engine, build_session_factory
 from app.infrastructure.persistence.repositories.sqlalchemy_campaign_line_query_repository import (
@@ -72,12 +74,27 @@ def _session_factory() -> sessionmaker[Session]:
     return build_session_factory(build_engine(get_settings().database_url))
 
 
+def _issuer_verifier(issuer: TokenIssuer) -> IssuerTokenVerifier:
+    """The key address for Entra and Cognito; the local public key for the test issuer."""
+    if issuer.public_key_file is None:
+        return IssuerTokenVerifier(issuer)
+    try:
+        key_provider = PemPublicKeyProvider(issuer.public_key_file)
+    except InvalidPublicKeyFileError as error:
+        raise ValueError(f"TEST_ISSUER_PUBLIC_KEY_FILE cannot be used: {error}") from error
+    return IssuerTokenVerifier(issuer, key_provider)
+
+
 @lru_cache
 def _token_verifier() -> CompositeTokenVerifier:
     # One instance per process, so each issuer's JWKS is fetched once and cached, not per request.
-    return CompositeTokenVerifier(
-        {issuer.issuer: IssuerTokenVerifier(issuer) for issuer in get_settings().token_issuers}
-    )
+    # Built when the application starts (app.main), so a bad configuration stops the backend there.
+    return CompositeTokenVerifier({issuer.issuer: _issuer_verifier(issuer) for issuer in get_settings().token_issuers})
+
+
+def build_startup_configuration() -> None:
+    """Builds the settings, the issuer list and the verifiers; raises on any invalid configuration."""
+    _token_verifier()
 
 
 def get_db_session() -> Iterator[Session]:

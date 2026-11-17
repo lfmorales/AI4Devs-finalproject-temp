@@ -1,6 +1,7 @@
 """One verifier per configured issuer: the common rules, then the rules of the issuer's kind."""
 
 import time
+from dataclasses import replace
 
 import jwt
 import pytest
@@ -8,7 +9,10 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from jwt import PyJWKClientConnectionError
 
 from app.config import TokenIssuer
-from app.domain.exceptions import IdentityProviderUnavailableError, InvalidIdentityTokenError
+from app.domain.exceptions import (
+    IdentityProviderUnavailableError,
+    InvalidIdentityTokenError,
+)
 from app.infrastructure.auth.issuer_token_verifier import IssuerTokenVerifier
 from tests.fixtures.identity_tokens import OTHER_TEST_KEY, TEST_KEY, StaticKeys
 
@@ -209,6 +213,13 @@ def test_an_entra_issuer_without_a_required_scope_is_refused_at_construction() -
 
     with pytest.raises(ValueError, match="scope"):
         _verifier(issuer_without_scope)
+
+
+def test_an_issuer_without_a_key_address_needs_a_key_provider() -> None:
+    issuer = replace(ENTRA, jwks_url=None)
+
+    with pytest.raises(ValueError, match="key"):
+        IssuerTokenVerifier(issuer)
 
 
 def test_an_unknown_issuer_kind_is_refused_at_construction() -> None:
