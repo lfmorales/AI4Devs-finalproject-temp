@@ -10,12 +10,12 @@
 
 ## 2. Configuration
 
-- [x] 2.1 Write failing tests that `Settings` reads a list of issuers (issuer, audience, key address, user claim, optional scope) and still derives `cognito_issuer` and `cognito_jwks_url`, then implement it and verify `tests/test_config.py` passes
+- [x] 2.1 Write failing tests that `Settings` reads a list of issuers (issuer, audience, key address, user claim, optional scope) and still derives `cognito_issuer` and `cognito_jwks_url`, then implement it and verify `tests/test_config.py` passes (Superseded by 21.3 and 21.7: the test issuer is added to the list and the Cognito settings are removed)
 
 ## 3. Generic Token Verifier
 
 - [x] 3.1 Write failing tests with synthetic tokens and a simulated key address for issuer, audience, key address and subject claim configurable, a missing mandatory scope rejected, and an Entra identity token rejected
-- [x] 3.2 Generalise the verifier, move the Cognito identity-token and verified-email checks to the Cognito entry, and verify the tests of 3.1 and `test_cognito_token_verifier.py` pass
+- [x] 3.2 Generalise the verifier, move the Cognito identity-token and verified-email checks to the Cognito entry, and verify the tests of 3.1 and `test_cognito_token_verifier.py` pass (Superseded by 21.7: the Cognito entry, its checks and `test_cognito_token_verifier.py` are removed)
 
 ## 4. Composite Verifier
 
@@ -60,8 +60,8 @@
 
 ## 12. Frontend and E2E
 
-- [x] 12.1 Write failing Vitest tests that the provider is chosen by environment variable, that Entra requests `api://<client>/access_as_user` with `openid profile email` and sends the access token, and that Cognito still sends the identity token
-- [x] 12.2 Split `cognito-config.ts` by provider, update `AuthProvider` and `lib/api/client.ts`, and verify the tests pass
+- [x] 12.1 Write failing Vitest tests that the provider is chosen by environment variable, that Entra requests `api://<client>/access_as_user` with `openid profile email` and sends the access token, and that Cognito still sends the identity token (Superseded by 21.6: the frontend signs in with Entra only and the provider choice is removed)
+- [x] 12.2 Split `cognito-config.ts` by provider, update `AuthProvider` and `lib/api/client.ts`, and verify the tests pass (Superseded by 21.6: `cognito-config.ts` and the Cognito branches are removed)
 - [x] 12.3 Add `operations` and `trading` sessions to `e2e/support/fixtures.ts` and a navigation spec per role, and verify they pass against the stack
 - [x] 12.4 Add `GET /users/me`, which answers the caller's roles from the database, with its spec scenarios, its row in the access matrix and its API tests
 - [x] 12.5 Use the roles of `GET /users/me` in the frontend to show only the links and the buttons the user may use, replacing the links hidden after a 403 and the buttons shown to profiles that would receive 403
@@ -96,8 +96,21 @@
 
 - [ ] 19.1 Limit the key reload rate and the download timeout, with a test
 - [ ] 19.2 Insert all four roles from a migration, idempotently, so a fresh database does not depend on the seed script
-- [ ] 19.3 Remove CognitoTokenVerifier and count_active_with_role, which nothing uses in production, with their tests
+- [ ] 19.3 Remove count_active_with_role, which nothing uses in production, with its tests; done together with 21.7 (the removal of CognitoTokenVerifier moved to 21.7)
 
 ## 20. Test Fixtures
 
-- [ ] 20.1 Extract the token and key helpers shared by the identity API tests into tests/fixtures
+- [ ] 20.1 Extract the token and key helpers shared by the identity API tests into tests/fixtures (Absorbed by 21.1)
+
+## 21. Entra Only, with a Test Issuer
+
+> Each task leaves the backend, frontend and E2E suites green. Cognito keeps working until nothing uses it (21.6 and 21.7). The mandatory steps 13 to 18 are run again after this section.
+
+- [ ] 21.1 Extract the RSA test key, the static key provider and an Entra-shaped token builder (`iss`, `aud`, `ver` 2.0, `scp`, `oid`, `tid`, `email`) shared by the identity tests into `tests/fixtures`, and move the existing tests onto them; verify the same tests pass unchanged in number
+- [ ] 21.2 Write failing tests for a production static key provider that reads one PEM public key and resolves a token signed with the matching private key, and rejects one signed with another key; then implement it next to `IssuerTokenVerifier` and verify the tests pass
+- [ ] 21.3 Write failing tests that `Settings` adds the test issuer (fixed `iss` `http://localhost/test-issuer/v2.0`, fixed test audience, `entra` kind, `oid`, `access_as_user`) only with `TEST_ISSUER_PUBLIC_KEY_FILE` set and `APP_ENV` `development` or `test`; that it refuses to start, naming both variables, with the key set and `APP_ENV` absent, `production` or any other value; that the issuer is absent without the key; that `providers.py` injects the static provider for it; and that a test-issuer token without `scp`, without `oid` or with another `ver` is rejected and a test-issuer token is rejected when the issuer is not active. Then implement and verify the tests pass
+- [ ] 21.4 Write a failing test for a script that generates the test key pair in a directory ignored by git, with the private key at mode 600 and no overwrite of an existing pair; then implement it, exclude the key directory in `.gitignore` and in the `.dockerignore` of each build context (backend and frontend), with a check that proves it (`git check-ignore` on both keys and no key in the build context sent to Docker), mount the public key into the backend and set `APP_ENV=development` in `docker-compose.yml`, set `APP_ENV=production` under `environment:` in `docker-compose.prod.yml`, and extend `scripts/verify_prod_images.sh` to check that the backend does not start with the test key; verify no key enters an image
+- [ ] 21.5 Move the E2E to the test issuer: write failing unit tests for the token signing of the global setup and the storage key built from the frontend's Entra authority and client; then sign one token per role on every run, seed one user per role with `*.example.test` addresses, inject the token as the access token, and remove `get-token.sh`, its test, the role backup of `e2e/support/roles.ts` and `login.spec.ts`; rebuild the frontend of the stack with Entra and verify every E2E spec passes with no sign-out pressed
+- [ ] 21.6 Write failing Vitest tests that the frontend signs in with Entra only (settings, access token, sign-out through Entra) with no provider variable; then remove `NEXT_PUBLIC_AUTH_PROVIDER`, `cognito-config.ts` (moving `CALLBACK_PATH`), `getLogoutUrl`, the Cognito branches of `AuthProvider` and `lib/api/client.ts`, and the `NEXT_PUBLIC_COGNITO_*` build variables of the Dockerfile and both compose files; verify the Vitest suite and the E2E pass
+- [ ] 21.7 Write failing tests that `Settings` requires `ENTRA_TENANT_ID` and `ENTRA_CLIENT_ID` and has no Cognito setting or kind; then remove the Cognito settings, the `cognito` kind and its checks, `CognitoTokenVerifier` and their tests, and `count_active_with_role` with its tests (19.3), the `COGNITO_*` variables of both compose files, `.env.example` and `verify_prod_images.sh`, and the Cognito comments in `alembic/env.py`, `run_ingestion.py` and the domain; verify the backend suite and the E2E pass and `git grep -i cognito` finds nothing outside documentation and reports
+- [ ] 21.8 Update the documentation for Entra only and the test issuer (README authentication, installation and architecture; `docs/deploy.md` with the Entra registration settings; `.env.example`; `docs/backend-standards.md`, `docs/frontend-standards.md` and `docs/base-standards.md`; `openspec/config.yaml`; `ai-specs/agents`), with placeholders only; verify no UUID and no real address in the touched files, then mark 18.1 and run `openspec validate entra-auth-and-roles` for 18.3

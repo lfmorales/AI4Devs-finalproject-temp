@@ -28,12 +28,52 @@ The system SHALL require, for tokens of an Entra issuer, a version 2 access toke
 - **WHEN** an Entra token has a valid signature and audience but no `access_as_user` in `scp`
 - **THEN** the request is rejected with 401
 
-### Requirement: Cognito tokens keep their current checks
+### Requirement: Entra is a required issuer
 
-The system SHALL keep for the Cognito issuer the requirement of an identity token with a verified email and the client as audience.
+The system SHALL require `ENTRA_TENANT_ID` and `ENTRA_CLIENT_ID` to build the Entra issuer, and SHALL refuse to start without either of them, with an error that names the missing variable.
 
-#### Scenario: A Cognito token without a verified email is rejected
-- **WHEN** a Cognito identity token has `email_verified` other than true
+#### Scenario: The backend does not start without an Entra variable
+- **WHEN** the backend starts without `ENTRA_TENANT_ID` or without `ENTRA_CLIENT_ID`
+- **THEN** it refuses to start with an error that names the missing variable
+
+### Requirement: The test issuer is active only in development and test
+
+The system SHALL add to the configured issuers a test issuer, whose `iss` is `http://localhost/test-issuer/v2.0` and whose audience is `api://adops360-test-issuer`, both fixed in the code, only when the variable `TEST_ISSUER_PUBLIC_KEY_FILE` names a PEM public key and `APP_ENV` is `development` or `test`, and SHALL verify its tokens against that key. When `TEST_ISSUER_PUBLIC_KEY_FILE` is set and `APP_ENV` is absent or has any other value, including `production`, the system SHALL refuse to start with an error that names both variables. When `TEST_ISSUER_PUBLIC_KEY_FILE` is set and `APP_ENV` is `development` or `test` but the file does not exist, cannot be read or does not hold a valid PEM public key, the system SHALL refuse to start with an error that names `TEST_ISSUER_PUBLIC_KEY_FILE`. Without `TEST_ISSUER_PUBLIC_KEY_FILE` the test issuer SHALL NOT be configured, whatever `APP_ENV` says.
+
+#### Scenario: A test-issuer token is accepted in development and test
+- **WHEN** `TEST_ISSUER_PUBLIC_KEY_FILE` names the public key, `APP_ENV` is `development` or `test`, and a valid token signed with the matching private key reaches a protected route
+- **THEN** the request is authenticated
+
+#### Scenario: The backend does not start with the test key outside development and test
+- **WHEN** the backend starts with `TEST_ISSUER_PUBLIC_KEY_FILE` set and `APP_ENV` set to `production`, absent, or any value other than `development` and `test`
+- **THEN** it refuses to start with an error that names `TEST_ISSUER_PUBLIC_KEY_FILE` and `APP_ENV`
+
+#### Scenario: The backend does not start with an unusable test key
+- **WHEN** the backend starts with `APP_ENV` set to `development` or `test` and `TEST_ISSUER_PUBLIC_KEY_FILE` naming a file that does not exist, cannot be read or does not hold a valid PEM public key
+- **THEN** it refuses to start with an error that names `TEST_ISSUER_PUBLIC_KEY_FILE`
+
+#### Scenario: A token with the test issuer is rejected when the issuer is not active
+- **WHEN** `TEST_ISSUER_PUBLIC_KEY_FILE` is not set and a token whose `iss` is `http://localhost/test-issuer/v2.0` reaches a protected route
+- **THEN** the request is rejected with 401 and no user lookup happens
+
+### Requirement: Test-issuer tokens follow the Entra rules
+
+The system SHALL verify tokens of the test issuer with the same rules as Entra tokens: a version 2 token whose `scp` claim contains `access_as_user`, with `oid` as the claim that identifies the user and the `email` claim as the address used on the first access.
+
+#### Scenario: A test-issuer token without the scope is rejected
+- **WHEN** a test-issuer token has a valid signature and audience but no `access_as_user` in `scp`
+- **THEN** the request is rejected with 401
+
+#### Scenario: A test-issuer token without oid is rejected
+- **WHEN** a test-issuer token has a valid signature, audience and scope but no `oid` claim
+- **THEN** the request is rejected with 401
+
+#### Scenario: A test-issuer token of another version is rejected
+- **WHEN** a test-issuer token has a valid signature, audience and scope but a `ver` other than `2.0`
+- **THEN** the request is rejected with 401
+
+#### Scenario: A test-issuer token signed with another key is rejected
+- **WHEN** a token carries the `iss` `http://localhost/test-issuer/v2.0` and the audience `api://adops360-test-issuer` but is signed with a key other than the one configured in `TEST_ISSUER_PUBLIC_KEY_FILE`
 - **THEN** the request is rejected with 401
 
 ### Requirement: Roles come only from the database
