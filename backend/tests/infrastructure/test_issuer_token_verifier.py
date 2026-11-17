@@ -1,17 +1,16 @@
 """One verifier per configured issuer: the common rules, then the rules of the issuer's kind."""
 
 import time
-from dataclasses import dataclass
 
 import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, RSAPublicKey
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from jwt import PyJWKClientConnectionError
 
 from app.config import TokenIssuer
 from app.domain.exceptions import IdentityProviderUnavailableError, InvalidIdentityTokenError
 from app.infrastructure.auth.issuer_token_verifier import IssuerTokenVerifier
+from tests.fixtures.identity_tokens import OTHER_TEST_KEY, TEST_KEY, StaticKeys
 
 COGNITO = TokenIssuer(
     kind="cognito",
@@ -32,32 +31,6 @@ ENTRA = TokenIssuer(
 ISSUERS = [pytest.param(COGNITO, id="cognito"), pytest.param(ENTRA, id="entra")]
 
 
-def _generate_private_key() -> RSAPrivateKey:
-    return rsa.generate_private_key(public_exponent=65537, key_size=2048)
-
-
-SIGNING_KEY = _generate_private_key()
-FOREIGN_KEY = _generate_private_key()
-
-
-@dataclass(frozen=True)
-class _SigningKey:
-    key: RSAPublicKey
-
-
-class _StaticKeys:
-    """Stands in for the key provider: returns one public key, or raises a given error."""
-
-    def __init__(self, public_key: RSAPublicKey, error: Exception | None = None) -> None:
-        self._public_key = public_key
-        self._error = error
-
-    def get_signing_key_from_jwt(self, token: str) -> _SigningKey:
-        if self._error is not None:
-            raise self._error
-        return _SigningKey(key=self._public_key)
-
-
 def _claims(issuer: TokenIssuer) -> dict[str, object]:
     now = int(time.time())
     claims: dict[str, object] = {
@@ -75,14 +48,14 @@ def _claims(issuer: TokenIssuer) -> dict[str, object]:
     return claims
 
 
-def _token(issuer: TokenIssuer, overrides: dict[str, object] | None = None, key: RSAPrivateKey = SIGNING_KEY) -> str:
+def _token(issuer: TokenIssuer, overrides: dict[str, object] | None = None, key: RSAPrivateKey = TEST_KEY) -> str:
     claims = _claims(issuer)
     claims.update(overrides or {})
     return jwt.encode({k: v for k, v in claims.items() if v is not None}, key, algorithm="RS256", headers={"kid": "test-kid"})
 
 
-def _verifier(issuer: TokenIssuer, keys: _StaticKeys | None = None) -> IssuerTokenVerifier:
-    return IssuerTokenVerifier(issuer, keys or _StaticKeys(SIGNING_KEY.public_key()))
+def _verifier(issuer: TokenIssuer, keys: StaticKeys | None = None) -> IssuerTokenVerifier:
+    return IssuerTokenVerifier(issuer, keys or StaticKeys(TEST_KEY.public_key()))
 
 
 # --- Rules common to every issuer ---
@@ -100,7 +73,7 @@ def test_a_valid_token_is_accepted_with_its_issuer_and_user_identifier(issuer: T
 @pytest.mark.parametrize("issuer", ISSUERS)
 def test_a_token_signed_with_another_key_is_rejected(issuer: TokenIssuer) -> None:
     with pytest.raises(InvalidIdentityTokenError):
-        _verifier(issuer).verify(_token(issuer, key=FOREIGN_KEY))
+        _verifier(issuer).verify(_token(issuer, key=OTHER_TEST_KEY))
 
 
 @pytest.mark.parametrize("issuer", ISSUERS)
@@ -148,7 +121,7 @@ def test_a_malformed_token_is_rejected(issuer: TokenIssuer) -> None:
 
 @pytest.mark.parametrize("issuer", ISSUERS)
 def test_unreachable_keys_are_reported_as_provider_unavailable(issuer: TokenIssuer) -> None:
-    keys = _StaticKeys(SIGNING_KEY.public_key(), error=PyJWKClientConnectionError("connection refused"))
+    keys = StaticKeys(TEST_KEY.public_key(), error=PyJWKClientConnectionError("connection refused"))
 
     with pytest.raises(IdentityProviderUnavailableError):
         _verifier(issuer, keys).verify(_token(issuer))

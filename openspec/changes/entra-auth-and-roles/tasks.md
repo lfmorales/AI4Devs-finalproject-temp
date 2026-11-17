@@ -100,13 +100,13 @@
 
 ## 20. Test Fixtures
 
-- [ ] 20.1 Extract the token and key helpers shared by the identity API tests into tests/fixtures (Absorbed by 21.1)
+- [x] 20.1 Extract the token and key helpers shared by the identity API tests into tests/fixtures (Absorbed by 21.1)
 
 ## 21. Entra Only, with a Test Issuer
 
 > Each task leaves the backend, frontend and E2E suites green. Cognito keeps working until nothing uses it (21.6 and 21.7). The mandatory steps 13 to 18 are run again after this section.
 
-- [ ] 21.1 Extract the RSA test key, the static key provider and an Entra-shaped token builder (`iss`, `aud`, `ver` 2.0, `scp`, `oid`, `tid`, `email`) shared by the identity tests into `tests/fixtures`, and move the existing tests onto them; verify the same tests pass unchanged in number
+- [x] 21.1 Extract the RSA test key, the static key provider and an Entra-shaped token builder (`iss`, `aud`, `ver` 2.0, `scp`, `oid`, `tid`, `email`) shared by the identity tests into `tests/fixtures`, and move the existing tests onto them; verify the same tests pass unchanged in number
 - [ ] 21.2 Write failing tests for a production static key provider that reads one PEM public key and resolves a token signed with the matching private key, and rejects one signed with another key; then implement it next to `IssuerTokenVerifier` and verify the tests pass
 - [ ] 21.3 Write failing tests that `Settings` adds the test issuer (fixed `iss` `http://localhost/test-issuer/v2.0`, fixed test audience, `entra` kind, `oid`, `access_as_user`) only with `TEST_ISSUER_PUBLIC_KEY_FILE` set and `APP_ENV` `development` or `test`; that it refuses to start, naming both variables, with the key set and `APP_ENV` absent, `production` or any other value; that the issuer is absent without the key; that `providers.py` injects the static provider for it; and that a test-issuer token without `scp`, without `oid` or with another `ver` is rejected and a test-issuer token is rejected when the issuer is not active. Then implement and verify the tests pass
 - [ ] 21.4 Write a failing test for a script that generates the test key pair in a directory ignored by git, with the private key at mode 600 and no overwrite of an existing pair; then implement it, exclude the key directory in `.gitignore` and in the `.dockerignore` of each build context (backend and frontend), with a check that proves it (`git check-ignore` on both keys and no key in the build context sent to Docker), mount the public key into the backend and set `APP_ENV=development` in `docker-compose.yml`, set `APP_ENV=production` under `environment:` in `docker-compose.prod.yml`, and extend `scripts/verify_prod_images.sh` to check that the backend does not start with the test key; verify no key enters an image

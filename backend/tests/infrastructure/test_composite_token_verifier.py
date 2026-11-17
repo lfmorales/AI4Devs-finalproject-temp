@@ -3,13 +3,11 @@
 import base64
 import json
 import time
-from dataclasses import dataclass
 
 import jwt
 import pytest
 from jwt.api_jws import PyJWS
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, RSAPublicKey
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 
 from app.config import TokenIssuer
 from app.domain.exceptions import IdentityProviderUnavailableError, InvalidIdentityTokenError
@@ -17,6 +15,7 @@ from app.domain.models.user import VerifiedIdentity
 from app.domain.services.identity_token_verifier import IdentityTokenVerifier
 from app.infrastructure.auth.composite_token_verifier import CompositeTokenVerifier
 from app.infrastructure.auth.issuer_token_verifier import IssuerTokenVerifier
+from tests.fixtures.identity_tokens import COGNITO_TEST_KEY, TEST_KEY, StaticKeys
 
 ISSUER_A = "https://emisor-a.example.com/tenant-de-prueba/v2.0"
 ISSUER_B = "https://emisor-b.example.com/pool-de-prueba"
@@ -203,27 +202,6 @@ ENTRA = TokenIssuer(
 )
 
 
-@dataclass(frozen=True)
-class _SigningKey:
-    key: RSAPublicKey
-
-
-class _StaticKeys:
-    def __init__(self, public_key: RSAPublicKey) -> None:
-        self._public_key = public_key
-
-    def get_signing_key_from_jwt(self, token: str) -> _SigningKey:
-        return _SigningKey(key=self._public_key)
-
-
-def _generate_private_key() -> RSAPrivateKey:
-    return rsa.generate_private_key(public_exponent=65537, key_size=2048)
-
-
-COGNITO_KEY = _generate_private_key()
-ENTRA_KEY = _generate_private_key()
-
-
 def _issuer_token(issuer: TokenIssuer, key: RSAPrivateKey, overrides: dict[str, object] | None = None) -> str:
     now = int(time.time())
     claims: dict[str, object] = {
@@ -246,15 +224,15 @@ def _issuer_token(issuer: TokenIssuer, key: RSAPrivateKey, overrides: dict[str, 
 def real_composite() -> CompositeTokenVerifier:
     return CompositeTokenVerifier(
         {
-            COGNITO.issuer: IssuerTokenVerifier(COGNITO, _StaticKeys(COGNITO_KEY.public_key())),
-            ENTRA.issuer: IssuerTokenVerifier(ENTRA, _StaticKeys(ENTRA_KEY.public_key())),
+            COGNITO.issuer: IssuerTokenVerifier(COGNITO, StaticKeys(COGNITO_TEST_KEY.public_key())),
+            ENTRA.issuer: IssuerTokenVerifier(ENTRA, StaticKeys(TEST_KEY.public_key())),
         }
     )
 
 
 def test_each_real_verifier_accepts_only_the_tokens_of_its_own_issuer(real_composite: CompositeTokenVerifier) -> None:
-    cognito_identity = real_composite.verify(_issuer_token(COGNITO, COGNITO_KEY))
-    entra_identity = real_composite.verify(_issuer_token(ENTRA, ENTRA_KEY))
+    cognito_identity = real_composite.verify(_issuer_token(COGNITO, COGNITO_TEST_KEY))
+    entra_identity = real_composite.verify(_issuer_token(ENTRA, TEST_KEY))
 
     assert (cognito_identity.issuer, cognito_identity.subject) == (COGNITO.issuer, "sujeto-cognito")
     assert (entra_identity.issuer, entra_identity.subject) == (ENTRA.issuer, "sujeto-entra")
@@ -262,14 +240,14 @@ def test_each_real_verifier_accepts_only_the_tokens_of_its_own_issuer(real_compo
 
 def test_a_token_signed_by_the_other_issuers_key_is_rejected(real_composite: CompositeTokenVerifier) -> None:
     with pytest.raises(InvalidIdentityTokenError):
-        real_composite.verify(_issuer_token(ENTRA, COGNITO_KEY))
+        real_composite.verify(_issuer_token(ENTRA, COGNITO_TEST_KEY))
     with pytest.raises(InvalidIdentityTokenError):
-        real_composite.verify(_issuer_token(COGNITO, ENTRA_KEY))
+        real_composite.verify(_issuer_token(COGNITO, TEST_KEY))
 
 
 def test_a_token_for_another_audience_is_rejected(real_composite: CompositeTokenVerifier) -> None:
     with pytest.raises(InvalidIdentityTokenError):
-        real_composite.verify(_issuer_token(ENTRA, ENTRA_KEY, {"aud": COGNITO.audience}))
+        real_composite.verify(_issuer_token(ENTRA, TEST_KEY, {"aud": COGNITO.audience}))
 
 
 def test_an_unsigned_token_with_a_valid_issuer_is_rejected_by_that_issuers_verifier(

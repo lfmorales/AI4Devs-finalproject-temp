@@ -1,13 +1,10 @@
 """The verifier built by providers.py reflects the configured issuers, and an unknown issuer never reaches the users."""
 
-import time
 from collections.abc import Iterator
-from dataclasses import dataclass
 from typing import Any
 
 import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, RSAPublicKey
 from fastapi.testclient import TestClient
 
@@ -17,20 +14,18 @@ from app.domain.models.user import User
 from app.main import create_app
 from app.presentation.dependencies import providers
 from app.presentation.dependencies.providers import get_db_session
+from tests.fixtures.identity_tokens import (
+    COGNITO_TEST_KEY,
+    TEST_KEY,
+    SigningKey,
+    cognito_token,
+    entra_token,
+)
 
 COGNITO_ISSUER = "https://cognito-idp.eu-central-1.amazonaws.com/eu-central-1_Example1"
 ENTRA_ISSUER = "https://login.microsoftonline.com/tenant-de-prueba/v2.0"
 COGNITO_AUDIENCE = "example-client-id"
 ENTRA_AUDIENCE = "cliente-de-prueba"
-
-COGNITO_KEY: RSAPrivateKey = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-ENTRA_KEY: RSAPrivateKey = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-
-
-@dataclass(frozen=True)
-class _SigningKey:
-    key: RSAPublicKey
-
 
 class _KeysByUrl:
     """Stands in for PyJWKClient: no network, the keys depend on the URL the provider configured."""
@@ -40,34 +35,24 @@ class _KeysByUrl:
     def __init__(self, jwks_url: str) -> None:
         self._public_key = self._PUBLIC_KEYS[jwks_url]
 
-    def get_signing_key_from_jwt(self, token: str) -> _SigningKey:
-        return _SigningKey(key=self._public_key)
+    def get_signing_key_from_jwt(self, token: str) -> SigningKey:
+        return SigningKey(key=self._public_key)
 
 
-def _cognito_token(key: RSAPrivateKey = COGNITO_KEY) -> str:
-    now = int(time.time())
-    claims = {
-        "iss": COGNITO_ISSUER, "aud": COGNITO_AUDIENCE, "iat": now, "exp": now + 3600, "sub": "sujeto-cognito",
-        "token_use": "id", "email": "ops@example.com", "email_verified": True,
-    }
-    return jwt.encode(claims, key, algorithm="RS256", headers={"kid": "test-kid"})
+def _cognito_token(key: RSAPrivateKey = COGNITO_TEST_KEY) -> str:
+    return cognito_token(iss=COGNITO_ISSUER, aud=COGNITO_AUDIENCE, key=key)
 
 
-def _entra_token(key: RSAPrivateKey = ENTRA_KEY) -> str:
-    now = int(time.time())
-    claims = {
-        "iss": ENTRA_ISSUER, "aud": ENTRA_AUDIENCE, "iat": now, "exp": now + 3600, "oid": "sujeto-entra",
-        "ver": "2.0", "scp": "access_as_user", "email": "ops@example.com",
-    }
-    return jwt.encode(claims, key, algorithm="RS256", headers={"kid": "test-kid"})
+def _entra_token(key: RSAPrivateKey = TEST_KEY) -> str:
+    return entra_token({"oid": "sujeto-entra"}, iss=ENTRA_ISSUER, aud=ENTRA_AUDIENCE, key=key)
 
 
 @pytest.fixture
 def configure(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     """Sets the issuer environment, then rebuilds the cached settings and verifier around it."""
     _KeysByUrl._PUBLIC_KEYS = {
-        f"{COGNITO_ISSUER}/.well-known/jwks.json": COGNITO_KEY.public_key(),
-        "https://login.microsoftonline.com/tenant-de-prueba/discovery/v2.0/keys": ENTRA_KEY.public_key(),
+        f"{COGNITO_ISSUER}/.well-known/jwks.json": COGNITO_TEST_KEY.public_key(),
+        "https://login.microsoftonline.com/tenant-de-prueba/discovery/v2.0/keys": TEST_KEY.public_key(),
     }
     monkeypatch.setattr("app.infrastructure.auth.issuer_token_verifier.PyJWKClient", _KeysByUrl)
 
@@ -113,9 +98,9 @@ def test_with_entra_configured_a_token_signed_for_the_other_issuer_is_not_accept
     verifier = providers._token_verifier()
 
     with pytest.raises(InvalidIdentityTokenError):
-        verifier.verify(_cognito_token(key=ENTRA_KEY))
+        verifier.verify(_cognito_token(key=TEST_KEY))
     with pytest.raises(InvalidIdentityTokenError):
-        verifier.verify(_entra_token(key=COGNITO_KEY))
+        verifier.verify(_entra_token(key=COGNITO_TEST_KEY))
 
 
 class _RecordingUserRepository:
@@ -143,7 +128,7 @@ def test_a_token_of_an_unknown_issuer_gives_401_and_the_user_repository_is_not_q
     app.dependency_overrides[get_db_session] = lambda: None
     unknown_issuer_token = jwt.encode(
         {"iss": "https://emisor-desconocido.example.com", "aud": "otra", "sub": "x", "email": "ops@example.com"},
-        COGNITO_KEY,
+        COGNITO_TEST_KEY,
         algorithm="RS256",
     )
 
