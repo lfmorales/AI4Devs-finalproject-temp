@@ -1,0 +1,33 @@
+▶ the project name of docker-compose.yml
+  ✔ is adops360, whatever the folder is called (186.708791ms)
+  ✔ is COMPOSE_PROJECT_NAME when the environment sets it (118.060917ms)
+  ✔ is COMPOSE_PROJECT_NAME when the folder's .env sets it (121.293667ms)
+  ✔ is the one given with -p, over the .env (123.685ms)
+✔ the project name of docker-compose.yml (550.474ms)
+▶ the project name of docker-compose.prod.yml
+  ✔ is adops360, whatever the folder is called (103.608916ms)
+  ✔ is COMPOSE_PROJECT_NAME when the environment sets it (113.434083ms)
+  ✔ is COMPOSE_PROJECT_NAME when the folder's .env sets it (124.408333ms)
+  ✔ is the one given with -p, over the .env (107.559ms)
+✔ the project name of docker-compose.prod.yml (449.292583ms)
+▶ git ignores the test issuer keys
+  ✔ reports both keys, and anything else under .secrets/, as ignored (42.14275ms)
+✔ git ignores the test issuer keys (43.152834ms)
+▶ no key reaches a build context sent to Docker
+  ✔ a pair placed inside backend/ is left out by its .dockerignore, and nothing else is (733.375875ms)
+  ✔ the real backend/ context holds no .secrets path, no .pem file and no private key (2653.375083ms)
+  ✔ a pair placed inside frontend/ is left out by its .dockerignore, and nothing else is (548.077833ms)
+  ✔ the real frontend/ context holds no .secrets path, no .pem file and no private key (743.4895ms)
+✔ no key reaches a build context sent to Docker (4678.565958ms)
+▶ the compose files
+  ✔ development mounts only the public directory, read-only, and selects the test issuer (87.23525ms)
+  ✔ production pins APP_ENV=production and has no key mount and no key variable (83.395542ms)
+✔ the compose files (170.798167ms)
+ℹ tests 15
+ℹ suites 5
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5287.041166

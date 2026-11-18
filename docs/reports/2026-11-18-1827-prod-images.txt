@@ -1,0 +1,1 @@
+OK: images built, /api/health 200 over HTTPS, port 80 redirects, backend image clean, without private keys and non-root, backend refuses the test issuer key, database not published, migrations applied as a separate step

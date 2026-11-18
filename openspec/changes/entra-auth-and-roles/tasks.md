@@ -68,19 +68,19 @@
 
 ## 13. Review and Update Existing Unit Tests (MANDATORY)
 
-- [ ] 13.1 Review every existing test that names a role (the files listed by `grep` for `RoleName` and the role strings in `backend/tests`, `e2e` and `frontend/tests`) and update the ones the matrix changes
+- [x] 13.1 Review every existing test that names a role (the files listed by `grep` for `RoleName` and the role strings in `backend/tests`, `e2e` and `frontend/tests`) and update the ones the matrix changes
 
 ## 14. Run Unit Tests and Verify Database State (MANDATORY)
 
-- [ ] 14.1 Capture the database state, run the targeted tests and then the full backend and frontend suites, re-check the state and restore any change, and create the report at `docs/reports/YYYY-MM-DD-step-14-unit-test-and-db-verification.md`
+- [x] 14.1 Capture the database state, run the targeted tests and then the full backend and frontend suites, re-check the state and restore any change, and create the report at `docs/reports/YYYY-MM-DD-step-14-unit-test-and-db-verification.md`
 
 ## 15. Manual Endpoint Testing with curl (MANDATORY - AGENT MUST EXECUTE)
 
-- [ ] 15.1 With curl, check a token from an unknown issuer (401), a valid user without the role (403) on each guarded route changed by the matrix, an unregistered user (403) and the active switch taking effect on the next request; restore the database state afterwards
+- [x] 15.1 With curl, check a token from an unknown issuer (401), a valid user without the role (403) on each guarded route changed by the matrix, an unregistered user (403) and the active switch taking effect on the next request; restore the database state afterwards
 
 ## 16. E2E Testing with Playwright (MANDATORY - AGENT MUST EXECUTE)
 
-- [ ] 16.1 Run the Playwright specs for the finance, operations and trading sessions and record the result
+- [x] 16.1 Run the Playwright specs for the finance, operations and trading sessions and record the result
 
 ## 17. Manual Entra Sign-in Check
 

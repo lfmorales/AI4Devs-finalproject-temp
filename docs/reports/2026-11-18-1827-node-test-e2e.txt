@@ -1,0 +1,76 @@
+▶ reset-data.sh before it touches anything
+  ✔ aborts naming the containers and the project when another project publishes port 80, and stops nothing (133.19325ms)
+  ✔ names a container that is not part of any Compose project (69.317084ms)
+  ✔ aborts naming the other folder, and stops nothing, when a stack of the same project name runs from another folder (70.369292ms)
+  ✔ aborts, explaining why, when a container carries no working directory label (70.926709ms)
+  ✔ goes on to bring this project down when port 80 is this project's own (83.036ms)
+  ✔ goes on when nothing publishes port 80 (75.599416ms)
+  ✔ aborts when docker is not available (9.468209ms)
+✔ reset-data.sh before it touches anything (512.8195ms)
+▶ reset-data.sh and the seeded user's email
+  ✔ shows the domain of every email but never its local part, on both streams (175.435125ms)
+  ✔ keeps the exit code of a failing seeding, and still prints nothing of the email (114.997417ms)
+  ✔ leaves the other lines of the output as they were (204.0175ms)
+✔ reset-data.sh and the seeded user's email (494.669583ms)
+▶ reset-data.sh and the demonstration data of the exception queue
+  ✔ runs the exception seed after the margin seed, which comes after the development seed (198.911709ms)
+  ✔ runs it before nginx is restarted (177.733708ms)
+  ✔ stops with its exit code if it fails, and restarts nothing (156.917709ms)
+  ✔ hides the local part of an email in its output too (167.399708ms)
+✔ reset-data.sh and the demonstration data of the exception queue (701.154209ms)
+(node:44636) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file://<repo>/e2e/support/compose-project.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to <repo>/e2e/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▶ the Compose project that publishes port 80
+  ✔ is fine when it is this project's (76.750541ms)
+  ✔ is a mismatch when another project publishes it, and names the containers and both projects (30.789958ms)
+  ✔ honours the project name that Compose reports, not the directory name (26.450792ms)
+  ✔ is a mismatch for a container that is not part of any Compose project (26.439541ms)
+  ✔ is a mismatch when a stack of the same project name was started from another folder, and names that folder (29.372792ms)
+  ✔ is a mismatch, explaining why, when a container carries no working directory label (27.290959ms)
+  ✔ ignores a container that only maps another host port to its port 80 (27.426125ms)
+  ✔ is a mismatch when no container publishes the port at all (27.250583ms)
+  ✔ warns and goes on when docker cannot be run (13.678709ms)
+  ✔ warns and goes on when Compose cannot name the project (26.617167ms)
+  ✔ warns and goes on when there is no docker in the PATH (1.482833ms)
+  ✔ only reads: it never stops, removes or starts anything (29.123584ms)
+✔ the Compose project that publishes port 80 (343.747541ms)
+(node:44637) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file://<repo>/e2e/support/e2e-users.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to <repo>/e2e/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▶ the test-issuer token
+  ✔ is an RS256 JWT that the matching public key verifies (4.048083ms)
+  ✔ carries exactly the claims of an Entra access token of the test issuer, valid for four hours (1.133125ms)
+  ✔ fails without the private key, naming the script that generates it (0.32425ms)
+  ✔ reads an existing private key (7.5575ms)
+✔ the test-issuer token (13.708875ms)
+▶ the Entra session object
+  ✔ is stored under the key oidc-client-ts builds from the frontend's Entra authority and client (1.269375ms)
+  ✔ holds the token as the access token, the email in the profile and the token's expiry (1.036041ms)
+  ✔ reads ENTRA_TENANT_ID and ENTRA_CLIENT_ID by name: the last assignment, unquoted and trimmed (0.24775ms)
+  ✔ names the missing variables without echoing any value (0.123792ms)
+✔ the Entra session object (2.857167ms)
+▶ the E2E users and their seeding
+  ✔ are one user per role plus the two unions of the access matrix, each with a fixed oid (0.138125ms)
+  ✔ is one transaction that names no address outside the fixed list (0.386292ms)
+  ✔ reactivates the users, clears their link so the first access links them by email again, and sets exactly their roles (0.122291ms)
+  ✔ refuses an address outside @adops360.example.test and an unknown role (0.110083ms)
+✔ the E2E users and their seeding (0.894334ms)
+▶ the Microsoft sign-in hosts the E2E block
+  ✔ are login.microsoftonline.com and login.microsoft.com, over any path (0.104292ms)
+  ✔ leave the stack and every other host alone (0.055792ms)
+✔ the Microsoft sign-in hosts the E2E block (0.207583ms)
+▶ the sessions the global setup leaves for the specs
+  ✔ are read back as written, by user name (6.354166ms)
+  ✔ are missing until the global setup has run, and the error says so (0.157833ms)
+✔ the sessions the global setup leaves for the specs (6.582083ms)
+ℹ tests 42
+ℹ suites 9
+ℹ pass 42
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1788.023875

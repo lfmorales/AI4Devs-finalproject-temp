@@ -1,0 +1,93 @@
+ssssssssssssssssssssssssssssssssssssss.................................. [  3%]
+........................................................................ [  6%]
+........................................................................ [  9%]
+........................................................................ [ 12%]
+........................................................................ [ 16%]
+........................................................................ [ 19%]
+........................................................................ [ 22%]
+........................................................................ [ 25%]
+........................................................................ [ 28%]
+........................................................................ [ 32%]
+........................................................................ [ 35%]
+........................................................................ [ 38%]
+........................................................................ [ 41%]
+........................................................................ [ 44%]
+........................................................................ [ 48%]
+........................................................................ [ 51%]
+........................................................................ [ 54%]
+........................................................................ [ 57%]
+........................................................................ [ 60%]
+........................................................................ [ 64%]
+........................................................................ [ 67%]
+........................................................................ [ 70%]
+........................................................................ [ 73%]
+........................................................................ [ 76%]
+........................................................................ [ 80%]
+........................................................................ [ 83%]
+........................................................................ [ 86%]
+........................................................................ [ 89%]
+........................................................................ [ 92%]
+........................................................................ [ 96%]
+........................................................................ [ 99%]
+................                                                         [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  <repo>/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/api/test_auth_dependencies.py: 1 warning
+tests/infrastructure/test_four_roles_migration.py: 11 warnings
+tests/infrastructure/test_identity_link_columns.py: 1 warning
+tests/infrastructure/test_identity_link_migration.py: 9 warnings
+tests/infrastructure/test_line_model_migration.py: 16 warnings
+tests/infrastructure/test_margin_closing_concurrency.py: 1 warning
+tests/infrastructure/test_margin_migration.py: 20 warnings
+tests/infrastructure/test_trading_role_migration.py: 7 warnings
+  <repo>/backend/.venv/lib/python3.12/site-packages/alembic/config.py:604: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+tests/infrastructure/test_identity_models.py::test_user_roles_composite_pk
+  <repo>/backend/tests/infrastructure/test_identity_models.py:39: SAWarning: New instance <UserRoleRecord at 0x10ea447a0> with identity key (<class 'app.infrastructure.persistence.models.identity.UserRoleRecord'>, (566, 9), None) conflicts with persistent instance <UserRoleRecord at 0x10e43a870>
+    test_db_session.commit()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/acceptance/test_closed_month_sheet.py:57: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_closed_month_sheet.py:62: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_closed_month_sheet.py:72: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_closed_month_sheet.py:96: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_closed_month_sheet.py:100: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_closed_month_sheet.py:117: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_closed_month_sheet.py:131: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_closed_month_sheet.py:149: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_closed_month_sheet.py:155: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_closed_month_sheet.py:161: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_closed_month_sheet.py:169: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_closed_month_sheet.py:179: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_running_month_sheet.py:59: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_running_month_sheet.py:70: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_running_month_sheet.py:83: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_running_month_sheet.py:102: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_running_month_sheet.py:113: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_running_month_sheet.py:128: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_running_month_sheet.py:139: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_running_month_sheet.py:157: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_running_month_sheet.py:163: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_running_month_sheet.py:170: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/acceptance/test_running_month_sheet.py:176: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/api/test_acceptance_closed_month_database.py:92: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/api/test_acceptance_closed_month_database.py:98: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/api/test_acceptance_closed_month_database.py:115: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/api/test_acceptance_closed_month_database.py:126: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/api/test_acceptance_closed_month_database.py:135: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/api/test_acceptance_closed_month_database.py:145: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/api/test_acceptance_closed_month_database.py:157: the private sheet mes_cerrado_directo.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/api/test_acceptance_running_month_database.py:103: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/api/test_acceptance_running_month_database.py:109: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/api/test_acceptance_running_month_database.py:124: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/api/test_acceptance_running_month_database.py:134: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/api/test_acceptance_running_month_database.py:144: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/api/test_acceptance_running_month_database.py:154: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/api/test_acceptance_running_month_database.py:164: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+SKIPPED [1] tests/api/test_acceptance_running_month_database.py:177: the private sheet mes_en_curso.csv is not present in tests/private/ (it is ignored by git)
+2210 passed, 38 skipped, 1 deselected, 68 warnings in 99.06s (0:01:39)

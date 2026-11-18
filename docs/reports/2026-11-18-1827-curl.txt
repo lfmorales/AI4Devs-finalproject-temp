@@ -1,0 +1,51 @@
+GET	/users/me	sin token	401	401	unauthenticated
+GET	/users/me	operations, firmado con otra clave	401	401	unauthenticated
+GET	/users/me	operations, iss desconocido	401	401	unauthenticated
+GET	/users/me	no registrado (nadie@adops360.example.test)	403	403	user_not_registered
+GET	/users/me	operations	200	200	
+GET	/users/me	business	200	200	
+GET	/users/me	finance	200	200	
+GET	/users/me	trading	200	200	
+GET	/users/me	finance-trading	200	200	
+GET	/users/me	business-trading	200	200	
+GET	/campaigns	trading	403	403	missing_role
+GET	/campaigns	finance	200	200	
+GET	/masters/agencies	trading	403	403	missing_role
+GET	/masters/agencies	finance	200	200	
+GET	/masters/advertisers	trading	403	403	missing_role
+GET	/masters/advertisers	finance	200	200	
+GET	/masters/dsps	trading	403	403	missing_role
+GET	/masters/dsps	finance	200	200	
+GET	/masters/dsps	business	200	200	
+GET	/masters/channels	trading	403	403	missing_role
+GET	/masters/channels	finance	200	200	
+GET	/masters/channels	business	200	200	
+GET	/masters/formats	trading	403	403	missing_role
+GET	/masters/formats	finance	200	200	
+GET	/masters/formats	business	200	200	
+GET	/masters/campaign-types	trading	403	403	missing_role
+GET	/masters/campaign-types	finance	200	200	
+GET	/masters/campaign-types	business	200	200	
+GET	/masters/sectors	trading	403	403	missing_role
+GET	/masters/sectors	finance	200	200	
+GET	/masters/sectors	business	200	200	
+GET	/masters/sales-reps	trading	403	403	missing_role
+GET	/masters/sales-reps	finance	200	200	
+GET	/masters/sales-reps	business	200	200	
+GET	/campaign-status	trading	200	200	
+GET	/campaign-status	finance	200	200	
+GET	/margin?year=2026&month=10	business	403	403	missing_role
+GET	/margin?year=2026&month=10	trading	403	403	missing_role
+GET	/margin?year=2026&month=10	operations	200	200	
+POST	/margin/closings	business	403	403	missing_role
+POST	/margin/closings	operations	200	200	
+POST	/margin/rebate-schedules	finance	403	403	missing_role
+POST	/margin/rebate-schedules	operations	201	201	
+POST	/margin/platform-rates	finance	403	403	missing_role
+POST	/margin/platform-rates	operations	201	201	
+POST	/users/activation	finance	403	403	missing_role
+POST	/users/activation	operations (desactiva a e2e-trading)	200	200	
+GET	/users/me	trading, desactivado	403	403	user_inactive
+POST	/users/activation	operations (reactiva a e2e-trading)	200	200	
+GET	/users/me	trading, reactivado	200	200	
+requests 50 matching 50 different 0
