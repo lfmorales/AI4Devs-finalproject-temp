@@ -293,7 +293,7 @@ cd e2e && npm ci && npx playwright test
 
 ```mermaid
 flowchart TB
-    user["Usuario GeoQ<br/>(operaciones · negocio · financiero)<br/>navegador"]
+    user["Usuario GeoQ<br/>(operaciones · negocio · financiero · trading)<br/>navegador"]
 
     subgraph ec2["EC2 t3.small/medium — Docker Compose"]
         nginx["<b>nginx</b><br/>proxy inverso · TLS<br/>(Certbot)"]
@@ -356,7 +356,7 @@ La aplicación es un **monolito desplegado como conjunto de contenedores en una 
 | Componente | Tecnología | Responsabilidad |
 |---|---|---|
 | `backend` | Python 3.12, FastAPI, SQLAlchemy, Alembic, pandas/openpyxl | API de la aplicación. Contiene el modelo de dominio y el cálculo de márgenes, orquesta la ingesta de OC, ofertas y rendimiento, verifica el token de acceso de Entra y **aplica la autorización por rol en cada endpoint**. |
-| `frontend` | Node 22 LTS, Next.js, TypeScript | Interfaz única para los tres roles. Inicia la sesión del usuario con Microsoft Entra ID, adjunta el token de acceso a las llamadas a la API y compone la navegación a partir de los roles del usuario. No calcula cifras financieras: las muestra ya calculadas por el backend. |
+| `frontend` | Node 22 LTS, Next.js, TypeScript | Interfaz única para los cuatro roles (operaciones, negocio, financiero y trading). Inicia la sesión del usuario con Microsoft Entra ID, adjunta el token de acceso a las llamadas a la API y compone la navegación a partir de los roles del usuario. No calcula cifras financieras: las muestra ya calculadas por el backend. |
 | `db` | PostgreSQL 16 (contenedor, volumen con nombre) | Único almacén transaccional: campañas, órdenes de compra versionadas, datos maestros, entregas y el modelo de usuarios y roles. |
 | `nginx` | nginx 1.27 + Certbot | Proxy inverso y terminación TLS. Único punto de entrada: enruta hacia `frontend` y `backend` y expone los puertos 80 y 443. |
 | **Microsoft Entra ID** (externo) | Tenant de la empresa y registro de la aplicación | Identidad: credenciales, tokens y sesión. **No guarda roles que la aplicación lea.** |

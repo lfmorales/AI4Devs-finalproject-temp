@@ -56,6 +56,6 @@ Constraints that shape the approach: authentication stays behind the `IdentityTo
 
 ## Entra Configuration Requirement
 
-The email fallback of D4 only works if the Entra application is configured to put an `email` claim in the access token (an optional claim of the version 2 access token). The link of the first access uses that email. If the token carries no email and the pair (issuer, subject) is not yet linked, the result is 403 `user_not_registered` and nothing is stored. A user already linked is unaffected by a missing email. The administrator therefore either configures the optional claim or links users beforehand.
+The Entra application must be configured to put an `email` claim in the access token (an optional claim of the version 2 access token); it is required, because the link of the first access (D4) uses that email and no tool writes `identity_issuer` or `identity_subject` in advance. If the token carries no email and the pair (issuer, subject) is not yet linked, the result is 403 `user_not_registered` and nothing is stored, so the first access of that user cannot be linked. A user already linked is unaffected by a missing email.
 
 The application defines no Entra application roles: the `roles` claim is ignored (D2).

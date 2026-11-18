@@ -42,7 +42,7 @@ Microsoft Entra ID is the only identity provider. Register an application for pr
 - **Platform:** single-page application (SPA), with the redirect URI `https://<SERVER_NAME>/callback` and the post-logout redirect URI `https://<SERVER_NAME>`. The browser uses the authorization code flow with PKCE, with no client secret.
 - **Expose an API:** the application ID URI `api://<client-id>` and a delegated scope named `access_as_user`. The browser asks for `api://<client-id>/access_as_user` besides `openid profile email`, and the backend rejects any token without that scope.
 - **Access token version 2:** in the manifest, `requestedAccessTokenVersion: 2`. The backend rejects any other version, and the audience of a version 2 token is the client id itself.
-- **Optional claim `email` in the access token.** The first access of a user finds them by that claim and stores their link (section 11); without it a user who is not linked yet is answered 403 `user_not_registered`.
+- **The optional claim `email` in the access token, which is required here.** The first access of a user finds them by that claim and stores their link (section 11), and no tool links a user in advance. Without it the first access cannot be linked: a user who is not linked yet is answered 403 `user_not_registered`.
 - **Assignment required:** in the enterprise application, set *Assignment required* to yes and assign the users who may sign in. Being assigned only lets a person sign in; what they may do still comes from their roles in the database.
 - **No application roles.** A `roles` claim in the token is ignored: roles live only in the database.
 

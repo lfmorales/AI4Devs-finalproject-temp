@@ -55,8 +55,7 @@ frontend/
 │   ├── auth/                 # Entra session and access token handling
 │   └── types/                # Shared domain types
 ├── tests/
-│   ├── unit/                 # Vitest component and unit tests
-│   └── e2e/                  # Playwright specs, one per role flow
+│   └── unit/                 # Vitest component and unit tests
 ├── public/                   # Static assets
 ├── next.config.ts
 ├── tsconfig.json
@@ -147,7 +146,7 @@ Three flows, one per role, covering the path each role actually takes:
 
 A fourth case is worth carrying: a user holding several roles at once, since that is the normal case for this team and the one a three-flow suite would otherwise never exercise.
 
-Location: `tests/e2e/`.
+Location: `e2e/` at the repository root, outside `frontend/`.
 
 ## Configuration Standards
 
