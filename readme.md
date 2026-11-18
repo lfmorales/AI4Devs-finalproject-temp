@@ -155,8 +155,9 @@ Mantenimiento administrativo (alta, consulta, modificación y baja) de los pará
 
 #### Requisitos previos
 
-- Docker y Docker Compose
-- Un User Pool de AWS Cognito ya creado (servicio gestionado, no forma parte del stack de contenedores), con un dominio de Hosted UI y un app client de tipo SPA: **sin client secret** y con flujo *authorization code* con PKCE. El app client debe tener como URL de callback `<origen>/callback` y como URL de cierre de sesión `<origen>/` (en local, `http://localhost/callback` y `http://localhost/`)
+- Docker y Docker Compose, y `openssl` para generar las claves del emisor de pruebas
+- El **registro de desarrollo** de la aplicación en Microsoft Entra ID (servicio gestionado, no forma parte del stack de contenedores), con los mismos ajustes que el de producción ([`docs/deploy.md` §5](./docs/deploy.md#5-microsoft-entra-id)) salvo las URI de redirección, que en local son `http://localhost/callback` y `http://localhost` (plataforma SPA)
+- Tu usuario de Microsoft del tenant de la empresa, **asignado a esa aplicación** de desarrollo
 - Un bucket de S3 y credenciales de AWS con acceso a él
 - Credenciales de API de Adform, Equativ y Displayce
 
@@ -178,14 +179,23 @@ Edita `.env` con los valores reales. El fichero nunca se versiona y en el servid
 | Bloque | Variables |
 |---|---|
 | PostgreSQL | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` |
-| AWS Cognito | `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID`, `COGNITO_REGION`, `COGNITO_DOMAIN` (dominio del Hosted UI, sin `https://`) |
+| Microsoft Entra ID | `ENTRA_TENANT_ID` (`<tenant-id>`) y `ENTRA_CLIENT_ID` (`<client-id>` del registro de desarrollo). **Obligatorias**: sin ellas cualquier comando de `docker compose` falla (`required variable ENTRA_TENANT_ID is missing a value`) y el backend no arranca |
 | AWS S3 | `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `S3_BUCKET_NAME` |
 | APIs de los DSP | `ADFORM_CLIENT_ID`, `ADFORM_CLIENT_SECRET`, `EQUATIV_CLIENT_ID`, `EQUATIV_CLIENT_SECRET`, `DISPLAYCE_CLIENT_ID`, `DISPLAYCE_CLIENT_SECRET` |
-| Frontend | `NEXT_PUBLIC_API_URL` |
+| Frontend | `NEXT_PUBLIC_API_URL`. El tenant y el cliente del navegador (`NEXT_PUBLIC_ENTRA_*`) los deriva Compose de `ENTRA_*`: no se escriben aparte |
+| Desarrollo | `SEED_USER_EMAIL`: el correo de tu usuario de Microsoft (ver el paso 3) |
 
 #### 3. Levantar los servicios y aplicar migraciones
 
 Ejecuta estos pasos **en orden exacto**:
+
+**Paso 0:** Generar las claves del emisor de pruebas, antes del primer `up`
+
+```bash
+bash scripts/generate_test_issuer_keys.sh
+```
+
+Crea el par de claves en `.secrets/test-issuer/` (ignorado por git y por todas las imágenes): la pública se monta en solo lectura en el backend de desarrollo y la privada, con permisos `600`, solo la usan los E2E para firmar tokens. Sin la clave pública el backend de desarrollo no arranca. Si el par ya existe lo conserva; `--force` lo sustituye.
 
 **Paso 1:** Levantar los contenedores
 
@@ -209,7 +219,9 @@ Las migraciones **deben ejecutarse antes del seed de datos**: sin ellas, el seed
 docker compose exec backend python -m scripts.seed_dev_data
 ```
 
-Crea el usuario de desarrollo cuyo email coincide con `SEED_USER_EMAIL` y le asigna el rol `operations`. Este usuario debe existir en Cognito con el mismo email.
+Crea el usuario de desarrollo cuyo email coincide con `SEED_USER_EMAIL` y le asigna los roles `operations` y `finance`. Con ese usuario se entra desde el navegador: `SEED_USER_EMAIL` debe ser el correo que Entra pone en el token de tu usuario de Microsoft. En el primer acceso la aplicación lo encuentra por ese correo y guarda el vínculo (emisor, `oid`); a partir de ahí solo cuenta el vínculo.
+
+> **Base con usuarios vinculados a otro emisor.** Un usuario tiene una sola identidad: si la base viene de una versión anterior y tu usuario quedó vinculado a otro emisor, el acceso con Entra responde 403 `identity_link_conflict`. Recrea la base con `bash e2e/scripts/reset-data.sh`, que **borra todos los datos** y vuelve a aplicar migraciones y semillas.
 
 **Paso 4:** Reiniciar nginx
 
@@ -219,7 +231,7 @@ docker compose restart nginx
 
 **Importante: variables de entorno incrustadas en el build**
 
-Las variables `NEXT_PUBLIC_*` y `COGNITO_DOMAIN` se incrustan en el bundle del frontend **al construir la imagen**. Si cambias alguna de estas variables en `.env`, debes reconstruir:
+Las variables `NEXT_PUBLIC_*` y `ENTRA_TENANT_ID` y `ENTRA_CLIENT_ID` (de las que Compose deriva `NEXT_PUBLIC_ENTRA_*`) se incrustan en el bundle del frontend **al construir la imagen**. Si cambias alguna de estas variables en `.env`, debes reconstruir:
 
 ```bash
 docker compose build
@@ -234,8 +246,9 @@ Estos campos son obligatorios en `.env` (ver `.env.example` para la lista comple
 | Variable | Propósito |
 |---|---|
 | `POSTGRES_PASSWORD` | Contraseña de PostgreSQL |
-| `COGNITO_DOMAIN` | Dominio del Hosted UI de Cognito (sin `https://`) |
-| `SEED_USER_EMAIL` | Email del usuario de desarrollo que el seed crea y al que asigna el rol `operations`. **Debe coincidir con un usuario existente en Cognito.** |
+| `ENTRA_TENANT_ID` | Identificador del tenant (`<tenant-id>`). Sin él Compose y el backend no arrancan |
+| `ENTRA_CLIENT_ID` | Identificador de la aplicación del registro de desarrollo (`<client-id>`). Sin él Compose y el backend no arrancan |
+| `SEED_USER_EMAIL` | Email del usuario de desarrollo que el seed crea y al que asigna los roles `operations` y `finance`. **Debe ser el correo que Entra pone en el token de tu usuario de Microsoft.** |
 
 Nunca incluyas valores reales en el repositorio. `.env.example` documenta la forma; `.env` en la instancia lleva permisos restringidos (`chmod 600`).
 
@@ -259,6 +272,17 @@ cd backend && uv run pytest
 cd frontend && npm ci && npm test
 ```
 
+**End-to-end (Playwright).** Necesitan las claves del paso 0, el stack levantado y datos recién sembrados, porque el cierre de mes es irreversible:
+
+```bash
+bash e2e/scripts/reset-data.sh       # borra la base, migra y siembra los datos de demostración
+cd e2e && npm ci && npx playwright test
+```
+
+- Los E2E no inician sesión en Microsoft ni piden ninguna contraseña. En cada ejecución, el *global setup* siembra un usuario por rol —`e2e-operations`, `e2e-business`, `e2e-finance` y `e2e-trading`, más `e2e-finance-trading` y `e2e-business-trading`, todos `@adops360.example.test`—, firma para cada uno un token del emisor de pruebas con la clave privada y lo inyecta como sesión del navegador.
+- Ningún E2E sale a Microsoft: cualquier petición a un host de inicio de sesión de Microsoft se bloquea y hace fallar el test. Ningún E2E pulsa «Cerrar sesión», que llevaría al tenant real.
+- Los usuarios E2E son distintos de `SEED_USER_EMAIL`, así que el emisor de pruebas y el tenant real nunca compiten por el mismo usuario.
+
 ---
 
 ## 2. Arquitectura del Sistema
@@ -278,8 +302,11 @@ flowchart TB
         db[("<b>db</b><br/>PostgreSQL 16<br/>volumen persistente")]
     end
 
-    subgraph aws["AWS — servicios gestionados"]
-        cognito["Cognito<br/>User Pool"]
+    subgraph microsoft["Microsoft — servicio gestionado"]
+        entra["Microsoft Entra ID<br/>tenant de la empresa"]
+    end
+
+    subgraph aws["AWS — servicio gestionado"]
         s3[("S3<br/>Excel de OC y oferta<br/>informes de DSP")]
     end
 
@@ -290,18 +317,18 @@ flowchart TB
     end
 
     user -->|"HTTPS 443"| nginx
-    user -->|"login · obtención del token"| cognito
+    user -->|"inicio de sesión · token de acceso"| entra
     nginx -->|"/"| frontend
     nginx -->|"/api · Bearer JWT"| backend
     backend --> db
-    backend -->|"verificación del token (JWKS)"| cognito
+    backend -->|"claves públicas del tenant (JWKS)"| entra
     backend -->|"subida y lectura de ficheros"| s3
     backend -->|"rendimiento de campañas"| adform
     backend -->|"rendimiento de campañas"| equativ
     backend -->|"rendimiento de campañas"| displayce
 ```
 
-Todo lo que queda dentro del recuadro `EC2` son contenedores del mismo `docker-compose.yml`. Cognito, S3 y las APIs de los DSP son externos: el sistema los consume, no los despliega.
+Todo lo que queda dentro del recuadro `EC2` son contenedores del mismo `docker-compose.yml`. Microsoft Entra ID, S3 y las APIs de los DSP son externos: el sistema los consume, no los despliega. El emisor de pruebas de desarrollo no aparece: no es un servicio, solo una clave pública que el backend de desarrollo lee de un fichero (§2.5).
 
 #### Patrón: monolito contenedorizado en una única instancia
 
@@ -312,7 +339,7 @@ La aplicación es un **monolito desplegado como conjunto de contenedores en una 
 - **El alcance es un MVP interno.** Los usuarios son los equipos de operaciones, negocio y financiero de GeoQ —decenas de personas, no miles—, con un volumen de campañas moderado. Una arquitectura distribuida introduciría coste operativo y modos de fallo que este alcance no justifica.
 - **El cálculo de margen es transaccional y local.** Cruza orden de compra, entrega real y datos maestros. Con un único esquema PostgreSQL eso es un `JOIN` dentro de una transacción; repartido entre servicios sería consistencia eventual y reconciliación entre copias, exactamente el problema que el producto existe para eliminar.
 - **Un solo equipo y un solo artefacto de despliegue.** `docker compose up` levanta el sistema completo, idéntico en local y en el servidor. No hay versionado cruzado entre servicios ni contratos internos que mantener.
-- **Coste.** Una instancia `t3.small`/`t3.medium` más Cognito y S3, sin base de datos gestionada ni balanceadores.
+- **Coste.** Una instancia `t3.small`/`t3.medium` más S3, sin base de datos gestionada ni balanceadores. La identidad la da el tenant de Entra de la empresa.
 
 **Sacrificios que implica, asumidos conscientemente:**
 
@@ -328,15 +355,15 @@ La aplicación es un **monolito desplegado como conjunto de contenedores en una 
 
 | Componente | Tecnología | Responsabilidad |
 |---|---|---|
-| `backend` | Python 3.12, FastAPI, SQLAlchemy, Alembic, pandas/openpyxl | API de la aplicación. Contiene el modelo de dominio y el cálculo de márgenes, orquesta la ingesta de OC, ofertas y rendimiento, verifica el token de Cognito y **aplica la autorización por rol en cada endpoint**. |
-| `frontend` | Node 22 LTS, Next.js, TypeScript | Interfaz única para los tres roles. Autentica al usuario contra Cognito, adjunta el token a las llamadas a la API y compone la navegación a partir de los roles del usuario. No calcula cifras financieras: las muestra ya calculadas por el backend. |
+| `backend` | Python 3.12, FastAPI, SQLAlchemy, Alembic, pandas/openpyxl | API de la aplicación. Contiene el modelo de dominio y el cálculo de márgenes, orquesta la ingesta de OC, ofertas y rendimiento, verifica el token de acceso de Entra y **aplica la autorización por rol en cada endpoint**. |
+| `frontend` | Node 22 LTS, Next.js, TypeScript | Interfaz única para los tres roles. Inicia la sesión del usuario con Microsoft Entra ID, adjunta el token de acceso a las llamadas a la API y compone la navegación a partir de los roles del usuario. No calcula cifras financieras: las muestra ya calculadas por el backend. |
 | `db` | PostgreSQL 16 (contenedor, volumen con nombre) | Único almacén transaccional: campañas, órdenes de compra versionadas, datos maestros, entregas y el modelo de usuarios y roles. |
 | `nginx` | nginx 1.27 + Certbot | Proxy inverso y terminación TLS. Único punto de entrada: enruta hacia `frontend` y `backend` y expone los puertos 80 y 443. |
-| **Cognito** (externo) | AWS Cognito User Pool | Identidad: credenciales, tokens y sesión. **No almacena roles.** |
+| **Microsoft Entra ID** (externo) | Tenant de la empresa y registro de la aplicación | Identidad: credenciales, tokens y sesión. **No guarda roles que la aplicación lea.** |
 | **S3** (externo) | Amazon S3 | Almacenamiento de los Excel de orden de compra y oferta comercial subidos, y de los informes descargados de los DSP. Los ficheros no se guardan en el disco de la instancia. |
 | **APIs de DSP** (externas) | Adform, Equativ, Displayce | Fuente del rendimiento real de las campañas. La integración es **de solo lectura**: el sistema no crea ni modifica campañas en los DSP. |
 
-El reparto entre Cognito y la aplicación es deliberado: **Cognito responde "quién es"; la aplicación responde "qué puede hacer"**. Los roles viven únicamente en la base de datos, en la tabla puente `user_roles`, de modo que hay una sola fuente de verdad y nada que sincronizar. El modelo completo está en [Base Standards § Authorization Model](./docs/base-standards.md#6-authorization-model).
+El reparto entre Entra y la aplicación es deliberado: **Entra responde "quién es"; la aplicación responde "qué puede hacer"**. Los roles viven únicamente en la base de datos, en la tabla puente `user_roles`, de modo que hay una sola fuente de verdad y nada que sincronizar. El modelo completo está en [Base Standards § Authorization Model](./docs/base-standards.md#6-authorization-model).
 
 ### **2.3. Descripción de alto nivel del proyecto y estructura de ficheros**
 
@@ -365,7 +392,7 @@ backend/app/
 │                     # Aquí vive el modelo económico, sin dependencias externas.
 ├── application/      # Servicios de caso de uso; dependen de interfaces, no de SQLAlchemy
 ├── presentation/     # Routers FastAPI, esquemas Pydantic y dependencias de rol
-└── infrastructure/   # Repositorios SQLAlchemy, clientes de DSP, S3, parsers, Cognito
+└── infrastructure/   # Repositorios SQLAlchemy, clientes de DSP, S3, parsers, verificación de tokens
 ```
 
 El motivo de aislar el dominio es concreto: el cálculo de margen incluye devengo de extraprima por tramos, órdenes de compra versionadas y tasas congeladas en el momento del cálculo. Reglas de esa forma deben poder ejercitarse en tests sin base de datos, sin servidor HTTP y sin DSP.
@@ -411,7 +438,7 @@ flowchart TB
 - Cuatro servicios en ejecución permanente —`backend`, `frontend`, `db`, `nginx`— más un `certbot` bajo el perfil `tls`, que se ejecuta solo a demanda para emitir y renovar certificados.
 - Todos los contenedores comparten una red bridge interna. **Solo `nginx` publica puertos** hacia el exterior (80 y 443); la base de datos y las aplicaciones no son alcanzables desde fuera de la instancia.
 - Dos volúmenes con nombre: `postgres_data` (persistencia de la base de datos) y `certbot_certs` (certificados TLS, montados en `nginx` en solo lectura).
-- Cognito y S3 son servicios gestionados de AWS y **no forman parte del stack de Compose**: solo se declara la configuración necesaria para alcanzarlos.
+- Microsoft Entra ID y S3 son servicios gestionados y **no forman parte del stack de Compose**: solo se declara la configuración necesaria para alcanzarlos.
 
 **Configuración**
 
@@ -442,17 +469,22 @@ docker compose run --rm certbot renew
 
 Las medidas se corresponden con el alcance —un MVP interno en una sola instancia— y no pretenden ir más allá.
 
-**1. Autenticación delegada en Cognito.** La aplicación no almacena ni gestiona contraseñas. El usuario se autentica contra el User Pool y el backend verifica el JWT contra las claves públicas del pool —firma, caducidad, emisor y audiencia— en cada petición.
+**1. Autenticación delegada en Microsoft Entra ID.** Entra es el único proveedor de identidad, en desarrollo y en producción; la aplicación no almacena ni gestiona contraseñas. El navegador inicia sesión con Entra y envía el token de acceso. El backend acepta tokens solo de los emisores configurados y, en cada petición, comprueba firma (con las claves públicas del tenant), caducidad, emisor, audiencia, versión 2 y el ámbito `access_as_user`; solo el token de acceso lleva ese ámbito, así que cualquier otro token del inicio de sesión se rechaza. `ENTRA_TENANT_ID` y `ENTRA_CLIENT_ID` son obligatorias: sin ellas el backend no arranca.
 
-**2. Autorización propia, siempre en el servidor.** El *claim* `email` del token es la clave de unión con `users.email`, y de ahí a `user_roles`. De esto se derivan tres reglas que se aplican sin excepción:
+**2. Autorización propia, siempre en el servidor.** El token solo dice quién es el usuario; lo que puede hacer lo dice la base de datos. De ahí estas reglas, que se aplican sin excepción:
 
-- Un token válido cuyo email no existe en `users` es **prohibido, no se autoprovisiona**. Autenticar correctamente no concede acceso.
+- **Identidad estable.** Cada usuario se une a su identidad por el par (emisor, `oid`). En el primer acceso, un usuario registrado y sin vínculo se encuentra por el *claim* `email` del token y se guarda el par; después solo cuenta el par, aunque cambie el correo. Un usuario tiene una sola identidad: si el correo coincide con un usuario ya vinculado a otro par, la respuesta es 403 `identity_link_conflict` y el vínculo no cambia. Sin correo en el token y sin vínculo, 403 `user_not_registered`.
+- **La autenticación nunca crea usuarios.** Un token válido que no corresponde a ningún usuario registrado es **prohibido (403), no se autoprovisiona**. Autenticar correctamente no concede acceso.
+- **Los roles viven solo en la base de datos** (`user_roles`). El *claim* `roles` de un token de Entra se ignora.
+- **Usuario activo.** Operaciones activa o desactiva un usuario con `POST /users/activation` (o quien administra la base, con `python -m scripts.set_user_active`); surte efecto en la siguiente petición, diga lo que diga el token. Operaciones no puede desactivarse a sí misma ni dejar el sistema sin ningún usuario de operaciones activo.
 - **Cada endpoint declara explícitamente el rol o roles que requiere.** Un endpoint sin requisito declarado es un fallo de revisión, no un endpoint abierto.
-- Los endpoints que exponen coste o margen están restringidos al rol financiero.
+- Los endpoints que exponen coste o margen están restringidos a los roles de operaciones y financiero.
 
 **3. Las guardas del frontend son usabilidad, no seguridad.** Las rutas protegidas por rol en Next.js ocultan lo que el usuario no puede usar; nunca son la única comprobación. Toda vista protegida está respaldada por una verificación en el servidor, que asume que la API puede llamarse directamente.
 
-**4. Gestión de secretos por entorno.** Ninguna credencial aparece en el código. `.env` no se versiona y en la instancia lleva permisos restringidos (`chmod 600`) por contener las credenciales de Adform, Equativ y Displayce. Solo las variables públicas de Cognito —pool, cliente, región— llegan al navegador; lo que debe permanecer secreto no vive en el frontend. *(Secrets Manager queda explícitamente fuera del alcance del MVP.)*
+**4. Gestión de secretos por entorno.** Ninguna credencial aparece en el código. `.env` no se versiona y en la instancia lleva permisos restringidos (`chmod 600`) por contener las credenciales de Adform, Equativ y Displayce. Solo los identificadores públicos de Entra —tenant y cliente— llegan al navegador; lo que debe permanecer secreto no vive en el frontend. *(Secrets Manager queda explícitamente fuera del alcance del MVP.)*
+
+**4 bis. Emisor de pruebas, solo en desarrollo y test.** Los E2E y las llamadas a la API en desarrollo usan un emisor con la forma de Entra que **no inicia sesión de ninguna persona**: firma tokens con una clave privada local (`scripts/generate_test_issuer_keys.sh`) y el backend los verifica con la clave pública, con las mismas reglas que los de Entra. Su emisor (`http://localhost/test-issuer/v2.0`) y su audiencia (`api://adops360-test-issuer`) son fijos en el código, distintos de los de cualquier tenant real, así que uno de sus tokens nunca pasa por uno de Entra. Solo está activo con `TEST_ISSUER_PUBLIC_KEY_FILE` definida y `APP_ENV` exactamente `development` o `test`, y **falla cerrado**: con la clave definida y `APP_ENV` ausente, `production` o cualquier otro valor, el backend no arranca, y tampoco arranca si el fichero de la clave no se puede usar. El Compose de producción fija `APP_ENV=production` y no monta ninguna clave.
 
 **5. HTTPS de extremo a extremo hacia el exterior.** nginx termina TLS con certificados de Let's Encrypt gestionados por Certbot. Es el único servicio con puertos publicados; el resto solo es alcanzable desde la red interna de Compose, de modo que PostgreSQL no está expuesto a Internet.
 
@@ -473,7 +505,7 @@ El desarrollo sigue TDD: toda funcionalidad nueva empieza por un test que falla.
 | Nivel | Herramientas | Resultados |
 |---|---|---|
 | **Tests de dominio** | `pytest` (backend) | Reglas de negocio puras sin base de datos: expansión de períodos, versionado de órdenes de compra. |
-| **Tests de API** | `pytest` + `httpx` contra FastAPI + PostgreSQL real | Endpoints reales: códigos de estado, esquemas, autenticación Cognito y **aplicación de roles en los endpoints protegidos por rol**. Base de pruebas (`adops360_test`) recreada al inicio de cada ejecución. |
+| **Tests de API** | `pytest` + `httpx` contra FastAPI + PostgreSQL real | Endpoints reales: códigos de estado, esquemas, autenticación con tokens de Entra y del emisor de pruebas, y **aplicación de roles en los endpoints protegidos por rol**. Base de pruebas (`adops360_test`) recreada al inicio de cada ejecución. |
 | **Tests de infraestructura y migraciones** | `pytest` contra PostgreSQL real | Modelos de identidad y coherencia entre la migración Alembic y los modelos. Incluidos en los 65 tests de backend. |
 | **Tests unitarios frontend** | `Vitest` + Testing Library | 61 tests en 16 ficheros, entorno jsdom. Comportamiento de componentes, layout de autenticación, interacción con sesión. Aprobados 2 veces consecutivas. |
 | **Verificación de tipos** | TypeScript `tsc --noEmit` | ✓ Paso: sin errores de tipo en frontend. |

@@ -10,7 +10,7 @@ The margin migration creates the PostgreSQL extension `btree_gist`, which the ex
 
 ## 1. Prerequisites
 
-- An AWS account with a Cognito User Pool and an app client (authorization code + PKCE, no client secret).
+- A Microsoft Entra ID tenant (the company's) where you can register an application, and the users who will sign in. Production has its own registration, separate from the development one (section 5).
 - A domain name you control (`SERVER_NAME` below, e.g. `adops.example.com`).
 - An S3 bucket and, for ingestion, the DSP credentials (Adform first).
 
@@ -34,14 +34,19 @@ PostgreSQL (5432), the backend (8000) and the frontend (3000) are never opened. 
 
 Create an `A` record for `SERVER_NAME` pointing to the Elastic IP, and wait until it resolves from outside before asking for a certificate.
 
-## 5. Cognito
+## 5. Microsoft Entra ID
 
-In the app client of the User Pool, set over HTTPS:
+Microsoft Entra ID is the only identity provider. Register an application for production in the company tenant, separate from the development registration (which lists `http://localhost` URIs), with:
 
-- Allowed callback URL: `https://<SERVER_NAME>/callback`
-- Allowed sign-out URL: `https://<SERVER_NAME>/`
+- **Supported account types:** this organisational directory only (single tenant).
+- **Platform:** single-page application (SPA), with the redirect URI `https://<SERVER_NAME>/callback` and the post-logout redirect URI `https://<SERVER_NAME>`. The browser uses the authorization code flow with PKCE, with no client secret.
+- **Expose an API:** the application ID URI `api://<client-id>` and a delegated scope named `access_as_user`. The browser asks for `api://<client-id>/access_as_user` besides `openid profile email`, and the backend rejects any token without that scope.
+- **Access token version 2:** in the manifest, `requestedAccessTokenVersion: 2`. The backend rejects any other version, and the audience of a version 2 token is the client id itself.
+- **Optional claim `email` in the access token.** The first access of a user finds them by that claim and stores their link (section 11); without it a user who is not linked yet is answered 403 `user_not_registered`.
+- **Assignment required:** in the enterprise application, set *Assignment required* to yes and assign the users who may sign in. Being assigned only lets a person sign in; what they may do still comes from their roles in the database.
+- **No application roles.** A `roles` claim in the token is ignored: roles live only in the database.
 
-Remove the `http://localhost` URLs from the production client. Cognito only accepts HTTP for localhost, so a client that still lists other HTTP URLs is a configuration error.
+The tenant id and the client id go into `.env` (section 6) and nowhere else: never in the repository, a ticket or a chat.
 
 ## 6. The `.env` file
 
@@ -54,10 +59,16 @@ Edit it and replace every example value. Besides the usual variables, set:
 
 - `SERVER_NAME`: the host name, without scheme (`adops.example.com`).
 - `NEXT_PUBLIC_API_URL`: `https://<SERVER_NAME>/api`.
-- `COGNITO_DOMAIN`: the hosted UI domain, without `https://`.
+- `ENTRA_TENANT_ID` (`<tenant-id>`) and `ENTRA_CLIENT_ID` (`<client-id>` of the production registration). Both are required: without either of them every `docker compose` command stops with `required variable ENTRA_TENANT_ID is missing a value` (or the client one), and the backend refuses to start. Compose also passes them to the frontend build as `NEXT_PUBLIC_ENTRA_TENANT_ID` and `NEXT_PUBLIC_ENTRA_CLIENT_ID`; you do not write those yourself.
 - `NEXT_PUBLIC_MASK_NAMES` (optional): with the exact value `true`, every Adform campaign and line name is drawn blurred, cannot be selected and does not reveal on hover, which is useful for screenshots and demos. Leave it empty to show names normally. It is a build variable like the other `NEXT_PUBLIC_*` ones: it is inlined when the frontend image is built, so changing it means rebuilding that image. It only blurs the names visually. The names are still in the page's data and in the API responses, so it is **not a guarantee of confidentiality** on a published page: do not rely on it to keep the names from anyone who can open the application.
 
-`NEXT_PUBLIC_*` values and `COGNITO_DOMAIN` are inlined into the browser bundle when the frontend image is built, so changing them requires rebuilding that image. Only the public settings reach the frontend build; the DSP credentials never do. Never commit `.env`, and do not paste it in tickets or chats.
+`NEXT_PUBLIC_*` values, including the two Entra ones derived from `ENTRA_*`, are inlined into the browser bundle when the frontend image is built, so changing them requires rebuilding that image. The production build of the frontend fails, naming the variable, when `NEXT_PUBLIC_ENTRA_TENANT_ID` or `NEXT_PUBLIC_ENTRA_CLIENT_ID` is empty, instead of failing in the browser. Only the public settings reach the frontend build; the DSP credentials never do. Never commit `.env`, and do not paste it in tickets or chats.
+
+### No test issuer in production
+
+The test issuer of development and the end-to-end tests (`TEST_ISSUER_PUBLIC_KEY_FILE`, `scripts/generate_test_issuer_keys.sh`) has no place on the instance: do not generate its keys there and do not set the variable. `docker-compose.prod.yml` sets `APP_ENV=production` under `environment:`, which `.env` cannot override, and mounts no key. The backend fails closed: with the key set and `APP_ENV` anything but `development` or `test`, it refuses to start.
+
+`scripts/verify_prod_images.sh` checks this locally, among the rest: it builds the production images and starts the production composition with throwaway settings and a self-signed certificate, and checks that `/api/health` answers 200 over HTTPS, that port 80 redirects, that the backend image carries no tests, development seeds or private key and does not run as root, that the backend refuses to start with the test issuer key, that the database is not published, and that the migrations are a separate step.
 
 ## 7. The first certificate
 
@@ -130,10 +141,12 @@ The development seed is not in the production image. Create the first user, with
 
 ```
 docker compose -f docker-compose.prod.yml run --rm backend \
-  python -m scripts.grant_roles <email> operations [business] [finance]
+  python -m scripts.grant_roles <email> operations [business] [finance] [trading]
 ```
 
-Use the email Cognito puts in the token, spelled exactly the same: it is the only link between Cognito and the local user. The command creates the user if it does not exist, creates the requested role rows if they are missing, and prints counts only. Running it again changes nothing.
+Use the email Entra puts in the `email` claim of the user's access token, spelled the same (the comparison ignores case). Signing in never creates a user: the first access finds the registered user by that email and stores the pair (issuer, `oid`), and from then on only the pair counts, even if the email changes in Entra. A user has a single identity: an email that matches a user already linked to another pair is answered 403 `identity_link_conflict`. The user must also be assigned to the production application (section 5). The command creates the user if it does not exist, creates the requested role rows if they are missing, and prints counts only. Running it again changes nothing.
+
+To deactivate or reactivate a user later, an operations user calls `POST /api/users/activation`; whoever administers the database can run `python -m scripts.set_user_active --email <email> --inactive` (or `--active`), which has none of the endpoint's lock-out protections. Either takes effect on the user's next request.
 
 ## 12. Nightly ingestion
 
@@ -272,7 +285,7 @@ Right after the first deployment and after every release:
 
 ### An authenticated request
 
-The status endpoint is the end-to-end check: it needs a valid Cognito token, the user's roles in the database and the migrated schema.
+The status endpoint is the end-to-end check: it needs a valid Entra access token, the user's roles in the database and the migrated schema.
 
 Without a token it must answer 401:
 
@@ -283,12 +296,20 @@ curl -s -o /dev/null -w '%{http_code}\n' https://<SERVER_NAME>/api/campaign-stat
 With a token, sign in to the application with the first user (section 11), open the browser's developer tools, and copy the `Authorization: Bearer ...` value of any request to `/api/`. Read it into a shell variable without echoing it or leaving it in the history, and use it once:
 
 ```
-read -rs ID_TOKEN
-curl -fsS -H "Authorization: Bearer $ID_TOKEN" https://<SERVER_NAME>/api/campaign-status
-unset ID_TOKEN
+read -rs ACCESS_TOKEN
+curl -fsS -H "Authorization: Bearer $ACCESS_TOKEN" https://<SERVER_NAME>/api/campaign-status
+unset ACCESS_TOKEN
 ```
 
-On a fresh database the answer is `200` with `[]` (no campaign is running yet). `401` means the token is not accepted (check the `COGNITO_*` values in `.env` against the pool, and that the token is the ID token), `403` means the email in the token has no user or no `operations` or `business` role (section 11). The same in the browser: the "Estado" page shows "No hay campañas en curso" rather than an error.
+On a fresh database the answer is `200` with `[]` (no campaign is running yet). Every role of the access matrix (`operations`, `business`, `finance` and `trading`) may read the status. Otherwise:
+
+- `401` (`unauthenticated`): the token is not accepted. Check `ENTRA_TENANT_ID` and `ENTRA_CLIENT_ID` in `.env` against the production registration, and that the token is the access token, version 2, with the scope `access_as_user`: no other token of the sign-in is accepted.
+- `403 user_not_registered`: no user matches the token's link or its email, or the token carries no email and the user is not linked yet (section 5, the optional claim, and section 11).
+- `403 identity_link_conflict`: the email matches a user linked to another identity.
+- `403 user_inactive`: the user has been deactivated.
+- `403 missing_role`: the user exists but holds none of the roles the route accepts.
+
+The same in the browser: the "Estado" page shows "No hay campañas en curso" rather than an error.
 
 ### The ingestion
 
