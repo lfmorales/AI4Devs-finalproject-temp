@@ -37,7 +37,7 @@ finish() {
   trap - EXIT
   cleanup
   if [ "$code" -eq 0 ] && [ -z "$REASON" ]; then
-    echo "OK: images built, /api/health 200 over HTTPS, port 80 redirects, backend image clean and non-root, database not published, migrations applied as a separate step"
+    echo "OK: images built, /api/health 200 over HTTPS, port 80 redirects, backend image clean, without private keys and non-root, backend refuses the test issuer key, database not published, migrations applied as a separate step"
     exit 0
   fi
   echo "FALLO: ${REASON:-unexpected error or interruption (exit $code)}"
@@ -103,6 +103,35 @@ check_backend_image_contents() {
     || stop "the backend image has pytest, tests/, seed_dev_data.py, seed_margin_demo.py or seed_exceptions_demo.py, or lacks run_ingestion.py, grant_roles.py or the migrations"
 }
 
+check_backend_image_has_no_private_key() {
+  docker run --rm --entrypoint sh "${PROJECT}-backend" -c '! grep -rq "PRIVATE KEY" /app' \
+    || stop "the backend image has a file holding a private key under /app"
+}
+
+# With the test issuer key mounted and pointed at, the production backend must refuse to start: the compose
+# file pins APP_ENV=production. The pair is temporary, lives under $WORK and is removed with it, also on failure.
+check_backend_refuses_the_test_issuer_key() {
+  local keys="$WORK/test-issuer" log="$WORK/test-issuer.log" pid waited=0
+  ./scripts/generate_test_issuer_keys.sh --out "$keys" > /dev/null || stop "could not generate a temporary test issuer key pair"
+  compose run --rm --no-deps -T -v "$keys/public:/run/test-issuer:ro" \
+    -e TEST_ISSUER_PUBLIC_KEY_FILE=/run/test-issuer/public.pem backend > "$log" 2>&1 &
+  pid=$!
+  while kill -0 "$pid" 2> /dev/null; do
+    if [ "$waited" -ge 60 ]; then
+      kill "$pid" 2> /dev/null
+      stop "the production backend kept running with the test issuer key"
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if wait "$pid"; then
+    stop "the production backend exited without an error with the test issuer key"
+  fi
+  { grep -q "TEST_ISSUER_PUBLIC_KEY_FILE" "$log" && grep -q "APP_ENV" "$log"; } \
+    || { tail -20 "$log"; stop "the production backend refused the test issuer key without naming TEST_ISSUER_PUBLIC_KEY_FILE and APP_ENV"; }
+  rm -rf "$keys"
+}
+
 check_backend_is_not_root() {
   local running image_user
   image_user=$(docker run --rm --entrypoint id "${PROJECT}-backend" -u)
@@ -143,6 +172,8 @@ verify() {
   check_health_over_https
   check_http_redirects_and_leaves_acme_open
   check_backend_image_contents
+  check_backend_image_has_no_private_key
+  check_backend_refuses_the_test_issuer_key
   check_backend_is_not_root
   check_database_is_not_published
   check_migrations_are_a_separate_step

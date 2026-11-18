@@ -4,3 +4,5 @@ __pycache__/
 .pytest_cache/
 .env
 .env.*
+# The test issuer key pair: it never enters an image, even if it is placed inside the context.
+.secrets/

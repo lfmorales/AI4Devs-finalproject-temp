@@ -44,6 +44,9 @@ services:
       # Optional Entra issuer: both or neither. Passed from the environment with no default, so empty means absent.
       ENTRA_TENANT_ID: ${ENTRA_TENANT_ID}
       ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID}
+      # environment: takes precedence over env_file, so no .env can turn on the test issuer: with its key set,
+      # the backend refuses to start.
+      APP_ENV: production
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s

@@ -5,3 +5,5 @@ coverage/
 *.tsbuildinfo
 .env
 .env.*
+# The test issuer key pair: it never enters an image, even if it is placed inside the context.
+.secrets/

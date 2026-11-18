@@ -36,6 +36,13 @@ services:
       # Optional Entra issuer: both or neither. Passed from the environment with no default, so empty means absent.
       ENTRA_TENANT_ID: ${ENTRA_TENANT_ID}
       ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID}
+      # The test issuer, for the end-to-end tests and API calls in development. environment: takes
+      # precedence over env_file, so .env cannot change them. The key pair comes from scripts/generate_test_issuer_keys.sh.
+      APP_ENV: development
+      TEST_ISSUER_PUBLIC_KEY_FILE: /run/test-issuer/public.pem
+    # Only the public half, read-only; the private directory is mounted into no service.
+    volumes:
+      - ./.secrets/test-issuer/public:/run/test-issuer:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s

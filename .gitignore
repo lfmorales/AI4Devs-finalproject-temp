@@ -34,6 +34,9 @@
 # rather than as *.csv, so that CSV fixtures and seed data stay trackable.
 docs/campanas-sin-entrega.csv
 
+# The test issuer key pair (scripts/generate_test_issuer_keys.sh): never versioned, never in an image.
+.secrets/
+
 # TLS material: certificates and keys are issued on the instance and never versioned.
 *.pem
 *.key
