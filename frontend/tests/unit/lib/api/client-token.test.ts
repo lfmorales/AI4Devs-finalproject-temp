@@ -25,35 +25,16 @@ async function authorizationSent(fetchMock: ReturnType<typeof stubFetch>) {
 }
 
 beforeEach(() => vi.clearAllMocks());
-afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.unstubAllEnvs();
-});
+afterEach(() => vi.unstubAllGlobals());
 
 describe("the Bearer token of the API client", () => {
-  it("is the access token with entra, even when an identity token is present", async () => {
-    vi.stubEnv("NEXT_PUBLIC_AUTH_PROVIDER", "entra");
+  it("is the access token, even when an identity token is present", async () => {
     getUser.mockResolvedValue(user({ id_token: "token-de-identidad", access_token: "token-de-acceso" }));
 
     expect(await authorizationSent(stubFetch())).toBe("Bearer token-de-acceso");
   });
 
-  it("is the identity token with cognito, even when an access token is present", async () => {
-    vi.stubEnv("NEXT_PUBLIC_AUTH_PROVIDER", "cognito");
-    getUser.mockResolvedValue(user({ id_token: "token-de-identidad", access_token: "token-de-acceso" }));
-
-    expect(await authorizationSent(stubFetch())).toBe("Bearer token-de-identidad");
-  });
-
-  it("is the identity token when no provider is set", async () => {
-    vi.stubEnv("NEXT_PUBLIC_AUTH_PROVIDER", undefined);
-    getUser.mockResolvedValue(user({ id_token: "token-de-identidad", access_token: "token-de-acceso" }));
-
-    expect(await authorizationSent(stubFetch())).toBe("Bearer token-de-identidad");
-  });
-
-  it("is not sent with entra when the access token is missing", async () => {
-    vi.stubEnv("NEXT_PUBLIC_AUTH_PROVIDER", "entra");
+  it("is not sent when the access token is missing, even with an identity token", async () => {
     getUser.mockResolvedValue(user({ id_token: "token-de-identidad" }));
 
     expect(await authorizationSent(stubFetch())).toBeNull();

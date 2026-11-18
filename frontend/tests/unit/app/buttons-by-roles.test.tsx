@@ -7,7 +7,7 @@ import { installRoutes, renderAuthenticated, reply } from "../../helpers/api-pag
 import { margin } from "../../helpers/margin-data";
 
 vi.mock("@/lib/auth/user-manager", () => ({
-  getUserManager: () => ({ getUser: vi.fn().mockResolvedValue({ id_token: "token", expired: false }), removeUser: vi.fn() }),
+  getUserManager: () => ({ getUser: vi.fn().mockResolvedValue({ access_token: "token", expired: false }), removeUser: vi.fn() }),
 }));
 
 type Role = "operations" | "business" | "finance" | "trading";

@@ -8,7 +8,7 @@ const mockRemoveUser = vi.fn();
 
 vi.mock("@/lib/auth/user-manager", () => ({
   getUserManager: () => ({
-    getUser: vi.fn().mockResolvedValue({ id_token: "t", expired: false } as unknown as User),
+    getUser: vi.fn().mockResolvedValue({ access_token: "t", expired: false } as unknown as User),
     removeUser: mockRemoveUser,
   }),
 }));

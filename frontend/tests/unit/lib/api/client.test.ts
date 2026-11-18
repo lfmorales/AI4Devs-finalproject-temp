@@ -31,9 +31,9 @@ afterEach(() => {
 });
 
 describe("createApiClient", () => {
-  it("obtains token from getUserManager().getUser() and sends id_token as Bearer", async () => {
+  it("obtains the token from getUserManager().getUser() and sends the access token as Bearer", async () => {
     const user = {
-      id_token: "test-id-token",
+      access_token: "test-access-token",
       expired: false,
     } as unknown as User;
     mockGetUser.mockResolvedValue(user);
@@ -47,7 +47,7 @@ describe("createApiClient", () => {
     expect(mockGetUser).toHaveBeenCalled();
     const [url, init] = fetchMock.mock.calls[0] ?? [];
     expect(url).toBe("http://localhost/api/health");
-    expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer test-id-token");
+    expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer test-access-token");
   });
 
   it("sends no Authorization header when there is no session", async () => {
@@ -65,7 +65,7 @@ describe("createApiClient", () => {
 
   it("does not use expired token", async () => {
     const expiredUser = {
-      id_token: "expired-token",
+      access_token: "expired-token",
       expired: true,
     } as unknown as User;
     mockGetUser.mockResolvedValue(expiredUser);
@@ -84,7 +84,7 @@ describe("createApiClient", () => {
     [403, "forbidden"],
     [500, "failed"],
   ] as const)("reports HTTP %i as a %s error", async (status, kind) => {
-    const user = { id_token: "token", expired: false } as unknown as User;
+    const user = { access_token: "token", expired: false } as unknown as User;
     mockGetUser.mockResolvedValue(user);
 
     stubFetch(status, { code: "x", message: "y" });
@@ -97,7 +97,7 @@ describe("createApiClient", () => {
   });
 
   it("calls removeUser on 401 response", async () => {
-    const user = { id_token: "token", expired: false } as unknown as User;
+    const user = { access_token: "token", expired: false } as unknown as User;
     mockGetUser.mockResolvedValue(user);
 
     stubFetch(401, { code: "unauthorized" });
@@ -113,7 +113,7 @@ describe("createApiClient", () => {
   });
 
   it("supports POST requests with body and token", async () => {
-    const user = { id_token: "test-token", expired: false } as unknown as User;
+    const user = { access_token: "test-token", expired: false } as unknown as User;
     mockGetUser.mockResolvedValue(user);
 
     const fetchMock = stubFetch(201, { id: 1, name: "test" });
@@ -133,7 +133,7 @@ describe("createApiClient", () => {
   });
 
   it("includes error code and message in ApiError for error responses", async () => {
-    const user = { id_token: "token", expired: false } as unknown as User;
+    const user = { access_token: "token", expired: false } as unknown as User;
     mockGetUser.mockResolvedValue(user);
 
     stubFetch(409, { code: "duplicate_order_reference", message: "Order reference already exists" });
@@ -171,7 +171,7 @@ describe("ApiError fieldErrors parsing", () => {
   });
 
   it("parses single validation error into fieldErrors", async () => {
-    const user = { id_token: "token", expired: false } as unknown as User;
+    const user = { access_token: "token", expired: false } as unknown as User;
     mockGetUser.mockResolvedValue(user);
 
     stubFetch(422, {
@@ -196,7 +196,7 @@ describe("ApiError fieldErrors parsing", () => {
   });
 
   it("parses multiple validation errors into fieldErrors", async () => {
-    const user = { id_token: "token", expired: false } as unknown as User;
+    const user = { access_token: "token", expired: false } as unknown as User;
     mockGetUser.mockResolvedValue(user);
 
     stubFetch(422, {
@@ -216,7 +216,7 @@ describe("ApiError fieldErrors parsing", () => {
   });
 
   it("parses nested validation error with array index", async () => {
-    const user = { id_token: "token", expired: false } as unknown as User;
+    const user = { access_token: "token", expired: false } as unknown as User;
     mockGetUser.mockResolvedValue(user);
 
     stubFetch(422, {
@@ -239,7 +239,7 @@ describe("ApiError fieldErrors parsing", () => {
   });
 
   it("handles unknown error type with fallback to msg", async () => {
-    const user = { id_token: "token", expired: false } as unknown as User;
+    const user = { access_token: "token", expired: false } as unknown as User;
     mockGetUser.mockResolvedValue(user);
 
     stubFetch(422, {
@@ -262,7 +262,7 @@ describe("ApiError fieldErrors parsing", () => {
   });
 
   it("preserves code and message for business errors (non-validation)", async () => {
-    const user = { id_token: "token", expired: false } as unknown as User;
+    const user = { access_token: "token", expired: false } as unknown as User;
     mockGetUser.mockResolvedValue(user);
 
     stubFetch(409, {
@@ -281,7 +281,7 @@ describe("ApiError fieldErrors parsing", () => {
   });
 
   it("uses generic message for 422 validation errors, not [object Object]", async () => {
-    const user = { id_token: "token", expired: false } as unknown as User;
+    const user = { access_token: "token", expired: false } as unknown as User;
     mockGetUser.mockResolvedValue(user);
 
     stubFetch(422, {

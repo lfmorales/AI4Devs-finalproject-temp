@@ -63,13 +63,8 @@ services:
       args:
         # Public settings, inlined into the browser bundle at build time. No env_file on purpose:
         # the DSP credentials must not reach this container.
-        NEXT_PUBLIC_COGNITO_REGION: ${COGNITO_REGION}
-        NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID}
-        NEXT_PUBLIC_COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID}
-        NEXT_PUBLIC_COGNITO_DOMAIN: ${COGNITO_DOMAIN}
-        # Sign-in provider of the browser: "cognito" (empty means cognito) or "entra". The Entra identifiers are optional,
-        # needed only with "entra", and are the same ones the backend reads. Never version real values.
-        NEXT_PUBLIC_AUTH_PROVIDER: ${NEXT_PUBLIC_AUTH_PROVIDER:-}
+        # The browser signs in with Entra: the same tenant and client the backend reads, required by the build.
+        # Never version real values.
         NEXT_PUBLIC_ENTRA_TENANT_ID: ${ENTRA_TENANT_ID:-}
         NEXT_PUBLIC_ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID:-}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}

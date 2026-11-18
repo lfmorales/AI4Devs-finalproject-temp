@@ -7,7 +7,8 @@ import StatusPage from "@/app/(authenticated)/status/page";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { installRoutes, reply, rolesRoutes } from "../../helpers/api-pages";
 
-// A stand-in for oidc-client-ts that behaves like the real one where it matters here: removeUser raises userUnloaded.
+// A stand-in for oidc-client-ts that behaves like the real one where it matters here: removeUser raises userUnloaded,
+// and signoutRedirect removes the user before it leaves for Entra's end_session_endpoint.
 const manager = vi.hoisted(() => {
   const unloaded: (() => void)[] = [];
   const state = { user: null as unknown };
@@ -21,6 +22,7 @@ const manager = vi.hoisted(() => {
         unloaded.forEach((handler) => handler());
       },
       signinRedirect: async () => {},
+      signoutRedirect: async () => {},
       events: {
         addUserLoaded: () => {},
         removeUserLoaded: () => {},
@@ -35,7 +37,6 @@ const manager = vi.hoisted(() => {
 
 vi.mock("@/lib/auth/user-manager", () => ({
   getUserManager: () => manager.api,
-  getLogoutUrl: () => "http://cognito.example/logout",
 }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/status" }));
 
@@ -54,7 +55,8 @@ function renderApp() {
 beforeEach(() => {
   vi.clearAllMocks();
   manager.unloaded.length = 0;
-  manager.state.user = { id_token: "token", expired: false, profile: { email: "user@example.com" } };
+  manager.api.signoutRedirect = vi.fn(async () => manager.api.removeUser());
+  manager.state.user = { access_token: "token", expired: false, profile: { email: "user@example.com" } };
   Object.defineProperty(window, "location", { value: { assign }, configurable: true });
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -71,7 +73,8 @@ describe("signing out", () => {
     await waitFor(() => expect(screen.getByText("Por favor, inicia sesión")).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Iniciar sesión" })).toBeInTheDocument();
     expect(screen.queryByText("Sesión caducada")).not.toBeInTheDocument();
-    expect(assign).toHaveBeenCalledWith("http://cognito.example/logout");
+    expect(manager.api.signoutRedirect).toHaveBeenCalledTimes(1);
+    expect(assign).not.toHaveBeenCalled();
   });
 });
 

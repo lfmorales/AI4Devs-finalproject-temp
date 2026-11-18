@@ -10,7 +10,7 @@ vi.mock("next/navigation", () => ({
   usePathname: vi.fn(() => "/test-path"),
 }));
 vi.mock("@/lib/auth/user-manager", () => ({
-  getUserManager: () => ({ getUser: vi.fn().mockResolvedValue({ id_token: "token", expired: false }), removeUser: vi.fn() }),
+  getUserManager: () => ({ getUser: vi.fn().mockResolvedValue({ access_token: "token", expired: false }), removeUser: vi.fn() }),
 }));
 
 beforeEach(() => installRoutes(rolesRoutes()));

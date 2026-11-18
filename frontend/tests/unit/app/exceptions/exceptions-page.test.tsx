@@ -8,7 +8,7 @@ import { installRoutes, plain, renderAuthenticated, reply, type FakeReply } from
 
 vi.mock("@/lib/auth/user-manager", () => ({
   getUserManager: () => ({
-    getUser: vi.fn().mockResolvedValue({ id_token: "token", expired: false }),
+    getUser: vi.fn().mockResolvedValue({ access_token: "token", expired: false }),
     removeUser: vi.fn(),
   }),
 }));

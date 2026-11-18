@@ -8,7 +8,7 @@ import { installRoutes, rolesRoutes } from "../../helpers/api-pages";
 const pathname = vi.fn<() => string | null>();
 
 vi.mock("next/navigation", () => ({ usePathname: () => pathname() }));
-vi.mock("@/lib/auth/user-manager", () => ({ getUserManager: () => ({ getUser: vi.fn().mockResolvedValue({ id_token: "token", expired: false }), removeUser: vi.fn() }) }));
+vi.mock("@/lib/auth/user-manager", () => ({ getUserManager: () => ({ getUser: vi.fn().mockResolvedValue({ access_token: "token", expired: false }), removeUser: vi.fn() }) }));
 
 /** The navigation of an operations user, once its roles have loaded. */
 async function renderAt(path: string | null) {

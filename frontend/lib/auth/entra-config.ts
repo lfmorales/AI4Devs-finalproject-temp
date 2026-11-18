@@ -1,6 +1,7 @@
 import type { UserManagerSettings } from "oidc-client-ts";
 
-import { CALLBACK_PATH } from "@/lib/auth/cognito-config";
+/** The route Entra returns to after the sign-in; registered as a redirect URI of the Entra application. */
+export const CALLBACK_PATH = "/callback";
 
 export interface EntraConfig {
   tenantId: string;

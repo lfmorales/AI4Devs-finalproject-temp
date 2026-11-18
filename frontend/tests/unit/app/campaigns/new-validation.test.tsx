@@ -30,7 +30,7 @@ vi.mock("@/lib/api/client", () => {
 vi.mock("@/lib/auth/user-manager", () => ({
   getUserManager: () => ({
     getUser: vi.fn().mockResolvedValue({
-      id_token: "token",
+      access_token: "token",
       expired: false,
     } as User),
     removeUser: vi.fn(),

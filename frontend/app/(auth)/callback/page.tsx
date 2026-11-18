@@ -10,7 +10,7 @@ function isSignInState(value: unknown): value is SignInState {
   return typeof value === "object" && value !== null && typeof (value as SignInState).returnTo === "string";
 }
 
-/** Completes the authorization code + PKCE exchange after the hosted UI redirects back. */
+/** Completes the authorization code + PKCE exchange after Entra redirects back. */
 export default function CallbackPage() {
   const router = useRouter();
   const [failed, setFailed] = useState(false);

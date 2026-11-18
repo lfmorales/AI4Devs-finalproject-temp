@@ -6,7 +6,7 @@ import { AuthContext, type AuthContextValue } from "@/lib/auth/AuthContext";
 import { useReportForbidden } from "@/lib/auth/ForbiddenPages";
 import { installRoutes, rolesRoutes } from "../../helpers/api-pages";
 
-vi.mock("@/lib/auth/user-manager", () => ({ getUserManager: () => ({ getUser: vi.fn().mockResolvedValue({ id_token: "token", expired: false }), removeUser: vi.fn() }) }));
+vi.mock("@/lib/auth/user-manager", () => ({ getUserManager: () => ({ getUser: vi.fn().mockResolvedValue({ access_token: "token", expired: false }), removeUser: vi.fn() }) }));
 
 afterEach(() => vi.unstubAllGlobals());
 vi.mock("next/navigation", () => ({ usePathname: () => "/status" }));

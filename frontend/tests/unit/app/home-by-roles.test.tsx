@@ -9,7 +9,7 @@ import { installRoutes, reply } from "../../helpers/api-pages";
 const replace = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace }) }));
 vi.mock("@/lib/auth/user-manager", () => ({
-  getUserManager: () => ({ getUser: vi.fn().mockResolvedValue({ id_token: "token", expired: false }), removeUser: vi.fn() }),
+  getUserManager: () => ({ getUser: vi.fn().mockResolvedValue({ access_token: "token", expired: false }), removeUser: vi.fn() }),
 }));
 
 const value: AuthContextValue = {

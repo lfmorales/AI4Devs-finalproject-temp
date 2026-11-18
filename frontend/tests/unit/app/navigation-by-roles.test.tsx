@@ -10,7 +10,7 @@ import { installRoutes, reply, type FakeReply } from "../../helpers/api-pages";
 
 vi.mock("@/lib/auth/user-manager", () => ({
   getUserManager: () => ({
-    getUser: vi.fn().mockResolvedValue({ id_token: "token", expired: false }),
+    getUser: vi.fn().mockResolvedValue({ access_token: "token", expired: false }),
     removeUser: vi.fn(),
   }),
 }));

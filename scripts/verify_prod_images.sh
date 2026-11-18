@@ -53,6 +53,8 @@ COGNITO_REGION=eu-west-1
 COGNITO_USER_POOL_ID=eu-west-1_verify
 COGNITO_CLIENT_ID=verify-client
 COGNITO_DOMAIN=verify.auth.eu-west-1.amazoncognito.com
+ENTRA_TENANT_ID=verify-tenant
+ENTRA_CLIENT_ID=verify-client
 NEXT_PUBLIC_API_URL=https://localhost:${HTTPS_PORT}/api
 SERVER_NAME=localhost
 EOF

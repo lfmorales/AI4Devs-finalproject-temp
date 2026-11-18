@@ -3,9 +3,9 @@
 import type { User } from "oidc-client-ts";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 
-import { bearerTokenOf, displayEmailOf, readAuthProvider } from "@/lib/auth/auth-provider";
+import { bearerTokenOf, displayEmailOf } from "@/lib/auth/auth-provider";
 import { AuthContext, type AuthContextValue, type AuthSession } from "@/lib/auth/AuthContext";
-import { getLogoutUrl, getUserManager } from "@/lib/auth/user-manager";
+import { getUserManager } from "@/lib/auth/user-manager";
 
 export interface SignInState {
   returnTo: string;
@@ -15,12 +15,11 @@ function toSession(user: User | null): AuthSession {
   if (user === null || user.expired) {
     return { status: "unauthenticated" };
   }
-  const provider = readAuthProvider();
-  const bearerToken = bearerTokenOf(user, provider);
+  const bearerToken = bearerTokenOf(user);
   if (bearerToken === null) {
     return { status: "unauthenticated" };
   }
-  return { status: "authenticated", email: displayEmailOf(user.profile, provider), bearerToken };
+  return { status: "authenticated", email: displayEmailOf(user.profile), bearerToken };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -62,13 +61,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     // Explicit signOut: go directly to unauthenticated, not session_expired
     setSession({ status: "unauthenticated" });
-    if (readAuthProvider() === "entra") {
-      // Entra's discovery document has the end_session_endpoint, and the settings carry post_logout_redirect_uri.
-      await getUserManager().signoutRedirect();
-      return;
-    }
-    await getUserManager().removeUser();
-    window.location.assign(getLogoutUrl());
+    // oidc-client-ts removes the user, then leaves for the end_session_endpoint of Entra's discovery document,
+    // which returns to post_logout_redirect_uri (the application's origin).
+    await getUserManager().signoutRedirect();
   }, []);
 
   const value = useMemo<AuthContextValue>(() => ({ session, signIn, signOut }), [session, signIn, signOut]);

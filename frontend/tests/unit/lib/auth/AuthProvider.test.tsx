@@ -15,6 +15,7 @@ const mockRemoveUserUnloaded = vi.fn();
 const mockRemoveSilentRenewError = vi.fn();
 const mockRemoveUser = vi.fn();
 const mockSigninRedirect = vi.fn();
+const mockSignoutRedirect = vi.fn();
 
 const mockEvents = {
   addUserLoaded: mockAddUserLoaded,
@@ -31,8 +32,8 @@ vi.mock("@/lib/auth/user-manager", () => ({
     events: mockEvents,
     removeUser: mockRemoveUser,
     signinRedirect: mockSigninRedirect,
+    signoutRedirect: mockSignoutRedirect,
   }),
-  getLogoutUrl: () => "https://cognito/logout",
 }));
 
 function TestComponent() {
@@ -56,7 +57,7 @@ afterEach(() => {
 describe("AuthProvider session expiration", () => {
   it("transitions to session_expired when userUnloaded fires from authenticated state", async () => {
     const user: User = {
-      id_token: "token",
+      access_token: "token",
       profile: { email: "test@example.com" },
       expired: false,
     } as User;
@@ -112,7 +113,7 @@ describe("AuthProvider session expiration", () => {
 
   it("goes directly to unauthenticated when signOut is called voluntarily", async () => {
     const user: User = {
-      id_token: "token",
+      access_token: "token",
       profile: { email: "test@example.com" },
       expired: false,
     } as User;
@@ -145,7 +146,9 @@ describe("AuthProvider session expiration", () => {
       await signOutRef.current();
     }
 
-    // Should go to unauthenticated (not session_expired) because it was voluntary
-    expect(mockRemoveUser).toHaveBeenCalled();
+    // Should go to unauthenticated (not session_expired) because it was voluntary; oidc-client-ts's signoutRedirect
+    // removes the user itself before it leaves for Entra.
+    expect(mockSignoutRedirect).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByText("Unauthenticated")).toBeInTheDocument());
   });
 });
