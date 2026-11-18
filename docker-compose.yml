@@ -6,6 +6,10 @@
 # Configuration comes from .env (copied from .env.example, never committed).
 # Compose also reads .env for the ${...} interpolation below.
 
+# The project is adops360 whatever the folder is called. COMPOSE_PROJECT_NAME (in the environment or in .env) and -p
+# take precedence: each worktree sets its own so it does not share containers or the database with another folder.
+name: adops360
+
 services:
   db:
     image: postgres:16
