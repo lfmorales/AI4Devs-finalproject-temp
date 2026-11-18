@@ -225,12 +225,12 @@ The system SHALL keep rejecting a line whose contracted impressions are 0 at reg
 - **WHEN** a line is registered with contracted impressions of 0
 - **THEN** the request is rejected
 
-### Requirement: Margin access is restricted to finance
+### Requirement: Margin access is restricted to operations and finance
 
-The system SHALL restrict every cost and margin figure to users holding the `finance` role, enforced at the endpoint.
+The system SHALL restrict every cost and margin figure to users holding the `operations` or the `finance` role, enforced at the endpoint.
 
 #### Scenario: A user without the role is forbidden
-- **WHEN** a user holding `business` or `operations` but not `finance` requests a margin resource
+- **WHEN** a user holding `business` or `trading`, and neither `operations` nor `finance`, requests a margin resource
 - **THEN** the request is rejected as forbidden
 
 #### Scenario: A missing or invalid token is unauthenticated

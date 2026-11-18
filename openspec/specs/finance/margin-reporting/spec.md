@@ -124,17 +124,17 @@ The system SHALL support comparing a recalculated closed month line by line agai
 - **THEN** every differing line is attributed to a named known defect or raised as an implementation error
 - **AND** no difference is accepted as merely close enough
 
-### Requirement: Reporting access is restricted to finance
+### Requirement: Reporting access is restricted to operations and finance
 
-The system SHALL restrict margin reporting to users holding the `finance` role.
+The system SHALL restrict margin reporting to users holding the `operations` or the `finance` role.
 
 #### Scenario: A user without the role is forbidden
-- **WHEN** a user without `finance` requests a roll-up
+- **WHEN** a user holding neither `operations` nor `finance` requests a roll-up
 - **THEN** the request is rejected as forbidden
 
 ### Requirement: The margin is read per campaign, line and flight
 
-The system SHALL expose `GET /margin`, restricted to the `finance` role, returning campaigns, their lines and their flights with totals at every level, filtered by year, month and campaign, and SHALL include every campaign whatever its status.
+The system SHALL expose `GET /margin`, restricted to the `operations` and `finance` roles, returning campaigns, their lines and their flights with totals at every level, filtered by year, month and campaign, and SHALL include every campaign whatever its status.
 
 #### Scenario: A closed flight reads what was frozen
 - **WHEN** a flight with an `applied_rates` row is read

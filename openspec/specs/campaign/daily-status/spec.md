@@ -84,12 +84,42 @@ The system SHALL calculate pacing for a flight from its contracted volume, its w
 - **WHEN** a campaign has several rows in the daily status
 - **THEN** each carries the campaign's missing-data flag, calculated from the latest delivery of any of its lines
 
-### Requirement: The daily status is read through one endpoint for operations and business
+### Requirement: The daily status takes its day from the configured time zone
 
-The system SHALL expose the daily status at `GET /api/campaign-status` to users holding the `operations` or the `business` role, with one row per flight whose window contains D-1 and whose campaign has status `active`, where D is the day the request is made. Each row SHALL carry the campaign (id and name), the agency (id and name), the line number, the flight (campaign period and window), the contracted volume of the flight, the delivered volume (the line's impressions from the flight's start to D-1), their ratio, the pacing (expected to date, deviation, days remaining until the flight's last day and the `pacing_flag`) and the `missing_data_flag`. Pacing SHALL be calculated by the pure pacing function. The delivered volume SHALL be aggregated in the database, without bringing delivery rows into the application.
+The system SHALL take D, and from it D-1, for the pacing and the missing-data flag of the daily status from the same time zone as the ingestion, `Europe/Madrid` unless configured otherwise, and not from UTC.
+
+#### Scenario: Just after midnight in Madrid the status already looks at the new day
+- **WHEN** the status is read at 00:30 in Madrid on 11 August, which is 22:30 UTC on the 10th
+- **THEN** D-1 is 10 August
+
+### Requirement: Cost and margin figures are restricted to operations and finance
+
+The system SHALL withhold cost and margin figures from users who hold neither the `operations` nor the `finance` role, in the API response and not only in the interface.
+
+#### Scenario: A business user sees delivery but not cost
+- **WHEN** a user holding `business`, and neither `operations` nor `finance`, reads the daily status
+- **THEN** campaigns and their delivery are returned
+- **AND** no cost or margin field is present in the response
+
+#### Scenario: Calling the API directly does not bypass the restriction
+- **WHEN** a user holding neither `operations` nor `finance` requests a cost or margin resource directly
+- **THEN** the request is rejected as forbidden
+
+### Requirement: Loading and empty states are distinguishable
+
+The system SHALL render a list that has not yet loaded differently from a list that loaded and is empty.
+
+#### Scenario: An empty result is not mistaken for a pending one
+- **WHEN** the daily status returns no campaigns
+- **THEN** the view states that there are none
+- **AND** that state is visually distinct from the pending state
+
+### Requirement: The daily status is read through one endpoint for operations, business, finance and trading
+
+The system SHALL expose the daily status at `GET /api/campaign-status` to users holding the `operations`, `business`, `finance` or `trading` role, with one row per flight whose window contains D-1 and whose campaign has status `active`, where D is the day the request is made. Each row SHALL carry the campaign (id and name), the agency (id and name), the line number, the flight (campaign period and window), the contracted volume of the flight, the delivered volume (the line's impressions from the flight's start to D-1), their ratio, the pacing (expected to date, deviation, days remaining until the flight's last day and the `pacing_flag`) and the `missing_data_flag`. Pacing SHALL be calculated by the pure pacing function. The delivered volume SHALL be aggregated in the database, without bringing delivery rows into the application.
 
 #### Scenario: A running flight of an active campaign is listed with its figures
-- **WHEN** a user with the `operations` or the `business` role reads the daily status
+- **WHEN** a user with the `operations`, `business`, `finance` or `trading` role reads the daily status
 - **THEN** a flight whose window contains D-1, of an `active` campaign, is listed once
 - **AND** its contracted volume and its delivered volume are separate fields
 - **AND** the delivered volume counts only impressions from the flight's start to D-1
@@ -111,37 +141,7 @@ The system SHALL expose the daily status at `GET /api/campaign-status` to users 
 - **WHEN** the daily status is read
 - **THEN** no field of the response, however nested, is a cost or margin figure
 
-#### Scenario: Reading the daily status requires operations or business
-- **WHEN** a user holding neither role reads the daily status
+#### Scenario: Reading the daily status requires one of the four roles
+- **WHEN** a user holding none of the four roles reads the daily status
 - **THEN** the request is rejected as forbidden
 - **AND** a request without a valid token is rejected as unauthenticated
-
-### Requirement: The daily status takes its day from the configured time zone
-
-The system SHALL take D, and from it D-1, for the pacing and the missing-data flag of the daily status from the same time zone as the ingestion, `Europe/Madrid` unless configured otherwise, and not from UTC.
-
-#### Scenario: Just after midnight in Madrid the status already looks at the new day
-- **WHEN** the status is read at 00:30 in Madrid on 11 August, which is 22:30 UTC on the 10th
-- **THEN** D-1 is 10 August
-
-### Requirement: Cost and margin figures are restricted to finance
-
-The system SHALL withhold cost and margin figures from users who do not hold the `finance` role, in the API response and not only in the interface.
-
-#### Scenario: A business user sees delivery but not cost
-- **WHEN** a user holding `business` and not `finance` reads the daily status
-- **THEN** campaigns and their delivery are returned
-- **AND** no cost or margin field is present in the response
-
-#### Scenario: Calling the API directly does not bypass the restriction
-- **WHEN** a user without `finance` requests a cost or margin resource directly
-- **THEN** the request is rejected as forbidden
-
-### Requirement: Loading and empty states are distinguishable
-
-The system SHALL render a list that has not yet loaded differently from a list that loaded and is empty.
-
-#### Scenario: An empty result is not mistaken for a pending one
-- **WHEN** the daily status returns no campaigns
-- **THEN** the view states that there are none
-- **AND** that state is visually distinct from the pending state

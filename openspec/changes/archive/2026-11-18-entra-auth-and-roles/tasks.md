@@ -2,7 +2,7 @@
 
 ## 0. Setup: Create Feature Branch (MANDATORY - FIRST STEP)
 
-- [ ] 0.1 Create or switch to feature branch `feature/entra-auth-and-roles` and verify `git branch --show-current` reports it
+- [x] 0.1 Create or switch to feature branch `feature/entra-auth-and-roles` and verify `git branch --show-current` reports it
 
 ## 1. Rules and Documentation First
 
@@ -84,13 +84,14 @@
 
 ## 17. Manual Entra Sign-in Check
 
-- [ ] 17.1 Sign in once with the real Entra tenant, confirm the user is authorised with the roles stored in the database, and record the result in a report under `docs/reports/` (no identifier in the report)
+- [x] 17.1 Sign in once with the real Entra tenant, confirm the user is authorised with the roles stored in the database, and record the result in a report under `docs/reports/` (no identifier in the report)
 
 ## 18. Update Technical Documentation (MANDATORY)
 
 - [x] 18.1 Update `docs/deploy.md` and `.env.example` documentation for the issuer variables and the Entra application settings, with placeholders only
 - [x] 18.2 Update README §3 and the data model documentation so they show the `identity_issuer` and `identity_subject` columns of `users`, their unique pair and the check that sets them together
 - [x] 18.3 Verify `openspec validate entra-auth-and-roles` passes before archiving
+- [ ] 18.4 Update README §2.6 with the current test figures (backend 2210 passed and 38 skipped, frontend 609 tests in 61 files, 40 end-to-end tests) and link the reports of 2026-11-18 (steps 13 to 16 and 17.1) **Deferred:** the section still describes the second delivery and its rewrite goes beyond this change's scope; it is left for the documentation task that closes the project.
 
 ## 19. Key Download Hardening
 

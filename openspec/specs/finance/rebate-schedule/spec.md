@@ -163,12 +163,12 @@ The system SHALL guarantee in the database that two schedules of the same key (g
 - **WHEN** two schedules differ in channel, scope or agency
 - **THEN** their validity may overlap
 
-### Requirement: Schedules and platform rates are created by finance through the API
+### Requirement: Schedules and platform rates are created by operations through the API
 
-The system SHALL let a user with the `finance` role create a rebate schedule with its brackets (`POST /margin/rebate-schedules`) and set a platform rate at any level (`POST /margin/platform-rates`), SHALL take every amount as a decimal string and refuse a JSON number, SHALL answer a schedule that overlaps another of its key with 409 `schedule_overlaps_existing` and a reference to something that does not exist with 422 `reference_not_found`, and SHALL stamp each platform rate with its author and time.
+The system SHALL let a user with the `operations` role create a rebate schedule with its brackets (`POST /margin/rebate-schedules`) and set a platform rate at any level (`POST /margin/platform-rates`), SHALL take every amount as a decimal string and refuse a JSON number, SHALL answer a schedule that overlaps another of its key with 409 `schedule_overlaps_existing` and a reference to something that does not exist with 422 `reference_not_found`, and SHALL stamp each platform rate with its author and time.
 
 #### Scenario: A schedule is created with its brackets
-- **WHEN** finance posts a schedule with a valid bracket table
+- **WHEN** operations posts a schedule with a valid bracket table
 - **THEN** the response is 201 and the schedule and its brackets are stored
 
 #### Scenario: An invalid table is refused with its own message
@@ -184,9 +184,9 @@ The system SHALL let a user with the `finance` role create a rebate schedule wit
 - **THEN** the response is 422 `validation_error`
 
 #### Scenario: A platform rate records who set it
-- **WHEN** finance sets a platform rate
+- **WHEN** operations sets a platform rate
 - **THEN** the response is 201 and the row holds the author and the time
 
-#### Scenario: Only finance may create them
-- **WHEN** a user without `finance` posts either
+#### Scenario: Only operations may create them
+- **WHEN** a user without `operations`, finance included, posts either
 - **THEN** the response is 403 and nothing is stored

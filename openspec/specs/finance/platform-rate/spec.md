@@ -38,18 +38,6 @@ The system SHALL resolve the platform rate by taking the most specific configure
 - **WHEN** a setting is stored for a level whose scope key is absent
 - **THEN** it is rejected
 
-### Requirement: Every override records who set it and when
-
-The system SHALL stamp each platform rate override with its author and the time it was created, because the value moves the margin.
-
-#### Scenario: An override is attributable
-- **WHEN** a platform rate override is created
-- **THEN** the author and creation time are stored with it
-
-#### Scenario: Only finance may configure the rate
-- **WHEN** a user without the `finance` role attempts to create or change an override
-- **THEN** the request is rejected as forbidden
-
 ### Requirement: The rate used is frozen on the closed flight
 
 The system SHALL record the platform rate actually applied in the `applied_rates` row of a closed flight, and SHALL NOT re-resolve it at read time for a closed flight.
@@ -81,3 +69,15 @@ The system SHALL hold the system rate as a row inserted by the migration with no
 #### Scenario: Only the system level may have no author
 - **WHEN** a row at the agency level is stored without an author
 - **THEN** it is rejected
+
+### Requirement: Every override keeps its author and the moment it was set
+
+The system SHALL stamp each platform rate override with its author and the time it was created, because the value moves the margin.
+
+#### Scenario: An override is attributable
+- **WHEN** a platform rate override is created
+- **THEN** the author and creation time are stored with it
+
+#### Scenario: Only operations may configure the rate
+- **WHEN** a user without the `operations` role, finance included, attempts to create or change an override
+- **THEN** the request is rejected as forbidden
