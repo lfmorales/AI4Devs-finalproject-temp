@@ -85,4 +85,6 @@ def test_two_simultaneous_deactivations_leave_one_active_holder(
 
     assert sorted(results.values()) == [False, True]
     with factory() as session:
-        assert SqlAlchemyUserRepository(session).count_active_with_role(ROLE) == 1
+        # The fixture guarantees these two are the only holders of the role.
+        still_active = session.query(UserRecord).filter(UserRecord.id.in_((first, second)), UserRecord.is_active.is_(True))
+        assert still_active.count() == 1

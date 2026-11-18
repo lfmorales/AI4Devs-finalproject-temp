@@ -68,17 +68,6 @@ class SqlAlchemyUserRepository(UserRepository):
         self._session.commit()
         return bool(result.rowcount == 1)  # type: ignore[attr-defined]
 
-    def count_active_with_role(self, role: RoleName) -> int:
-        return int(
-            self._session.scalar(
-                select(func.count(UserRecord.id))
-                .join(UserRoleRecord, UserRoleRecord.user_id == UserRecord.id)
-                .join(RoleRecord, RoleRecord.id == UserRoleRecord.role_id)
-                .where(RoleRecord.name == role.value, UserRecord.is_active.is_(True))
-            )
-            or 0
-        )
-
     @staticmethod
     def _to_user(record: UserRecord | None) -> User | None:
         if record is None:

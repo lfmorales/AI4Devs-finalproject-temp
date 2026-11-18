@@ -29,7 +29,3 @@ class UserRepository(ABC):
         Returns True when the state was set (also when it already was), and False when the guard refused or the
         user does not exist. A reactivation is never refused.
         """
-
-    @abstractmethod
-    def count_active_with_role(self, role: RoleName) -> int:
-        """Return how many active users hold the role."""

@@ -60,9 +60,6 @@ class InMemoryUserRepository(UserRepository):
         self.add(replace(user, is_active=active))
         return True
 
-    def count_active_with_role(self, role: RoleName) -> int:
-        return sum(1 for user in self._users_by_email.values() if user.is_active and role in user.roles)
-
     def _find_by_id(self, user_id: int) -> User | None:
         return next((candidate for candidate in self._users_by_email.values() if candidate.id == user_id), None)
 

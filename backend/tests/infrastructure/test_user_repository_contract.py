@@ -196,20 +196,8 @@ def test_set_active_reports_false_for_an_id_that_does_not_exist(harness: Harness
     assert harness.repository.set_active(99999, False) is False
 
 
-def test_count_active_with_role_counts_only_active_holders_of_that_role(harness: Harness) -> None:
-    harness.add_user("ops1@example.com", roles=[RoleName.OPERATIONS])
-    second = harness.add_user("ops2@example.com", roles=[RoleName.OPERATIONS, RoleName.FINANCE])
-    harness.add_user("fin@example.com", roles=[RoleName.FINANCE])
-    before = harness.repository.count_active_with_role(RoleName.OPERATIONS)
-
-    harness.repository.set_active(second, False)
-
-    assert harness.repository.count_active_with_role(RoleName.OPERATIONS) == before - 1
-
-
 def test_the_guard_refuses_to_deactivate_the_last_active_holder_of_the_role(harness: Harness) -> None:
     only = harness.add_user("only@example.com", roles=[RoleName.TRADING])
-    assert harness.repository.count_active_with_role(RoleName.TRADING) == 1
 
     changed = harness.repository.set_active(only, False, keep_one_active_with_role=RoleName.TRADING)
 
