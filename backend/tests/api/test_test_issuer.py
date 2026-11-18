@@ -51,14 +51,10 @@ class _RecordingUserRepository(InMemoryUserRepository):
 
 @pytest.fixture(autouse=True)
 def fresh_configuration(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Each case builds its own settings and verifier from its own environment, and leaves none behind."""
+    """Each case builds its own settings and verifier from its own environment, and leaves none behind.
+    tests/conftest.py has already set the example Entra settings and turned the test issuer off."""
     get_settings.cache_clear()
     providers._token_verifier.cache_clear()
-    monkeypatch.setenv("COGNITO_REGION", "eu-central-1")
-    monkeypatch.setenv("COGNITO_USER_POOL_ID", "eu-central-1_Example1")
-    monkeypatch.setenv("COGNITO_CLIENT_ID", "example-client-id")
-    for variable in ("ENTRA_TENANT_ID", "ENTRA_CLIENT_ID", "APP_ENV", "TEST_ISSUER_PUBLIC_KEY_FILE"):
-        monkeypatch.delenv(variable, raising=False)
     _RecordingUserRepository.users = [build_user(email=TEST_EMAIL)]
     _RecordingUserRepository.lookups = []
     monkeypatch.setattr(providers, "SqlAlchemyUserRepository", _RecordingUserRepository)

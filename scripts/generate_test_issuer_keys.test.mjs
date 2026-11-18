@@ -45,7 +45,7 @@ function generatePairInside(dir) {
 
 function composeConfig(file) {
   const envFile = join(workDir, "compose.env");
-  writeFileSync(envFile, "POSTGRES_USER=u\nPOSTGRES_PASSWORD=p\nPOSTGRES_DB=d\n");
+  writeFileSync(envFile, "POSTGRES_USER=u\nPOSTGRES_PASSWORD=p\nPOSTGRES_DB=d\nENTRA_TENANT_ID=t\nENTRA_CLIENT_ID=c\n");
   const result = run(
     "docker",
     ["compose", "-f", file, "--env-file", envFile, "config", "--no-env-resolution", "--format", "json"],

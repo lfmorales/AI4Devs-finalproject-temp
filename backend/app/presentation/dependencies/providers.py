@@ -75,7 +75,7 @@ def _session_factory() -> sessionmaker[Session]:
 
 
 def _issuer_verifier(issuer: TokenIssuer) -> IssuerTokenVerifier:
-    """The key address for Entra and Cognito; the local public key for the test issuer."""
+    """The key address for Entra; the local public key for the test issuer."""
     if issuer.public_key_file is None:
         return IssuerTokenVerifier(issuer)
     try:

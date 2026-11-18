@@ -13,16 +13,7 @@ from app.main import create_app
 from app.presentation.dependencies.auth import require_roles
 from app.presentation.dependencies.providers import get_authentication_service
 from tests.fixtures.identity import InMemoryUserRepository, build_user
-from tests.fixtures.identity_tokens import (
-    COGNITO,
-    COGNITO_TEST_KEY,
-    ENTRA,
-    TEST_KEY,
-    StaticKeys,
-    bearer,
-    cognito_token,
-    entra_token,
-)
+from tests.fixtures.identity_tokens import ENTRA, TEST_KEY, StaticKeys, bearer, entra_token
 
 
 def _client(users: list[User]) -> TestClient:
@@ -42,7 +33,6 @@ def _client(users: list[User]) -> TestClient:
         token_verifier=CompositeTokenVerifier(
             {
                 ENTRA.issuer: IssuerTokenVerifier(ENTRA, StaticKeys(TEST_KEY.public_key())),
-                COGNITO.issuer: IssuerTokenVerifier(COGNITO, StaticKeys(COGNITO_TEST_KEY.public_key())),
             }
         ),
         user_repository=InMemoryUserRepository(users),
@@ -71,14 +61,6 @@ def test_a_conflicting_link_answers_403_with_its_code() -> None:
 
     assert response.status_code == 403
     assert response.json()["code"] == "identity_link_conflict"
-
-
-def test_a_cognito_token_is_authorised_with_the_roles_stored_in_the_database() -> None:
-    client = _client([build_user(email="ops@example.com", roles=[RoleName.OPERATIONS])])
-    token = cognito_token({"custom:roles": "finance"})
-
-    assert client.get("/probe/operations", headers=bearer(token)).status_code == 200
-    assert client.get("/probe/finance", headers=bearer(token)).status_code == 403
 
 
 def test_a_user_without_roles_is_forbidden_on_every_protected_route() -> None:

@@ -52,7 +52,7 @@ class _NotConfigured(Exception):
 
 
 class _Settings(BaseSettings):
-    """Only what this command reads, so it does not need the Cognito settings of the API."""
+    """Only what this command reads, so it does not need the Entra settings of the API."""
 
     model_config = SettingsConfigDict(case_sensitive=False, extra="ignore")
 

@@ -16,14 +16,6 @@ from app.domain.exceptions import (
 from app.infrastructure.auth.issuer_token_verifier import IssuerTokenVerifier
 from tests.fixtures.identity_tokens import OTHER_TEST_KEY, TEST_KEY, StaticKeys
 
-COGNITO = TokenIssuer(
-    kind="cognito",
-    issuer="https://cognito-idp.eu-central-1.amazonaws.com/eu-central-1_TestPool1",
-    audience="cliente-cognito-de-prueba",
-    jwks_url="https://cognito-idp.eu-central-1.amazonaws.com/eu-central-1_TestPool1/.well-known/jwks.json",
-    user_claim="sub",
-    required_scope=None,
-)
 ENTRA = TokenIssuer(
     kind="entra",
     issuer="https://login.microsoftonline.com/tenant-de-prueba/v2.0",
@@ -32,7 +24,7 @@ ENTRA = TokenIssuer(
     user_claim="oid",
     required_scope="access_as_user",
 )
-ISSUERS = [pytest.param(COGNITO, id="cognito"), pytest.param(ENTRA, id="entra")]
+ISSUERS = [pytest.param(ENTRA, id="entra")]
 
 
 def _claims(issuer: TokenIssuer) -> dict[str, object]:
@@ -44,11 +36,9 @@ def _claims(issuer: TokenIssuer) -> dict[str, object]:
         "exp": now + 3600,
         issuer.user_claim: "identificador-de-prueba",
         "email": "ops@example.com",
+        "ver": "2.0",
+        "scp": "openid access_as_user",
     }
-    if issuer.kind == "cognito":
-        claims.update({"token_use": "id", "email_verified": True})
-    else:
-        claims.update({"ver": "2.0", "scp": "openid access_as_user"})
     return claims
 
 
@@ -131,22 +121,6 @@ def test_unreachable_keys_are_reported_as_provider_unavailable(issuer: TokenIssu
         _verifier(issuer, keys).verify(_token(issuer))
 
 
-# --- Cognito rules ---
-
-
-@pytest.mark.parametrize(
-    "overrides",
-    [
-        pytest.param({"token_use": "access"}, id="access-token"),
-        pytest.param({"email_verified": False}, id="unverified-email"),
-        pytest.param({"email": None}, id="no-email"),
-    ],
-)
-def test_a_cognito_token_failing_its_own_rules_is_rejected(overrides: dict[str, object]) -> None:
-    with pytest.raises(InvalidIdentityTokenError):
-        _verifier(COGNITO).verify(_token(COGNITO, overrides))
-
-
 # --- Entra rules ---
 
 
@@ -222,8 +196,9 @@ def test_an_issuer_without_a_key_address_needs_a_key_provider() -> None:
         IssuerTokenVerifier(issuer)
 
 
-def test_an_unknown_issuer_kind_is_refused_at_construction() -> None:
-    unknown_kind = TokenIssuer(**{**COGNITO.__dict__, "kind": "otro"})  # type: ignore[arg-type]
+@pytest.mark.parametrize("kind", ["otro", "cognito"])
+def test_an_unknown_issuer_kind_is_refused_at_construction(kind: str) -> None:
+    unknown_kind = TokenIssuer(**{**ENTRA.__dict__, "kind": kind})
 
-    with pytest.raises(ValueError, match="otro"):
+    with pytest.raises(ValueError, match=kind):
         _verifier(unknown_kind)

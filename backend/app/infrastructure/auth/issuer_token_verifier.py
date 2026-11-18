@@ -22,19 +22,6 @@ class SigningKeyProvider(Protocol):
     def get_signing_key_from_jwt(self, token: str) -> Any: ...
 
 
-def _cognito_email(claims: dict[str, Any], issuer: TokenIssuer) -> str | None:
-    """Cognito: an ID token with a verified email, because only the ID token carries the email."""
-    if claims.get("token_use") != "id":
-        raise InvalidIdentityTokenError("Token is not an ID token")
-    email = claims.get("email")
-    if not isinstance(email, str) or not email:
-        raise InvalidIdentityTokenError("Token carries no email claim")
-    # An unverified email must not be trusted as the join key to a local user.
-    if claims.get("email_verified") is not True:
-        raise InvalidIdentityTokenError("Token email is not verified")
-    return email
-
-
 def _entra_email(claims: dict[str, Any], issuer: TokenIssuer) -> str | None:
     """Entra: a version 2 access token with the mandatory scope. The email may be absent; `roles` is ignored."""
     if claims.get("ver") != "2.0":
@@ -50,7 +37,6 @@ def _entra_email(claims: dict[str, Any], issuer: TokenIssuer) -> str | None:
 
 # What each kind of issuer adds to the common rules, and where it takes the email from.
 _RULES_BY_KIND: dict[str, Callable[[dict[str, Any], TokenIssuer], str | None]] = {
-    "cognito": _cognito_email,
     "entra": _entra_email,
 }
 

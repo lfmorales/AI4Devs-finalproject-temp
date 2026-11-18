@@ -1,7 +1,7 @@
 """In-memory doubles and builders for the identity model.
 
-They let authentication and role enforcement be tested without Cognito
-and without a database.
+They let authentication and role enforcement be tested without an identity
+provider and without a database.
 """
 
 from collections.abc import Iterable

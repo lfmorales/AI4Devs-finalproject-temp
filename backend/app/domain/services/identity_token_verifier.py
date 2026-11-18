@@ -4,7 +4,7 @@ from app.domain.models.user import VerifiedIdentity
 
 
 class IdentityTokenVerifier(ABC):
-    """Contract for verifying a bearer token. Implemented in infrastructure (Cognito)."""
+    """Contract for verifying a bearer token. Implemented in infrastructure, one verifier per configured issuer."""
 
     @abstractmethod
     def verify(self, token: str) -> VerifiedIdentity:

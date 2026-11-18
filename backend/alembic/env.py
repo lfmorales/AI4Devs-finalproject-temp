@@ -14,7 +14,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Only DATABASE_URL is needed here; reading it directly keeps migrations runnable
-# without the Cognito settings the application requires.
+# without the Entra settings the application requires.
 config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 
 target_metadata = Base.metadata

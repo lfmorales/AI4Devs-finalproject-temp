@@ -4,7 +4,7 @@ from enum import StrEnum
 
 
 class RoleName(StrEnum):
-    """Functional roles. Stored only in the database, never in Cognito."""
+    """Functional roles. Stored only in the database, never read from the identity provider."""
 
     OPERATIONS = "operations"
     BUSINESS = "business"

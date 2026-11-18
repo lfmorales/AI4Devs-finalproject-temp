@@ -1,6 +1,6 @@
 # AdOps360 — containerised monolith on a single EC2 instance.
 # Four services: backend, frontend, db, nginx.
-# Cognito and S3 are managed AWS services and are not part of this stack;
+# Microsoft Entra ID and S3 are managed services and are not part of this stack;
 # only the configuration needed to reach them is declared here.
 #
 # Configuration comes from .env (copied from .env.example, never committed).
@@ -29,13 +29,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    # Database, Cognito, S3 and DSP credentials. Only the backend needs the secrets.
+    # Database, S3 and DSP credentials. Only the backend needs the secrets.
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      # Optional Entra issuer: both or neither. Passed from the environment with no default, so empty means absent.
-      ENTRA_TENANT_ID: ${ENTRA_TENANT_ID}
-      ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID}
+      # Entra is the one real issuer: Compose refuses to start without both, and so does the backend.
+      ENTRA_TENANT_ID: "${ENTRA_TENANT_ID:?ENTRA_TENANT_ID is required, set it in .env}"
+      ENTRA_CLIENT_ID: "${ENTRA_CLIENT_ID:?ENTRA_CLIENT_ID is required, set it in .env}"
       # The test issuer, for the end-to-end tests and API calls in development. environment: takes
       # precedence over env_file, so .env cannot change them. The key pair comes from scripts/generate_test_issuer_keys.sh.
       APP_ENV: development
@@ -60,8 +60,8 @@ services:
         # No env_file here on purpose: the DSP credentials must not reach this container.
         # The browser signs in with Entra: the same tenant and client the backend reads, required by the build.
         # Never version real values.
-        NEXT_PUBLIC_ENTRA_TENANT_ID: ${ENTRA_TENANT_ID:-}
-        NEXT_PUBLIC_ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID:-}
+        NEXT_PUBLIC_ENTRA_TENANT_ID: "${ENTRA_TENANT_ID:?ENTRA_TENANT_ID is required, set it in .env}"
+        NEXT_PUBLIC_ENTRA_CLIENT_ID: "${ENTRA_CLIENT_ID:?ENTRA_CLIENT_ID is required, set it in .env}"
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
         # "true" blurs every Adform campaign and line name (screenshots, demos). Empty shows them.
         NEXT_PUBLIC_MASK_NAMES: ${NEXT_PUBLIC_MASK_NAMES:-}

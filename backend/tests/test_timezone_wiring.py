@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime
 from app.config import Settings
 from app.presentation.dependencies import providers
 
-REQUIRED = {"database_url": "x", "cognito_region": "x", "cognito_user_pool_id": "x", "cognito_client_id": "x"}
+REQUIRED = {"database_url": "x", "entra_tenant_id": "x", "entra_client_id": "x"}
 
 
 def test_the_zone_defaults_to_madrid():

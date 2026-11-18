@@ -22,7 +22,7 @@ _TEST_ISSUER_APP_ENVS = ("development", "test")
 class TokenIssuer:
     """An identity provider whose bearer tokens are accepted."""
 
-    kind: Literal["cognito", "entra"]
+    kind: Literal["entra"]
     issuer: str
     audience: str
     # Where the issuer publishes its keys, or None when they come from a local file.
@@ -41,10 +41,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(case_sensitive=False, extra="ignore")
 
     database_url: str
-    cognito_region: str
-    cognito_user_pool_id: str
-    cognito_client_id: str
-    # Optional so the application starts with Cognito alone; Entra is enabled only when both are set.
+    # Required: Entra is the one real issuer. Read as optional only so the validator below can name what is missing.
     entra_tenant_id: str | None = None
     entra_client_id: str | None = None
     # Optional so the application starts without a DSP; a connector that needs them reports it is not configured.
@@ -58,10 +55,15 @@ class Settings(BaseSettings):
     test_issuer_public_key_file: Path | None = None
 
     @model_validator(mode="after")
-    def _entra_variables_come_together(self) -> "Settings":
-        if bool(self._entra_tenant) != bool(self._entra_client):
-            missing = "ENTRA_CLIENT_ID" if self._entra_tenant else "ENTRA_TENANT_ID"
-            raise ValueError(f"Entra is partly configured: {missing} is missing")
+    def _entra_is_configured(self) -> "Settings":
+        # Absent, empty and blank are the same: the backend does not start without Entra.
+        missing = [
+            variable
+            for variable, value in (("ENTRA_TENANT_ID", self._entra_tenant), ("ENTRA_CLIENT_ID", self._entra_client))
+            if not value
+        ]
+        if missing:
+            raise ValueError(f"Entra is not configured: set {' and '.join(missing)} in .env")
         return self
 
     @model_validator(mode="after")
@@ -84,29 +86,18 @@ class Settings(BaseSettings):
 
     @property
     def token_issuers(self) -> tuple[TokenIssuer, ...]:
-        """Every issuer whose tokens are accepted: Cognito always, Entra when configured, and the test
-        issuer when its key is set (the validator has already required development or test)."""
+        """Every issuer whose tokens are accepted: Entra always, and the test issuer when its key is set
+        (the validator has already required development or test)."""
         issuers = [
             TokenIssuer(
-                kind="cognito",
-                issuer=self.cognito_issuer,
-                audience=self.cognito_client_id,
-                jwks_url=self.cognito_jwks_url,
-                user_claim="sub",
-                required_scope=None,
+                kind="entra",
+                issuer=f"{_ENTRA_AUTHORITY}/{self._entra_tenant}/v2.0",
+                audience=self._entra_client,
+                jwks_url=f"{_ENTRA_AUTHORITY}/{self._entra_tenant}/discovery/v2.0/keys",
+                user_claim=_ENTRA_USER_CLAIM,
+                required_scope=_ENTRA_REQUIRED_SCOPE,
             )
         ]
-        if self._entra_tenant:
-            issuers.append(
-                TokenIssuer(
-                    kind="entra",
-                    issuer=f"{_ENTRA_AUTHORITY}/{self._entra_tenant}/v2.0",
-                    audience=self._entra_client,
-                    jwks_url=f"{_ENTRA_AUTHORITY}/{self._entra_tenant}/discovery/v2.0/keys",
-                    user_claim=_ENTRA_USER_CLAIM,
-                    required_scope=_ENTRA_REQUIRED_SCOPE,
-                )
-            )
         if self.test_issuer_public_key_file is not None:
             issuers.append(
                 TokenIssuer(
@@ -120,14 +111,6 @@ class Settings(BaseSettings):
                 )
             )
         return tuple(issuers)
-
-    @property
-    def cognito_issuer(self) -> str:
-        return f"https://cognito-idp.{self.cognito_region}.amazonaws.com/{self.cognito_user_pool_id}"
-
-    @property
-    def cognito_jwks_url(self) -> str:
-        return f"{self.cognito_issuer}/.well-known/jwks.json"
 
 
 @lru_cache

@@ -83,38 +83,3 @@ def entra_token(
 def bearer(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
-
-# --- Cognito: removed with the Cognito issuer in task 21.7 ---
-
-COGNITO_TEST_KEY: RSAPrivateKey = _generate_private_key()
-
-COGNITO = TokenIssuer(
-    kind="cognito",
-    issuer="https://cognito-idp.eu-central-1.amazonaws.com/eu-central-1_TestPool1",
-    audience="cliente-cognito-de-prueba",
-    jwks_url="https://cognito-idp.eu-central-1.amazonaws.com/eu-central-1_TestPool1/.well-known/jwks.json",
-    user_claim="sub",
-    required_scope=None,
-)
-
-
-def cognito_token(
-    claims: Mapping[str, object] | None = None,
-    *,
-    iss: str = COGNITO.issuer,
-    aud: str = COGNITO.audience,
-    key: RSAPrivateKey = COGNITO_TEST_KEY,
-) -> str:
-    """A Cognito identity token, as the identity tests built it before; `claims` overrides or removes as above."""
-    now = int(time.time())
-    defaults: dict[str, object] = {
-        "iss": iss,
-        "aud": aud,
-        "iat": now,
-        "exp": now + 3600,
-        "sub": "sujeto-cognito",
-        "token_use": "id",
-        "email": TEST_EMAIL,
-        "email_verified": True,
-    }
-    return _sign({**defaults, **(claims or {})}, key)

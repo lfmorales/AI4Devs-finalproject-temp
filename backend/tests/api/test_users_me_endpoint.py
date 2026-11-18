@@ -1,9 +1,7 @@
 """GET /users/me through the real application: the caller's roles from the database, ordered, and nothing else."""
 
-from collections.abc import Callable
 from dataclasses import replace
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app.application.services.authentication_service import AuthenticationService
@@ -13,16 +11,7 @@ from app.infrastructure.auth.issuer_token_verifier import IssuerTokenVerifier
 from app.main import create_app
 from app.presentation.dependencies.providers import get_authentication_service
 from tests.fixtures.identity import InMemoryUserRepository, build_user
-from tests.fixtures.identity_tokens import (
-    COGNITO,
-    COGNITO_TEST_KEY,
-    ENTRA,
-    TEST_KEY,
-    StaticKeys,
-    bearer,
-    cognito_token,
-    entra_token,
-)
+from tests.fixtures.identity_tokens import ENTRA, TEST_KEY, StaticKeys, bearer, entra_token
 
 PATH = "/users/me"
 EMAIL = "ops@example.com"
@@ -34,7 +23,6 @@ def _client(user: User) -> TestClient:
         token_verifier=CompositeTokenVerifier(
             {
                 ENTRA.issuer: IssuerTokenVerifier(ENTRA, StaticKeys(TEST_KEY.public_key())),
-                COGNITO.issuer: IssuerTokenVerifier(COGNITO, StaticKeys(COGNITO_TEST_KEY.public_key())),
             }
         ),
         user_repository=InMemoryUserRepository([user]),
@@ -43,21 +31,19 @@ def _client(user: User) -> TestClient:
     return TestClient(app)
 
 
-@pytest.mark.parametrize("make_token", [entra_token, cognito_token], ids=["entra", "cognito"])
-def test_a_user_with_two_roles_receives_both_ordered_by_name(make_token: Callable[..., str]) -> None:
+def test_a_user_with_two_roles_receives_both_ordered_by_name() -> None:
     client = _client(build_user(email=EMAIL, roles=[RoleName.OPERATIONS, RoleName.FINANCE]))
 
-    response = client.get(PATH, headers=bearer(make_token()))
+    response = client.get(PATH, headers=bearer(entra_token()))
 
     assert response.status_code == 200
     assert response.json() == {"roles": ["finance", "operations"]}
 
 
-@pytest.mark.parametrize("make_token", [entra_token, cognito_token], ids=["entra", "cognito"])
-def test_a_user_with_one_role_receives_that_role(make_token: Callable[..., str]) -> None:
+def test_a_user_with_one_role_receives_that_role() -> None:
     client = _client(build_user(email=EMAIL, roles=[RoleName.TRADING]))
 
-    response = client.get(PATH, headers=bearer(make_token()))
+    response = client.get(PATH, headers=bearer(entra_token()))
 
     assert response.status_code == 200
     assert response.json() == {"roles": ["trading"]}
