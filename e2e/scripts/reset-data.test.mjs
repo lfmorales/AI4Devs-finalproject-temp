@@ -2,15 +2,18 @@
 // Run: node --test scripts/reset-data.test.mjs. The fake never starts or stops anything.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "reset-data.sh");
+/** The folder the script works in: the repository root, which it changes to before anything else. */
+const ROOT = realpathSync(join(dirname(SCRIPT), "..", ".."));
 const workDir = mkdtempSync(join(tmpdir(), "reset-data-test-"));
 after(() => rmSync(workDir, { recursive: true, force: true }));
+const OTHER_FOLDER = mkdtempSync(join(workDir, "other-checkout-"));
 
 /** Logs every call. `compose down` fails, so a script that gets past the check stops right there. */
 function fakeDocker({ ps, project = "mine" }) {
@@ -29,7 +32,7 @@ case "$1" in ps) printf '%s' '${ps}' ;; esac
 }
 
 const run = (docker) => spawnSync("bash", [SCRIPT], { encoding: "utf8", timeout: 20_000, env: { PATH: `${docker.dir}:${process.env.PATH}`, HOME: process.env.HOME } });
-const NGINX = (name, project) => `${name}|${project}|0.0.0.0:80->80/tcp, :::80->80/tcp\n`;
+const NGINX = (name, project, folder = ROOT) => `${name}|${project}|${folder}|0.0.0.0:80->80/tcp, :::80->80/tcp\n`;
 
 describe("reset-data.sh before it touches anything", () => {
   it("aborts naming the containers and the project when another project publishes port 80, and stops nothing", () => {
@@ -51,6 +54,27 @@ describe("reset-data.sh before it touches anything", () => {
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /loose-container/);
     assert.match(result.stderr, /not a Compose project/);
+  });
+
+  it("aborts naming the other folder, and stops nothing, when a stack of the same project name runs from another folder", () => {
+    const docker = fakeDocker({ ps: NGINX("mine-nginx-1", "mine", OTHER_FOLDER) });
+
+    const result = run(docker);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /mine-nginx-1/);
+    assert.ok(result.stderr.includes(OTHER_FOLDER), result.stderr);
+    for (const call of docker.calls()) assert.doesNotMatch(call, /\b(down|up|stop|rm|kill|restart|exec)\b/);
+  });
+
+  it("aborts, explaining why, when a container carries no working directory label", () => {
+    const docker = fakeDocker({ ps: NGINX("mine-nginx-1", "mine", "") });
+
+    const result = run(docker);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /no working directory label/);
+    for (const call of docker.calls()) assert.doesNotMatch(call, /\b(down|up|stop|rm|kill|restart|exec)\b/);
   });
 
   it("goes on to bring this project down when port 80 is this project's own", () => {
