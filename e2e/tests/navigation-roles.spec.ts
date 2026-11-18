@@ -2,10 +2,10 @@ import { expect, failApiCalls, test } from "../support/fixtures";
 
 const LINKS = ["Campañas", "Estado", "Margen", "Excepciones", "Catálogo Adform"];
 
-// The session is the development user's, who holds operations and finance (see roles-matrix.spec.ts for the other
-// profiles). Under the access matrix finance alone sees three links, so the five links belong to operations.
-test.describe("the navigation of the development user, who holds operations and finance", () => {
-  test("has the five links", async ({ financeSession: page }) => {
+// The session is the E2E operations user's (see roles-matrix.spec.ts for the other profiles): under the access matrix
+// operations sees the five links.
+test.describe("the navigation of the operations user", () => {
+  test("has the five links", async ({ operationsSession: page }) => {
     await page.goto("/status");
 
     const navigation = page.getByRole("navigation", { name: "Principal" });
@@ -13,7 +13,7 @@ test.describe("the navigation of the development user, who holds operations and 
     for (const name of LINKS) await expect(navigation.getByRole("link", { name })).toBeVisible();
   });
 
-  test("shows 'Acceso denegado' and drops the Margen link when the margin answers 403", async ({ financeSession: page }) => {
+  test("shows 'Acceso denegado' and drops the Margen link when the margin answers 403", async ({ operationsSession: page }) => {
     await failApiCalls(page, "/margin", 403);
 
     await page.goto("/margin");
@@ -22,7 +22,7 @@ test.describe("the navigation of the development user, who holds operations and 
     await expect(page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Margen" })).toHaveCount(0);
   });
 
-  test("shows 'Sesión caducada' when the margin answers 401", async ({ financeSession: page }) => {
+  test("shows 'Sesión caducada' when the margin answers 401", async ({ operationsSession: page }) => {
     await failApiCalls(page, "/margin", 401);
 
     await page.goto("/margin");

@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { after, describe, it } from "node:test";
 
 import { buildSeedSql, E2E_USERS } from "./e2e-users.ts";
-import { readEntraSettings, sessionStorageEntry } from "./session.ts";
+import { isMicrosoftSignIn, readEntraSettings, readSessions, sessionStorageEntry, writeSessions } from "./session.ts";
 import { readPrivateKey, signTestIssuerToken, TEST_AUDIENCE, TEST_ISSUER } from "./test-issuer.ts";
 
 const workDir = mkdtempSync(join(tmpdir(), "test-issuer-test-"));
@@ -134,5 +134,33 @@ describe("the E2E users and their seeding", () => {
   it("refuses an address outside @adops360.example.test and an unknown role", () => {
     assert.throws(() => buildSeedSql([{ ...OPERATIONS, email: "someone@example.com" }]), /adops360\.example\.test/);
     assert.throws(() => buildSeedSql([{ ...OPERATIONS, roles: ["admin"] }]), /Unknown role/);
+  });
+});
+
+describe("the Microsoft sign-in hosts the E2E block", () => {
+  it("are login.microsoftonline.com and login.microsoft.com, over any path", () => {
+    assert.equal(isMicrosoftSignIn("https://login.microsoftonline.com/tenant/v2.0/.well-known/openid-configuration"), true);
+    assert.equal(isMicrosoftSignIn("https://login.microsoft.com/common/oauth2/v2.0/authorize"), true);
+  });
+
+  it("leave the stack and every other host alone", () => {
+    assert.equal(isMicrosoftSignIn("http://localhost/api/users/me"), false);
+    assert.equal(isMicrosoftSignIn("https://graph.microsoft.com/v1.0/me"), false);
+    assert.equal(isMicrosoftSignIn("https://login.microsoftonline.com.example.test/"), false);
+  });
+});
+
+describe("the sessions the global setup leaves for the specs", () => {
+  it("are read back as written, by user name", () => {
+    const path = join(workDir, "auth", "sessions.json");
+    const sessions = { operations: { token: "t", key: "k", value: "v" } };
+
+    writeSessions(path, sessions);
+
+    assert.deepEqual(readSessions(path), sessions);
+  });
+
+  it("are missing until the global setup has run, and the error says so", () => {
+    assert.throws(() => readSessions(join(workDir, "none.json")), /global setup/);
   });
 });

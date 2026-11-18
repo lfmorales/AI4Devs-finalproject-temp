@@ -1,41 +1,56 @@
 import { test as base, expect, request, type APIRequestContext, type Page } from "@playwright/test";
 
 import { BASE_URL } from "../playwright.config";
-import { readToken } from "./token";
+import { SESSIONS_PATH } from "./global-setup";
+import { isMicrosoftSignIn, readSessions } from "./session";
 
-/** The text oidc-client-ts keeps under its sessionStorage key: a stored User. */
-function storedUser(idToken: string, claims: ReturnType<typeof readToken>["claims"]): { key: string; value: string } {
-  return {
-    // UserStore prefix "oidc." + "user:<authority>:<client_id>"; Cognito's iss and aud are exactly those two.
-    key: `oidc.user:${claims.iss}:${claims.aud}`,
-    value: JSON.stringify({
-      id_token: idToken,
-      // The application only reads id_token; the ID token stands in for the access token it never uses.
-      access_token: idToken,
-      token_type: "Bearer",
-      scope: "openid email",
-      profile: { sub: claims.sub, iss: claims.iss, aud: claims.aud, exp: claims.exp, iat: claims.iat, email: claims.email },
-      expires_at: claims.exp,
-    }),
-  };
+/** The names of the E2E users (support/e2e-users.ts), whose sessions the global setup signs on every run. */
+export type E2eUserName = "operations" | "business" | "finance" | "trading" | "finance-trading" | "business-trading";
+
+function sessionOf(name: E2eUserName): { token: string; key: string; value: string } {
+  const session = readSessions(SESSIONS_PATH)[name];
+  if (session === undefined) throw new Error(`The global setup signed no session for the E2E user ${name}.`);
+  return session;
+}
+
+/** Puts the E2E user's session in sessionStorage before any script of the application runs. */
+export async function signInAs(page: Page, name: E2eUserName): Promise<Page> {
+  const { key, value } = sessionOf(name);
+  await page.addInitScript((entry) => window.sessionStorage.setItem(entry.key, entry.value), { key, value });
+  return page;
 }
 
 interface Fixtures {
-  /** A page that already holds the finance user's session before any script of the application runs. */
-  financeSession: Page;
-  /** The backend API behind /api, called with the same token. */
+  /** A page that already holds the operations user's session, which may use every page and every route. */
+  operationsSession: Page;
+  /** The backend API behind /api, called with the operations user's token. */
   api: APIRequestContext;
+  /** Fails the test if the browser sent any request to a Microsoft sign-in host; the E2E sign in through the test issuer. */
+  noMicrosoftSignIn: void;
 }
 
 export const test = base.extend<Fixtures>({
-  financeSession: async ({ page }, use) => {
-    const { idToken, claims } = readToken();
-    await page.addInitScript((user) => window.sessionStorage.setItem(user.key, user.value), storedUser(idToken, claims));
-    await use(page);
+  noMicrosoftSignIn: [
+    async ({ context }, use) => {
+      const hosts: string[] = [];
+      await context.route(isMicrosoftSignIn, (route) => {
+        // Only the host is kept: the path of a sign-in request carries the tenant.
+        hosts.push(new URL(route.request().url()).hostname);
+        return route.abort();
+      });
+      await use();
+      expect(hosts, "requests to a Microsoft sign-in host").toEqual([]);
+    },
+    { auto: true },
+  ],
+  operationsSession: async ({ page }, use) => {
+    await use(await signInAs(page, "operations"));
   },
   api: async ({}, use) => {
-    const { idToken } = readToken();
-    const context = await request.newContext({ baseURL: `${BASE_URL}/api/`, extraHTTPHeaders: { Authorization: `Bearer ${idToken}` } });
+    const context = await request.newContext({
+      baseURL: `${BASE_URL}/api/`,
+      extraHTTPHeaders: { Authorization: `Bearer ${sessionOf("operations").token}` },
+    });
     await use(context);
     await context.dispose();
   },

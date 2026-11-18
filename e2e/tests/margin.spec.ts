@@ -19,7 +19,7 @@ const isFirstOfMonth = madridToday().day === 1;
 let closedAndKept: { before: MarginResponse; closedFlights: number } | null = null;
 
 test.describe("the margin of the previous month, pending close", () => {
-  test("shows the state, the contracted sale and the accrued revenue of every campaign as the API gives them", async ({ financeSession: page, api }) => {
+  test("shows the state, the contracted sale and the accrued revenue of every campaign as the API gives them", async ({ operationsSession: page, api }) => {
     const margin = await readMargin(api, previous);
     test.skip(!hasPendingClose(margin), FRESH_DATABASE_SKIP_REASON);
 
@@ -47,7 +47,7 @@ test.describe("the margin of the previous month, pending close", () => {
 test.describe("the margin of the current month, running", () => {
   test.skip(isFirstOfMonth, "Today (Madrid) is the first of the month: no flight of this month has started yet.");
 
-  test("shows the state, the days and the delivery of every running flight as the API gives them", async ({ financeSession: page, api }) => {
+  test("shows the state, the days and the delivery of every running flight as the API gives them", async ({ operationsSession: page, api }) => {
     const margin = await readMargin(api, current);
     const running = flightsOf(margin).filter((flight) => flight.state === "running");
     test.skip(running.length === 0, FRESH_DATABASE_SKIP_REASON);
@@ -72,7 +72,7 @@ test.describe("the margin of the current month, running", () => {
     }
   });
 
-  test("labels a negative margin and a flight without a sale exactly where the API raises them", async ({ financeSession: page, api }) => {
+  test("labels a negative margin and a flight without a sale exactly where the API raises them", async ({ operationsSession: page, api }) => {
     const margin = await readMargin(api, current);
     const flights = flightsOf(margin);
     test.skip(!flights.some((flight) => flight.below_cost) || !flights.some((flight) => flight.zero_sale), FRESH_DATABASE_SKIP_REASON);
@@ -100,7 +100,7 @@ test.describe("the margin of the current month, running", () => {
 });
 
 test.describe("the close-month button", () => {
-  test("is off with a campaign filter, with the reason", async ({ financeSession: page, api }) => {
+  test("is off with a campaign filter, with the reason", async ({ operationsSession: page, api }) => {
     const margin = await readMargin(api, previous);
     const campaign = margin.campaigns[0];
     test.skip(campaign === undefined, FRESH_DATABASE_SKIP_REASON);
@@ -114,7 +114,7 @@ test.describe("the close-month button", () => {
     await expect(button).toHaveAccessibleDescription(REMOVE_CAMPAIGN_FILTER);
   });
 
-  test("is off in a month with only running flights, with the reason", async ({ financeSession: page, api }) => {
+  test("is off in a month with only running flights, with the reason", async ({ operationsSession: page, api }) => {
     const margin = await readMargin(api, current);
     test.skip(hasPendingClose(margin), FRESH_DATABASE_SKIP_REASON);
 
@@ -126,7 +126,7 @@ test.describe("the close-month button", () => {
     await expect(button).toHaveAccessibleDescription(NOTHING_TO_CLOSE);
   });
 
-  test("is on in a month with a flight pending close", async ({ financeSession: page, api }) => {
+  test("is on in a month with a flight pending close", async ({ operationsSession: page, api }) => {
     test.skip(!hasPendingClose(await readMargin(api, previous)), FRESH_DATABASE_SKIP_REASON);
 
     await page.goto("/margin");
@@ -137,7 +137,7 @@ test.describe("the close-month button", () => {
 });
 
 test.describe("the access to the closing", () => {
-  test("shows 'Acceso denegado' when the closing answers 403", async ({ financeSession: page, api }) => {
+  test("shows 'Acceso denegado' when the closing answers 403", async ({ operationsSession: page, api }) => {
     test.skip(!hasPendingClose(await readMargin(api, previous)), FRESH_DATABASE_SKIP_REASON);
     await page.route(/\/api\/margin\/closings$/, (route) =>
       route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ code: "forbidden", message: "simulated" }) }),
@@ -154,7 +154,7 @@ test.describe("the access to the closing", () => {
 });
 
 test.describe("the closing order", () => {
-  test("names the earlier month that blocks the closing, and leaves the database able to close", async ({ financeSession: page, api }) => {
+  test("names the earlier month that blocks the closing, and leaves the database able to close", async ({ operationsSession: page, api }) => {
     const earlier: Month = { year: previous.year, month: previous.month - 3 };
     test.skip(earlier.month < 1, "No hay un mes anterior en el mismo año: el mes previo es de enero a marzo.");
     const all = await readMargin(api);
@@ -196,7 +196,7 @@ test.describe("the closing order", () => {
 test.describe("the real closing", () => {
   test.skip(isFirstOfMonth, "Today (Madrid) is the first of the month: the closing depends on flights that ended yesterday.");
 
-  test("freezes the rates, closes what the API counts and changes no amount", async ({ financeSession: page, api }) => {
+  test("freezes the rates, closes what the API counts and changes no amount", async ({ operationsSession: page, api }) => {
     const before = await readMargin(api, previous);
     test.skip(!hasPendingClose(before), FRESH_DATABASE_SKIP_REASON);
     const closing = flightsOf(before).filter((flight) => flight.state === "pending_close").length;
@@ -219,7 +219,7 @@ test.describe("the real closing", () => {
     closedAndKept = { before, closedFlights: flightsOf(after).length };
   });
 
-  test("is idempotent: the button is off and a second closing changes nothing", async ({ financeSession: page, api }) => {
+  test("is idempotent: the button is off and a second closing changes nothing", async ({ operationsSession: page, api }) => {
     test.skip(closedAndKept === null, "El cierre real no se ha ejecutado en esta pasada, así que no hay nada que repetir.");
     const kept = closedAndKept as NonNullable<typeof closedAndKept>;
     const before = await readMargin(api, previous);

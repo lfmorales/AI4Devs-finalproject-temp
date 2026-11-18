@@ -30,7 +30,7 @@ const months = [next, addMonths(next, 1), addMonths(next, 2)];
 const WINDOW = { start: firstDayOf(months[0]!), end: lastDateOf(months[2]!) };
 
 test.describe("registering a campaign of three months", () => {
-  test("calculates the split, shows what the backend registers and lists the campaign", async ({ financeSession: page, api }) => {
+  test("calculates the split, shows what the backend registers and lists the campaign", async ({ operationsSession: page, api }) => {
     const masters = await readMasterChoices(api);
     const name = uniqueCampaignName();
     await openNewCampaign(page);
@@ -65,7 +65,7 @@ test.describe("registering a campaign of three months", () => {
     expect(listed?.end_date).toBe(WINDOW.end);
   });
 
-  test("a line with its own dates shows only the months it touches", async ({ financeSession: page, api }) => {
+  test("a line with its own dates shows only the months it touches", async ({ operationsSession: page, api }) => {
     const masters = await readMasterChoices(api);
     await openNewCampaign(page);
     await fillCampaign(page, masters, { name: uniqueCampaignName(), ...WINDOW, impressions: TOTAL, cpm: "1.00" });
@@ -84,7 +84,7 @@ test.describe("registering a campaign of three months", () => {
 });
 
 test.describe("what the form refuses before sending", () => {
-  test("a manual split that does not add up blocks the submission, and the reset restores the proportional one", async ({ financeSession: page, api }) => {
+  test("a manual split that does not add up blocks the submission, and the reset restores the proportional one", async ({ operationsSession: page, api }) => {
     const masters = await readMasterChoices(api);
     const registrations = countRegistrations(page);
     await openNewCampaign(page);
@@ -107,7 +107,7 @@ test.describe("what the form refuses before sending", () => {
     expect(registrations.count(), "registrations sent during the whole case").toBe(0);
   });
 
-  test("a negative CPM shows its message and sends nothing", async ({ financeSession: page, api }) => {
+  test("a negative CPM shows its message and sends nothing", async ({ operationsSession: page, api }) => {
     const masters = await readMasterChoices(api);
     const registrations = countRegistrations(page);
     await openNewCampaign(page);
@@ -120,7 +120,7 @@ test.describe("what the form refuses before sending", () => {
     expect(registrations.count()).toBe(0);
   });
 
-  test("line dates outside the campaign's are refused in the browser, beside the line", async ({ financeSession: page, api }) => {
+  test("line dates outside the campaign's are refused in the browser, beside the line", async ({ operationsSession: page, api }) => {
     const masters = await readMasterChoices(api);
     const registrations = countRegistrations(page);
     await openNewCampaign(page);
@@ -138,7 +138,7 @@ test.describe("what the form refuses before sending", () => {
 });
 
 test.describe("what the backend refuses, shown beside the line", () => {
-  test("a volume too small for its months shows volume_too_small_for_flights in Spanish in the line", async ({ financeSession: page, api }) => {
+  test("a volume too small for its months shows volume_too_small_for_flights in Spanish in the line", async ({ operationsSession: page, api }) => {
     const masters = await readMasterChoices(api);
     const registrations = countRegistrations(page);
     // The code comes from the backend: ask it directly, then see the screen say the same thing in Spanish.
@@ -160,7 +160,7 @@ test.describe("what the backend refuses, shown beside the line", () => {
 });
 
 test.describe("a campaign without a price (needs a previous month that is still open)", () => {
-  test("CPM 0 registers, and the margin of the previous month labels it «Sin venta» with a dash", async ({ financeSession: page, api }) => {
+  test("CPM 0 registers, and the margin of the previous month labels it «Sin venta» with a dash", async ({ operationsSession: page, api }) => {
     const previous = previousMonth();
     const month = currentMonth();
     const margin = await readMargin(api, previous);

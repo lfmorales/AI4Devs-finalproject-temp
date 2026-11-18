@@ -1,3 +1,6 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+
 /** The frontend's Entra registration, as it was built (NEXT_PUBLIC_ENTRA_* come from ENTRA_* in .env). */
 export interface EntraSettings {
   tenantId: string;
@@ -47,4 +50,31 @@ export function sessionStorageEntry(settings: EntraSettings, token: string): { k
       expires_at: claims.exp,
     }),
   };
+}
+
+/** The hosts of a Microsoft sign-in. The E2E sign in through the test issuer only: any request to them is a failure. */
+const MICROSOFT_SIGN_IN = /^https:\/\/login\.microsoft(online)?\.com\//;
+
+export function isMicrosoftSignIn(url: string): boolean {
+  return MICROSOFT_SIGN_IN.test(url);
+}
+
+/** What the global setup leaves for one E2E user: its token and its sessionStorage entry. */
+export interface StoredSession {
+  token: string;
+  key: string;
+  value: string;
+}
+
+export type StoredSessions = Record<string, StoredSession>;
+
+/** Written by the global setup on every run, in e2e/.auth (ignored by git); tokens of the test issuer only. */
+export function writeSessions(path: string, sessions: StoredSessions): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(sessions), { mode: 0o600 });
+}
+
+export function readSessions(path: string): StoredSessions {
+  if (!existsSync(path)) throw new Error(`${path} does not exist: the global setup writes it, so run the specs with npx playwright test.`);
+  return JSON.parse(readFileSync(path, "utf8")) as StoredSessions;
 }

@@ -15,7 +15,7 @@ const searchableOf = (row: IngestionException): string =>
   plain([row.campaign_name, row.line_item_name, row.dsp_id === null ? null : dspText(row), row.external_campaign_id, row.external_line_item_id].filter((part) => part !== null).join(" "));
 
 test.describe("the exception queue, reading", () => {
-  test("«Abiertas» has the rows of GET /api/ingestion-exceptions?status=open", async ({ financeSession: page, api }) => {
+  test("«Abiertas» has the rows of GET /api/ingestion-exceptions?status=open", async ({ operationsSession: page, api }) => {
     const open = await readExceptions(api, "open");
     test.skip(open.length === 0, "la cola no tiene excepciones abiertas: ejecuta reset-data.sh");
 
@@ -26,7 +26,7 @@ test.describe("the exception queue, reading", () => {
     await expect(counter(page, open.length, open.length)).toBeVisible();
   });
 
-  test("«Resueltas» shows the resolved rows of the API with their note", async ({ financeSession: page, api }) => {
+  test("«Resueltas» shows the resolved rows of the API with their note", async ({ operationsSession: page, api }) => {
     const resolved = await readExceptions(api, "resolved");
     const withNote = resolved.filter((row) => row.note !== null);
     test.skip(withNote.length === 0, "no hay excepciones resueltas con nota: ejecuta reset-data.sh");
@@ -39,7 +39,7 @@ test.describe("the exception queue, reading", () => {
   });
 
   test.describe("the filter", () => {
-    test("finds by catalogue name without accents or case", async ({ financeSession: page, api }) => {
+    test("finds by catalogue name without accents or case", async ({ operationsSession: page, api }) => {
       const open = await readExceptions(api, "open");
       const term = "catalogo linea";
       const expected = open.filter((row) => searchableOf(row).includes(term));
@@ -57,7 +57,7 @@ test.describe("the exception queue, reading", () => {
       }
     });
 
-    test("finds by external pair and by DSP", async ({ financeSession: page, api }) => {
+    test("finds by external pair and by DSP", async ({ operationsSession: page, api }) => {
       const open = await readExceptions(api, "open");
       const withPair = open.find((row) => row.external_campaign_id !== null);
       const withDsp = open.find((row) => row.dsp_id !== null);
@@ -80,7 +80,7 @@ test.describe("the exception queue, reading", () => {
       await expect(counter(page, byDsp.length, open.length)).toBeVisible();
     });
 
-    test("shows the no-match state, and «Limpiar filtros» brings every row back", async ({ financeSession: page, api }) => {
+    test("shows the no-match state, and «Limpiar filtros» brings every row back", async ({ operationsSession: page, api }) => {
       const open = await readExceptions(api, "open");
       test.skip(open.length === 0, FRESH_DATABASE_SKIP_REASON);
 
@@ -96,7 +96,7 @@ test.describe("the exception queue, reading", () => {
       await expect(queueTable(page).getByRole("row")).toHaveCount(open.length + 1);
     });
 
-    test("the type selector keeps only the chosen type", async ({ financeSession: page, api }) => {
+    test("the type selector keeps only the chosen type", async ({ operationsSession: page, api }) => {
       const open = await readExceptions(api, "open");
       test.skip(open.length === 0, FRESH_DATABASE_SKIP_REASON);
 
@@ -118,7 +118,7 @@ test.describe("the exception queue, reading", () => {
 });
 
 test.describe("the exception queue, failures", () => {
-  test("shows 'Acceso denegado' and drops the Excepciones link when the queue answers 403", async ({ financeSession: page }) => {
+  test("shows 'Acceso denegado' and drops the Excepciones link when the queue answers 403", async ({ operationsSession: page }) => {
     await failApiCalls(page, "/ingestion-exceptions", 403);
 
     await page.goto("/exceptions");
@@ -129,7 +129,7 @@ test.describe("the exception queue, failures", () => {
 });
 
 test.describe("the exception queue, changing state (needs a freshly seeded database)", () => {
-  test("resolving an open row with a note takes it out of «Abiertas» without reloading", async ({ financeSession: page, api }) => {
+  test("resolving an open row with a note takes it out of «Abiertas» without reloading", async ({ operationsSession: page, api }) => {
     const [target] = await seededOpenUnmatched(api);
     test.skip(target === undefined, FRESH_DATABASE_SKIP_REASON);
     if (target === undefined) return;
@@ -156,7 +156,7 @@ test.describe("the exception queue, changing state (needs a freshly seeded datab
     expect((await readExceptions(api, "open")).some((row) => row.id === target.id)).toBe(false);
   });
 
-  test("linking an unmatched row to the unmapped line of the demo campaign maps it and warns about the history", async ({ financeSession: page, api }) => {
+  test("linking an unmatched row to the unmapped line of the demo campaign maps it and warns about the history", async ({ operationsSession: page, api }) => {
     const [target] = await seededOpenUnmatched(api);
     const line = await seededLinkTarget(api);
     test.skip(target === undefined || line === undefined, FRESH_DATABASE_SKIP_REASON);
@@ -183,7 +183,7 @@ test.describe("the exception queue, changing state (needs a freshly seeded datab
     expect((await readUnmappedLines(api)).some((entry) => entry.id === line.id)).toBe(false);
   });
 
-  test("a row resolved through the API before the confirmation shows the error in Spanish, not a generic one", async ({ financeSession: page, api }) => {
+  test("a row resolved through the API before the confirmation shows the error in Spanish, not a generic one", async ({ operationsSession: page, api }) => {
     const [target] = await seededOpenUnmatched(api);
     test.skip(target === undefined, FRESH_DATABASE_SKIP_REASON);
     if (target === undefined) return;

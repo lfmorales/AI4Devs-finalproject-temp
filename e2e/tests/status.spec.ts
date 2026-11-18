@@ -14,7 +14,7 @@ function madridDate(offsetDays: number): string {
 }
 
 test.describe("the campaign status", () => {
-  test("lists the rows of GET /api/campaign-status, in number and in campaign", async ({ financeSession: page, api }) => {
+  test("lists the rows of GET /api/campaign-status, in number and in campaign", async ({ operationsSession: page, api }) => {
     const rows = (await (await api.get("campaign-status")).json()) as StatusRow[];
 
     await page.goto("/status");
@@ -32,7 +32,7 @@ test.describe("the campaign status", () => {
     }
   });
 
-  test("shows the two flags of a campaign whose running flight has received no delivery", async ({ financeSession: page, api }) => {
+  test("shows the two flags of a campaign whose running flight has received no delivery", async ({ operationsSession: page, api }) => {
     // The line starts five days ago and ends in five days, so a flight contains D-1 whatever the day of the month is.
     const start = madridDate(-5);
     const end = madridDate(5);

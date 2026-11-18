@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../support/fixtures";
 
 test.describe("without a session", () => {
   test("the home page offers to sign in", async ({ page }) => {
