@@ -96,6 +96,8 @@ docker compose -f docker-compose.prod.yml build
 docker compose -f docker-compose.prod.yml up -d --wait
 ```
 
+The Compose project is named `adops360` by `docker-compose.prod.yml` itself (`name: adops360`), not by the folder the repository is cloned into: `/opt/adops360` is only the path used in the examples of this guide. Its volumes are therefore `adops360_postgres_data`, `adops360_certbot_certs` and `adops360_certbot_webroot` wherever the repository lives. Do not set `COMPOSE_PROJECT_NAME` on the instance and do not pass `-p`: either would rename the project, and the stack would start with new, empty volumes next to the real ones.
+
 ## 9. Migrations (an explicit step)
 
 The backend never migrates when it starts. After the first start, and after every release that adds a migration:

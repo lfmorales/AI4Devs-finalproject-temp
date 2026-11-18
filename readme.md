@@ -168,6 +168,17 @@ git clone [URL_REPO]
 cd AI4Devs-finalproject
 ```
 
+**Proyecto de Docker Compose.** Los ficheros de Compose llaman al proyecto `adops360` (`name: adops360`), se llame como se llame la carpeta: los contenedores son `adops360-db-1`, `adops360-backend-1`…, y los volúmenes, `adops360_postgres_data`, `adops360_certbot_certs` y `adops360_certbot_webroot`. `COMPOSE_PROJECT_NAME`, en el entorno o en el `.env` de la carpeta, tiene prioridad sobre ese nombre.
+
+- **Worktrees.** La carpeta principal no fija nada y se llama `adops360`. Cada worktree debe fijar en su propio `.env` un nombre distinto, por ejemplo `COMPOSE_PROJECT_NAME=adops360-<rama>`; si no, comparte contenedores y base de datos con la carpeta principal, y un `reset-data.sh` en el worktree borraría sus datos. `reset-data.sh` y los E2E se niegan a seguir si el stack que publica el puerto 80 se levantó desde otra carpeta.
+- **Al cambiar de nombre la base de desarrollo arranca vacía.** Los volúmenes llevan el nombre del proyecto delante, así que una carpeta que antes tenía otro nombre (por ejemplo `ai4devs-finalproject`) arranca con volúmenes nuevos. Los antiguos no se borran. Para seguir trabajando, recrea los datos con `bash e2e/scripts/reset-data.sh`, o copia una vez el volumen antiguo en el nuevo, con el stack parado y sin borrar el original:
+
+  ```bash
+  docker compose -p ai4devs-finalproject down   # para el stack con el nombre antiguo; sin -v, conserva sus volúmenes
+  docker run --rm -v ai4devs-finalproject_postgres_data:/from:ro -v adops360_postgres_data:/to alpine sh -c 'cp -a /from/. /to/'
+  docker compose up -d
+  ```
+
 #### 2. Configurar las variables de entorno
 
 ```bash
