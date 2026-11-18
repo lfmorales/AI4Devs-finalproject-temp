@@ -90,7 +90,7 @@
 
 - [x] 18.1 Update `docs/deploy.md` and `.env.example` documentation for the issuer variables and the Entra application settings, with placeholders only
 - [x] 18.2 Update README §3 and the data model documentation so they show the `identity_issuer` and `identity_subject` columns of `users`, their unique pair and the check that sets them together
-- [ ] 18.3 Verify `openspec validate entra-auth-and-roles` passes before archiving
+- [x] 18.3 Verify `openspec validate entra-auth-and-roles` passes before archiving
 
 ## 19. Key Download Hardening
 

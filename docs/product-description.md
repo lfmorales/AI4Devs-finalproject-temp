@@ -130,7 +130,7 @@ Access rules assumed for phase 1 (pending confirmation):
 - Business sees all campaigns but cost and margin figures are restricted to Operations, Finance and Admin.
 - Trading reads the daily delivery status only, with no cost, revenue, rebate or margin figure.
 - No external access for agencies or advertisers.
-- Authentication through Microsoft Entra ID, with Cognito kept as a second issuer for development and the end-to-end tests. The provider answers *who is this*; roles live only in the application database, so authorisation stays the application's own responsibility. See [Base Standards §6](./base-standards.md#6-authorization-model).
+- Authentication through Microsoft Entra ID, the only identity provider in every environment; development and the end-to-end tests also use a test issuer shaped like Entra, active only when `APP_ENV` is `development` or `test`. The provider answers *who is this*; roles live only in the application database, so authorisation stays the application's own responsibility. See [Base Standards §6](./base-standards.md#6-authorization-model).
 
 ## 4. Domain model
 
@@ -605,6 +605,7 @@ Ordered by how much they move the numbers.
 - An agency carrying a rebate exception accrues volume on its own counter and is carved out of its group's, per channel. The accumulation key is `(group, agency | null, channel, year)`. *(PO, 2026-09-21)*
 - The rebate is normally negotiated with the holding group, but an individual agency within a group may carry its own exception, which overrides the group's schedule for that agency only. No such rows exist in the 2023, 2024 or 2026 tables, so exceptions are created in the application rather than migrated. *(PO, 2026-09-21)*
 - Authentication is Microsoft Entra ID, with Cognito kept for development and the end-to-end tests. Roles stay in the application database. *(PO, 2026-11-12; supersedes the 2026-09-21 decision that chose Cognito)*
+- Cognito is removed: Microsoft Entra ID is the only identity provider in every environment. Development and the end-to-end tests use a test issuer shaped like Entra, active only when `APP_ENV` is `development` or `test`. *(PO, 2026-11-17; supersedes the 2026-11-12 decision that kept Cognito for development and the end-to-end tests)*
 - Operations has global control and sees the margin; Finance is the reviewer and no longer writes rebate schedules or platform rates. Trading is a new role that reads the delivery status only. *(PO, 2026-11-12)*
 
 - The 136 finished campaign-months with no delivery did not execute and are discarded on migration; their 111,572 € of accrued rebate is reversed. *(PO, 2026-09-15)*

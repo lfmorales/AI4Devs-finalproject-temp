@@ -31,7 +31,7 @@ This document outlines the best practices, conventions and standards used in the
 - **TypeScript**: Type-safe development across the whole codebase.
 
 ### Authentication
-- **AWS Cognito (User Pool)**: The frontend authenticates the user against Cognito and attaches the resulting token to API requests. It does not decide what the user may do.
+- **Microsoft Entra ID**: The only identity provider. The frontend signs the user in with Entra (`oidc-client-ts`, authorization code with PKCE), requests `api://<client-id>/access_as_user` besides `openid profile email`, and attaches the **access token** to API requests. It does not decide what the user may do: the roles come from `GET /users/me`, which reads them from the database. The test issuer of the end-to-end tests has no sign-in page and the frontend knows nothing of it.
 
 ### Testing Framework
 - **Vitest**: Unit and component testing.
@@ -52,7 +52,7 @@ frontend/
 ├── features/                 # Feature modules, grouped by domain area
 ├── lib/
 │   ├── api/                  # API client and typed endpoint wrappers
-│   ├── auth/                 # Cognito session and token handling
+│   ├── auth/                 # Entra session and access token handling
 │   └── types/                # Shared domain types
 ├── tests/
 │   ├── unit/                 # Vitest component and unit tests
@@ -104,13 +104,13 @@ Routes and views are guarded by role. The rules mirror the server's, but they ar
 - The authenticated user's roles are read once after sign-in and made available through a session context.
 - A route guard checks the required role or roles before rendering; a user holding **any** of the accepted roles passes, since roles are additive.
 - Navigation renders only the destinations the user can reach. A guard that lets a user click through to a rejected request is a worse experience than one that never offered the link.
-- Cost and margin views are restricted to the finance role.
+- Cost and margin views are restricted to the operations and finance roles.
 - **Every guarded view is backed by a server-side check.** The frontend never assumes the API will not be called directly. See [Backend Standards](./backend-standards.md#authentication-and-authorization).
 
 ## Data Access
 
 - All API calls go through the typed client in `lib/api/`. Components never call `fetch` directly.
-- The Cognito token is attached by the client, in one place.
+- The Entra access token is attached by the client, in one place.
 - Handle the three failure cases distinctly: unauthenticated (session expired — re-authenticate), forbidden (the role is missing — explain, do not retry), and failed (show the error and allow a retry).
 - Loading and empty states are designed, not left as blank space. An empty campaign list and a list that has not loaded yet must not look the same.
 
@@ -152,7 +152,7 @@ Location: `tests/e2e/`.
 ## Configuration Standards
 
 - Configuration comes from environment variables, declared in `.env.example` with no real values.
-- Cognito settings needed by the browser — user pool id, client id, region — are exposed as public variables. Anything that must stay secret does not belong in the frontend.
+- The Entra settings needed by the browser — tenant id and client id — are exposed as the public build variables `NEXT_PUBLIC_ENTRA_TENANT_ID` and `NEXT_PUBLIC_ENTRA_CLIENT_ID`, which Compose derives from `ENTRA_TENANT_ID` and `ENTRA_CLIENT_ID`; the production build fails, naming the variable, when either is empty. Anything that must stay secret does not belong in the frontend.
 - `.env` is never committed.
 
 ## Performance Best Practices

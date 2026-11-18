@@ -48,7 +48,7 @@ Read these before planning; they are the source of truth and they outrank your d
 - SQLAlchemy repository implementations satisfying domain interfaces, in `persistence/`.
 - DSP clients in `dsp/`, behind a common interface so that adding a DSP never modifies an existing client.
 - Spreadsheet parsers in `spreadsheets/`; **pandas and openpyxl appear nowhere else**. Parsers validate structure before content and fail naming the file, sheet and row.
-- S3 access in `storage/`, Cognito token verification in `auth/`.
+- S3 access in `storage/`, token verification for the configured issuers (Entra, and the test issuer only in development and test) in `auth/`.
 
 **4. Presentation Layer** (`app/presentation/`)
 
@@ -71,12 +71,12 @@ Read these before planning; they are the source of truth and they outrank your d
 
 ## Authentication and authorisation
 
-Cognito answers *who is this*; the application answers *what may they do*. The verified token's **email claim** is the join key to `users.email`.
+Microsoft Entra ID answers *who is this*; the application answers *what may they do*. A verified token is joined to `users` by the pair **(issuer, subject)**, the subject being `oid`; the **email claim** is used only on the first access, to link a registered user that has no link yet. Roles come only from `user_roles`; a `roles` claim in the token is ignored.
 
-- A valid token for an email absent from `users` is **forbidden, never auto-provisioned**.
+- A valid token that matches no registered user, by pair or by email, is **forbidden, never auto-provisioned**. A user has a single identity: an email of a user linked to another pair is rejected and the link is not changed.
 - Every endpoint declares its requirement explicitly via `require_roles(...)`. An endpoint without one is a review failure, not an open endpoint.
 - `require_roles` authorises a user holding **any** of the accepted roles; roles are additive.
-- Cost and margin endpoints are restricted to `finance`, and the restriction removes the field from the response rather than merely hiding it in the interface.
+- Cost and margin endpoints are restricted to `operations` and `finance`, and the restriction removes the field from the response rather than merely hiding it in the interface.
 
 ## Database
 

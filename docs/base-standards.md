@@ -65,7 +65,7 @@ The economic model, the domain entities and the decisions behind them are specif
 
 ### Authentication
 - **Microsoft Entra ID** handles credentials, tokens and session, with every user in the company tenant.
-- **AWS Cognito (User Pool)** is kept as a second configured issuer for development and the end-to-end tests.
+- In development and the end-to-end tests the backend also accepts a **test issuer** shaped like Entra, which signs in no person: its `iss` and audience are fixed in code, it is active only when `APP_ENV` is `development` or `test`, and with its key set in any other environment the backend refuses to start.
 - The backend accepts tokens only from the configured issuers (issuer, audience, key address, user identifier claim and, optionally, a mandatory scope each). Tenant and application identifiers live only in `.env`.
 - **Authorisation remains the application's own responsibility** (see §6).
 
@@ -106,7 +106,7 @@ Authentication and authorisation are deliberately split. **The identity provider
 
 ### Identity
 
-A user authenticates against a configured issuer (Entra ID, or Cognito in development) and presents a JWT. The backend validates the token against that issuer's public keys and joins it to the local `users` table by the pair **(issuer, subject)**: `oid` for Entra, `sub` for Cognito. The **email claim** is used only on the first access, to link a registered user that has no link yet.
+A user authenticates against Microsoft Entra ID and presents its access token (the end-to-end tests present a token of the test issuer instead). The backend validates the token against that issuer's public keys and joins it to the local `users` table by the pair **(issuer, subject)**, where the subject is the `oid` claim. The **email claim** is used only on the first access, to link a registered user that has no link yet.
 
 ```
 Issuer ──token (issuer, subject)──> users ──> user_roles ──> roles
@@ -155,7 +155,7 @@ Four services:
 | `db` | PostgreSQL, with a named volume for persistence |
 | `nginx` | Reverse proxy and TLS termination, with Certbot for certificates |
 
-Cognito and S3 are managed AWS services and are not part of the Compose stack. Only the configuration needed for `backend` and `frontend` to reach them is declared, via environment variables.
+Microsoft Entra ID and S3 are managed services and are not part of the Compose stack. Only the configuration needed for `backend` and `frontend` to reach them is declared, via environment variables.
 
 Configuration rules:
 

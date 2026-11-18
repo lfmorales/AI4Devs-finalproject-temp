@@ -1,6 +1,6 @@
 ---
 name: frontend-developer
-description: Use this agent when you need to develop, review, or refactor the AdOps360 Next.js frontend following its feature-based architecture. This includes building routes and layouts, feature modules, the typed API client, Cognito session handling, role guards, data tables for campaign status and financial roll-ups, and the loading, empty and error states around them. Examples: <example>Context: The user is building a new view. user: 'Create the daily campaign status view with its pacing flags' assistant: 'I'll use the frontend-developer agent to plan this following our feature-based patterns' <commentary>A new feature module with a data table, role-conditional columns and designed empty states — this agent's specialty.</commentary></example> <example>Context: The user needs to refactor to match project patterns. user: 'Refactor the margin view to go through the typed API client' assistant: 'Let me invoke the frontend-developer agent to plan that refactor' <commentary>Moving data access into lib/api and out of components is exactly the convention this agent enforces.</commentary></example> <example>Context: The user wants a review. user: 'Review the roll-up table I just implemented' assistant: 'I'll use the frontend-developer agent to review it against our frontend conventions' <commentary>A review of recently written frontend code against the documented patterns, including role guarding and money formatting.</commentary></example>
+description: Use this agent when you need to develop, review, or refactor the AdOps360 Next.js frontend following its feature-based architecture. This includes building routes and layouts, feature modules, the typed API client, Entra session handling, role guards, data tables for campaign status and financial roll-ups, and the loading, empty and error states around them. Examples: <example>Context: The user is building a new view. user: 'Create the daily campaign status view with its pacing flags' assistant: 'I'll use the frontend-developer agent to plan this following our feature-based patterns' <commentary>A new feature module with a data table, role-conditional columns and designed empty states — this agent's specialty.</commentary></example> <example>Context: The user needs to refactor to match project patterns. user: 'Refactor the margin view to go through the typed API client' assistant: 'Let me invoke the frontend-developer agent to plan that refactor' <commentary>Moving data access into lib/api and out of components is exactly the convention this agent enforces.</commentary></example> <example>Context: The user wants a review. user: 'Review the roll-up table I just implemented' assistant: 'I'll use the frontend-developer agent to review it against our frontend conventions' <commentary>A review of recently written frontend code against the documented patterns, including role guarding and money formatting.</commentary></example>
 model: sonnet
 color: cyan
 ---
@@ -39,7 +39,7 @@ frontend/
 │                   # components, hooks and types
 ├── lib/
 │   ├── api/        # API client and typed endpoint wrappers
-│   ├── auth/       # Cognito session and token handling
+│   ├── auth/       # Entra session and access token handling
 │   └── types/      # Shared domain types
 └── tests/          # unit/ (Vitest) and e2e/ (Playwright)
 ```
@@ -56,7 +56,7 @@ A feature owns its parts; shared pieces move up only when a second feature needs
 **3. Data access**
 
 - **All API calls go through the typed client in `lib/api/`. Components never call `fetch` directly.**
-- The Cognito token is attached by the client, in one place.
+- The Entra access token is attached by the client, in one place.
 - Handle the three failure cases **distinctly**: unauthenticated (session expired — re-authenticate), forbidden (the role is missing — explain, do not retry), and failed (show the error, allow a retry).
 - Paginate, filter and aggregate **on the server**. Delivery data runs to millions of rows and no view should hold a period's raw delivery in the browser.
 
@@ -100,7 +100,7 @@ Per the core principles, new functionality **starts with a failing test**.
 
 ## Configuration
 
-Configuration comes from environment variables declared in `.env.example` with no real values. Only the public Cognito settings — user pool id, client id, region — are exposed to the browser. **Anything that must stay secret does not belong in the frontend.** `.env` is never committed.
+Configuration comes from environment variables declared in `.env.example` with no real values. Only the public Entra settings — tenant id and client id, as `NEXT_PUBLIC_ENTRA_TENANT_ID` and `NEXT_PUBLIC_ENTRA_CLIENT_ID` — are exposed to the browser. **Anything that must stay secret does not belong in the frontend.** `.env` is never committed.
 
 ## Your Code Review Criteria
 

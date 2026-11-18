@@ -46,7 +46,7 @@ That constraint is not stylistic. The margin calculation is the product: it carr
 - **openpyxl**: Reading and writing `.xlsx` files.
 
 ### Authentication
-- **AWS Cognito (User Pool)**: Identity provider. The backend validates tokens; it does not issue them.
+- **Microsoft Entra ID**: The only identity provider. The backend validates its access tokens; it does not issue them. In development and the end-to-end tests a test issuer shaped like Entra is also accepted (see [Token Verification](#token-verification)).
 
 ### File Storage
 - **Amazon S3**: Uploaded purchase-order and offer spreadsheets, and reports downloaded from the DSPs.
@@ -84,7 +84,7 @@ Domain-Driven Design focuses on modelling software according to business logic a
 
 **Infrastructure Layer** (`app/infrastructure/`)
 - SQLAlchemy repository implementations satisfying domain interfaces.
-- DSP API clients, S3 access, spreadsheet parsers, Cognito token verification.
+- DSP API clients, S3 access, spreadsheet parsers, token verification for the configured issuers.
 
 The dependency rule is one-directional: presentation depends on application, application depends on domain, infrastructure depends on domain. **Nothing depends on infrastructure.**
 
@@ -108,7 +108,7 @@ backend/
 │   │   ├── dsp/              # Adform, Equativ and Displayce clients
 │   │   ├── spreadsheets/     # pandas/openpyxl parsers
 │   │   ├── storage/          # S3 access
-│   │   └── auth/             # Cognito token verification
+│   │   └── auth/             # Token verification, one verifier per configured issuer
 │   ├── config.py             # Settings loaded from environment variables
 │   └── main.py               # Application entry point
 ├── alembic/
@@ -266,39 +266,48 @@ The split is defined in [Base Standards §6](./base-standards.md#6-authorization
 
 ### Token Verification
 
-Every request carrying a bearer token has it verified against the Cognito User Pool's public keys, checking signature, expiry, issuer and audience. Verification lives in `app/infrastructure/auth/`.
+Every request carrying a bearer token has it verified against the configured issuers, which `Settings` builds when the application starts. A composite verifier reads the unverified `iss`, picks that issuer's verifier and delegates; an unknown `iss` is an invalid token before any user lookup. Each issuer's verifier checks signature, expiry, issuer and audience, and the rules of the `entra` kind: version 2 and the scope `access_as_user`. Verification lives in `app/infrastructure/auth/`.
+
+- **Entra** is always configured: `ENTRA_TENANT_ID` and `ENTRA_CLIENT_ID` are required, and without them the backend refuses to start. Its keys come from the tenant's key address.
+- **The test issuer** is configured only when `TEST_ISSUER_PUBLIC_KEY_FILE` is set and `APP_ENV` is exactly `development` or `test`. Its `iss` and audience are fixed in code, and its key is a local PEM public key. With the key set and any other `APP_ENV`, or an unusable key file, the backend refuses to start.
 
 ### Resolving the User
 
-The verified token's **email claim** is the join key to `users.email`.
+The user is joined to the token by the pair **(issuer, subject)**, where the subject is the `oid` claim. The **email claim** is used only on the first access, to link a registered user that has no link yet. `AuthenticationService` does it:
 
 ```python
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
-    claims = verify_cognito_token(token)          # 401 if invalid
-    user = user_repository.get_by_email(claims["email"])
+def authenticate(self, token: str) -> User:
+    identity = self._token_verifier.verify(token)                 # 401 if invalid
+    user = self._user_repository.get_by_identity(identity.issuer, identity.subject)
     if user is None:
-        raise ForbiddenError("Authenticated user is not registered")
+        user = self._find_unlinked_user_by_email(identity)        # 403 if not registered or linked elsewhere
+    if not user.is_active:
+        raise InactiveUserError("Authenticated user is inactive")  # 403
+    if user.identity_issuer is None:
+        user = self._link(user, identity)                         # stores the pair
     return user
 ```
 
-A valid token for an unknown email is **forbidden, not created**. The backend never auto-provisions users, because doing so would grant an identity a foothold in the system without anyone deciding it should have one.
+- A valid token that matches no registered user, by pair or by email, is **forbidden, not created** (`user_not_registered`). The backend never auto-provisions users, because doing so would grant an identity a foothold in the system without anyone deciding it should have one.
+- A user has a single identity: an email that matches a user already linked to another pair is rejected with `identity_link_conflict`, and the stored link does not change. A token without email and without a stored link is `user_not_registered`.
+- An inactive user is rejected with `user_inactive` on every request, whatever the token says.
 
 ### Enforcing Roles
 
-Roles are read from `user_roles` for the resolved user. Endpoints declare their requirement as a dependency:
+Roles are read from `user_roles` for the resolved user, whatever the issuer; a `roles` claim in the token is ignored. Endpoints declare their requirement as a dependency:
 
 ```python
 @router.get("/campaigns/{campaign_id}/margin")
 async def get_campaign_margin(
     campaign_id: int,
-    user: User = Depends(require_roles("finance")),
+    user: User = Depends(require_roles(RoleName.OPERATIONS, RoleName.FINANCE)),
 ) -> MarginResponse:
     ...
 ```
 
 - `require_roles` accepts one or more role names and authorises a user holding **any** of them. Roles are additive.
 - Every endpoint declares its requirement explicitly. There is no implicit default, and an endpoint without a declared requirement is a review failure, not an open endpoint.
-- Cost and margin endpoints are restricted to `finance`.
+- Cost and margin endpoints are restricted to `operations` and `finance`, per the access matrix of the `identity/access-matrix` specification.
 - The frontend's role-guarded routes are a usability measure and are never the only check.
 
 ## Database Patterns

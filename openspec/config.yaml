@@ -12,7 +12,8 @@ context: |
     and must be testable without a database, an HTTP server or a DSP.
   - Frontend: Node 22 LTS, Next.js, TypeScript. Grouped by feature, not by file type.
   - Database: PostgreSQL 16 in its own container with a named volume.
-  - Auth: AWS Cognito User Pool authenticates; the application authorises.
+  - Auth: Microsoft Entra ID authenticates (a test issuer shaped like Entra only in
+    development and test); the application authorises. Users are joined by (issuer, oid).
     Roles live only in the database, in the user_roles bridge table.
   - Deployment: containerised monolith on a single EC2 instance, Docker Compose,
     nginx + Certbot. Four services: backend, frontend, db, nginx.
