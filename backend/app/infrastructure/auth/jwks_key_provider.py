@@ -8,6 +8,8 @@ timeout. This provider bounds both: at most one download a minute, whatever the 
 import threading
 import time
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any
 
 import jwt
@@ -31,6 +33,15 @@ KeySetDownloader = Callable[[str, float], Mapping[str, Any]]
 Clock = Callable[[], float]
 
 
+@dataclass(frozen=True)
+class _CachedKeySet:
+    """One downloaded key set and when it was loaded. Replaced whole on every download and never modified, so a
+    reader without the lock sees either the old set or the new one, never a mixture."""
+
+    keys: Mapping[str, PyJWK]
+    loaded_at: float
+
+
 def download_key_set(url: str, timeout: float) -> Mapping[str, Any]:
     """One download of the key set, through PyJWKClient's HTTP (no redirects) with its own cache off."""
     data: Mapping[str, Any] = PyJWKClient(url, cache_jwk_set=False, timeout=timeout).fetch_data()
@@ -52,8 +63,7 @@ class CachedJwksKeyProvider:
         self._download = download
         self._clock = clock
         self._lock = threading.Lock()
-        self._keys: dict[str, PyJWK] = {}
-        self._loaded_at: float | None = None
+        self._cached: _CachedKeySet | None = None
         self._last_attempt_at: float | None = None
         self._last_attempt_failed = False
 
@@ -62,26 +72,38 @@ class CachedJwksKeyProvider:
         if not isinstance(kid, str) or not kid:
             raise PyJWKClientError("The token names no signing key")
 
-        # One lock for the decision and the download, so simultaneous requests cause at most one download.
+        # A known kid of a current key set never waits: no lock, so a download in progress does not hold it up.
+        key = self._current_key(self._cached, kid)
+        if key is not None:
+            return key
+
+        # The lock is for deciding and downloading only. Inside, check again: a request that waited for it may find
+        # that another one has just downloaded, so simultaneous requests still cause at most one download.
         with self._lock:
-            if self._needs_download(kid) and self._may_download():
-                self._reload()
-            key = self._keys.get(kid)
+            cached = self._cached
+            key = self._current_key(cached, kid)
             if key is not None:
                 return key
-            if self._last_attempt_failed and self._loaded_at is None:
+            if self._may_download():
+                cached = self._reload()
+            key = cached.keys.get(kid) if cached is not None else None
+            if key is not None:
+                return key
+            if self._last_attempt_failed and cached is None:
                 # Nothing was ever loaded and the last download failed: still unavailable, without asking again.
                 raise PyJWKClientConnectionError("The issuer's keys could not be downloaded")
             raise PyJWKClientError("The token's signing key is not one of the issuer's keys")
 
-    def _needs_download(self, kid: str) -> bool:
-        expired = self._loaded_at is None or self._clock() - self._loaded_at >= JWKS_LIFETIME_SECONDS
-        return expired or kid not in self._keys
+    def _current_key(self, cached: _CachedKeySet | None, kid: str) -> PyJWK | None:
+        """The key of the kid, when the key set holds it and has not expired."""
+        if cached is None or self._clock() - cached.loaded_at >= JWKS_LIFETIME_SECONDS:
+            return None
+        return cached.keys.get(kid)
 
     def _may_download(self) -> bool:
         return self._last_attempt_at is None or self._clock() - self._last_attempt_at >= JWKS_RELOAD_INTERVAL_SECONDS
 
-    def _reload(self) -> None:
+    def _reload(self) -> _CachedKeySet:
         self._last_attempt_at = self._clock()
         try:
             key_set = PyJWKSet.from_dict(dict(self._download(self._url, JWKS_DOWNLOAD_TIMEOUT_SECONDS)))
@@ -90,6 +112,9 @@ class CachedJwksKeyProvider:
             # The keys already cached are kept.
             self._last_attempt_failed = True
             raise PyJWKClientConnectionError("The issuer's keys could not be downloaded") from error
-        self._keys = {key.key_id: key for key in key_set.keys if key.key_id}
-        self._loaded_at = self._last_attempt_at
+        self._cached = _CachedKeySet(
+            keys=MappingProxyType({key.key_id: key for key in key_set.keys if key.key_id}),
+            loaded_at=self._last_attempt_at,
+        )
         self._last_attempt_failed = False
+        return self._cached

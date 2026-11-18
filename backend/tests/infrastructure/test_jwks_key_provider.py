@@ -259,3 +259,58 @@ def test_the_wiring_uses_the_cached_provider_for_entra_and_the_pem_provider_for_
 
     assert isinstance(providers._issuer_verifier(ENTRA).key_provider, CachedJwksKeyProvider)
     assert isinstance(providers._issuer_verifier(test_issuer).key_provider, PemPublicKeyProvider)
+
+
+class BlockingDownloader:
+    """Answers with its key set, but each call waits until the test releases it; `entered` tells the test a call
+    is in progress."""
+
+    def __init__(self, key_set: Mapping[str, Any]) -> None:
+        self.key_set = key_set
+        self.calls = 0
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self._lock = threading.Lock()
+
+    def __call__(self, url: str, timeout: float) -> Mapping[str, Any]:
+        with self._lock:
+            self.calls += 1
+        self.entered.set()
+        assert self.release.wait(timeout=10)
+        return self.key_set
+
+
+def test_a_known_current_kid_is_served_while_a_download_is_in_progress(clock: FakeClock) -> None:
+    downloader = BlockingDownloader(_key_set((TEST_KEY, "clave-a")))
+    verifier = IssuerTokenVerifier(ENTRA, CachedJwksKeyProvider(KEYS_URL, download=downloader, clock=clock))
+    downloader.release.set()
+    verifier.verify(_token("clave-a"))  # first load
+    downloader.release.clear()
+    downloader.entered.clear()
+    clock.now += 61
+    known_outcome: list[str] = []
+
+    def unknown_kid_request() -> None:
+        with pytest.raises(InvalidIdentityTokenError):
+            verifier.verify(_token("clave-desconocida"))
+
+    def known_kid_request() -> None:
+        known_outcome.append(verifier.verify(_token("clave-a")).subject)
+
+    downloading = [threading.Thread(target=unknown_kid_request) for _ in range(2)]
+    try:
+        downloading[0].start()
+        assert downloader.entered.wait(timeout=5)
+        downloading[1].start()
+        known = threading.Thread(target=known_kid_request)
+        known.start()
+        known.join(timeout=1)
+
+        assert not known.is_alive(), "a known kid waited for the download"
+        assert known_outcome == ["sujeto-de-prueba"]
+    finally:
+        downloader.release.set()
+        for thread in downloading:
+            thread.join(timeout=5)
+
+    assert downloader.calls == 2  # the first load and one download for the two simultaneous unknown kids
