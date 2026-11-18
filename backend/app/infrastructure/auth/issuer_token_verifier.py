@@ -2,12 +2,13 @@ from collections.abc import Callable
 from typing import Any, Protocol
 
 import jwt
-from jwt import PyJWKClient, PyJWKClientConnectionError, PyJWKClientError
+from jwt import PyJWKClientConnectionError, PyJWKClientError
 
 from app.config import TokenIssuer
 from app.domain.exceptions import IdentityProviderUnavailableError, InvalidIdentityTokenError
 from app.domain.models.user import VerifiedIdentity
 from app.domain.services.identity_token_verifier import IdentityTokenVerifier
+from app.infrastructure.auth.jwks_key_provider import CachedJwksKeyProvider
 
 # Only an asymmetric algorithm: never "none" and never a shared-secret one.
 _ALGORITHMS = ["RS256"]
@@ -55,10 +56,15 @@ class IssuerTokenVerifier(IdentityTokenVerifier):
         if jwks_client is not None:
             self._jwks_client = jwks_client
         elif issuer.jwks_url is not None:
-            # PyJWKClient caches the key set and refetches it when an unknown kid appears.
-            self._jwks_client = PyJWKClient(issuer.jwks_url)
+            # Cached, reloaded at most once a minute and with a bounded download time (jwks_key_provider.py).
+            self._jwks_client = CachedJwksKeyProvider(issuer.jwks_url)
         else:
             raise ValueError(f"The issuer {issuer.issuer} has no key address and no key provider was given")
+
+    @property
+    def key_provider(self) -> SigningKeyProvider:
+        """Where this verifier takes the issuer's keys from."""
+        return self._jwks_client
 
     def verify(self, token: str) -> VerifiedIdentity:
         try:

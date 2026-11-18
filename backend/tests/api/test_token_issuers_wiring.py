@@ -27,7 +27,7 @@ ENTRA_ISSUER = "https://login.microsoftonline.com/tenant-de-prueba/v2.0"
 ENTRA_AUDIENCE = "cliente-de-prueba"
 
 class _KeysByUrl:
-    """Stands in for PyJWKClient: no network, the keys depend on the URL the provider configured."""
+    """Stands in for the cached key provider: no network, the keys depend on the URL the provider configured."""
 
     _PUBLIC_KEYS: dict[str, RSAPublicKey] = {}
 
@@ -52,7 +52,7 @@ def configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Any]:
     _KeysByUrl._PUBLIC_KEYS = {
         "https://login.microsoftonline.com/tenant-de-prueba/discovery/v2.0/keys": TEST_KEY.public_key(),
     }
-    monkeypatch.setattr("app.infrastructure.auth.issuer_token_verifier.PyJWKClient", _KeysByUrl)
+    monkeypatch.setattr(providers, "CachedJwksKeyProvider", _KeysByUrl)
 
     def _apply(with_test_issuer: bool) -> None:
         monkeypatch.setenv("ENTRA_TENANT_ID", "tenant-de-prueba")

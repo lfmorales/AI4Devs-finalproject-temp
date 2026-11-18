@@ -32,6 +32,7 @@ from app.domain.services.dsp_delivery_client import DspDeliveryClient
 from app.infrastructure.auth.composite_token_verifier import CompositeTokenVerifier
 from app.config import TokenIssuer
 from app.infrastructure.auth.issuer_token_verifier import IssuerTokenVerifier
+from app.infrastructure.auth.jwks_key_provider import CachedJwksKeyProvider
 from app.infrastructure.auth.static_key_provider import InvalidPublicKeyFileError, PemPublicKeyProvider
 from app.infrastructure.dsp.adform_delivery_client import AdformDeliveryClient
 from app.infrastructure.persistence.database import build_engine, build_session_factory
@@ -75,9 +76,11 @@ def _session_factory() -> sessionmaker[Session]:
 
 
 def _issuer_verifier(issuer: TokenIssuer) -> IssuerTokenVerifier:
-    """The key address for Entra; the local public key for the test issuer."""
+    """The key address for Entra, cached and reloaded sparingly; the local public key for the test issuer."""
     if issuer.public_key_file is None:
-        return IssuerTokenVerifier(issuer)
+        if issuer.jwks_url is None:
+            raise ValueError(f"The issuer {issuer.issuer} has neither a key address nor a key file")
+        return IssuerTokenVerifier(issuer, CachedJwksKeyProvider(issuer.jwks_url))
     try:
         key_provider = PemPublicKeyProvider(issuer.public_key_file)
     except InvalidPublicKeyFileError as error:

@@ -94,7 +94,7 @@
 
 ## 19. Key Download Hardening
 
-- [ ] 19.1 Limit the key reload rate and the download timeout, with a test
+- [x] 19.1 Limit the key reload rate and the download timeout, with a test
 - [x] 19.2 Insert all four roles from a migration, idempotently, so a fresh database does not depend on the seed script
 - [x] 19.3 Remove count_active_with_role, which nothing uses in production, with its tests; done together with 21.7 (the removal of CognitoTokenVerifier moved to 21.7)
 
