@@ -137,7 +137,9 @@ def seed(session: Session, seed_email: str) -> None:
         SELECT g.id, DATE '2026-01-01' FROM holding_groups g
         WHERE g.name = 'Default Holding Group'
           AND NOT EXISTS (
-              SELECT 1 FROM rebate_schedules s WHERE s.holding_group_id = g.id AND s.channel_id IS NULL
+              SELECT 1 FROM rebate_schedules s
+              WHERE s.holding_group_id = g.id
+                AND s.agency_id IS NULL AND s.channel_id IS NULL AND s.scope IS NULL
           )
     """))
     session.execute(text("""
@@ -147,7 +149,7 @@ def seed(session: Session, seed_email: str) -> None:
         JOIN holding_groups g ON g.id = s.holding_group_id AND g.name = 'Default Holding Group'
         CROSS JOIN (VALUES (1, 0::numeric, 100000::numeric, 0.10::numeric), (2, 100000::numeric, NULL::numeric, 0.15::numeric))
             AS b(position, lower, upper, rate)
-        WHERE s.channel_id IS NULL
+        WHERE s.agency_id IS NULL AND s.channel_id IS NULL AND s.scope IS NULL
           AND NOT EXISTS (SELECT 1 FROM rebate_brackets x WHERE x.rebate_schedule_id = s.id)
     """))
     print("✓ Example rebate schedule seeded (fictitious)")
@@ -160,7 +162,9 @@ def seed(session: Session, seed_email: str) -> None:
         FROM holding_groups g JOIN channels c ON c.name = 'CTV'
         WHERE g.name = 'Default Holding Group'
           AND NOT EXISTS (
-              SELECT 1 FROM rebate_schedules s WHERE s.holding_group_id = g.id AND s.channel_id = c.id
+              SELECT 1 FROM rebate_schedules s
+              WHERE s.holding_group_id = g.id
+                AND s.agency_id IS NULL AND s.channel_id = c.id AND s.scope IS NULL
           )
     """))
     session.execute(text("""
@@ -171,7 +175,8 @@ def seed(session: Session, seed_email: str) -> None:
         JOIN channels c ON c.id = s.channel_id AND c.name = 'CTV'
         CROSS JOIN (VALUES (1, 0::numeric, 50000::numeric, 0.05::numeric), (2, 50000::numeric, NULL::numeric, 0.08::numeric))
             AS b(position, lower, upper, rate)
-        WHERE NOT EXISTS (SELECT 1 FROM rebate_brackets x WHERE x.rebate_schedule_id = s.id)
+        WHERE s.agency_id IS NULL AND s.scope IS NULL
+          AND NOT EXISTS (SELECT 1 FROM rebate_brackets x WHERE x.rebate_schedule_id = s.id)
     """))
     print("✓ Example CTV rebate schedule seeded (fictitious)")
     session.execute(text("""

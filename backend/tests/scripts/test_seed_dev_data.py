@@ -6,7 +6,7 @@ It also carries the four channels of the catalogue and a fictitious rebate sched
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import ScalarResult, delete, func, select
 from sqlalchemy.orm import Session
 
 from app.domain.services.rebate_ladder import resolve_rebate_schedule
@@ -69,17 +69,24 @@ def test_running_the_seed_twice_changes_nothing_the_second_time(rolled_back_sess
     assert _counts(rolled_back_session) == first
 
 
+def _any_channel_schedules(session: Session, group_id: int) -> ScalarResult[RebateScheduleRecord]:
+    """The group's schedule for any agency, channel and scope: the key the exclusion constraint compares, with
+    one validity period in the seed."""
+    return session.scalars(select(RebateScheduleRecord).where(
+        RebateScheduleRecord.holding_group_id == group_id,
+        RebateScheduleRecord.agency_id.is_(None),
+        RebateScheduleRecord.channel_id.is_(None),
+        RebateScheduleRecord.scope.is_(None),
+    ))
+
+
 def test_it_leaves_one_fictitious_any_channel_schedule_and_one_fictitious_rate(rolled_back_session: Session) -> None:
     seed(rolled_back_session, EMAIL)
 
     group = rolled_back_session.scalars(
         select(HoldingGroupRecord).where(HoldingGroupRecord.name == "Default Holding Group")
     ).one()
-    # Not a unique key (an agency exception or a scoped schedule also has no channel), so scalar(), not one().
-    schedule = rolled_back_session.scalar(select(RebateScheduleRecord).where(
-        RebateScheduleRecord.holding_group_id == group.id, RebateScheduleRecord.channel_id.is_(None),
-    ))
-    assert schedule is not None
+    schedule = _any_channel_schedules(rolled_back_session, group.id).one()
     brackets = rolled_back_session.scalars(
         select(RebateBracketRecord).where(RebateBracketRecord.rebate_schedule_id == schedule.id).order_by(RebateBracketRecord.position)
     ).all()
@@ -91,6 +98,44 @@ def test_it_leaves_one_fictitious_any_channel_schedule_and_one_fictitious_rate(r
     assert [(b.lower, b.upper, b.rate) for b in brackets] == [
         (Decimal(0), Decimal(100000), Decimal("0.10")), (Decimal(100000), None, Decimal("0.15"))]
     assert [(r.agency_id, r.rate_per_thousand, r.created_by) for r in rates] == [(agency.id, Decimal("1.10"), author.id)]
+
+
+def test_the_any_channel_schedule_is_created_even_when_the_group_has_other_schedules_without_a_channel(
+    rolled_back_session: Session,
+) -> None:
+    seed(rolled_back_session, EMAIL)
+    group = rolled_back_session.scalars(
+        select(HoldingGroupRecord).where(HoldingGroupRecord.name == "Default Holding Group")
+    ).one()
+    agency = rolled_back_session.scalars(select(AgencyRecord).where(AgencyRecord.name == "Test Agency")).one()
+    seeded = _any_channel_schedules(rolled_back_session, group.id).one()
+    rolled_back_session.execute(delete(RebateBracketRecord).where(RebateBracketRecord.rebate_schedule_id == seeded.id))
+    rolled_back_session.execute(delete(RebateScheduleRecord).where(RebateScheduleRecord.id == seeded.id))
+    # Both have no channel, but neither is the group's schedule for any agency and any scope.
+    rolled_back_session.add_all([
+        RebateScheduleRecord(holding_group_id=group.id, agency_id=agency.id, channel_id=None, scope=None,
+                             valid_from=date(2026, 1, 1)),
+        RebateScheduleRecord(holding_group_id=group.id, agency_id=None, channel_id=None, scope="national",
+                             valid_from=date(2026, 1, 1)),
+    ])
+    rolled_back_session.flush()
+
+    seed(rolled_back_session, EMAIL)
+
+    recreated = _any_channel_schedules(rolled_back_session, group.id).one()
+    brackets = rolled_back_session.scalars(
+        select(RebateBracketRecord).where(RebateBracketRecord.rebate_schedule_id == recreated.id)
+        .order_by(RebateBracketRecord.position)
+    ).all()
+    assert [(b.lower, b.upper, b.rate) for b in brackets] == [
+        (Decimal(0), Decimal(100000), Decimal("0.10")), (Decimal(100000), None, Decimal("0.15"))]
+    others = rolled_back_session.scalars(select(RebateBracketRecord).where(
+        RebateBracketRecord.rebate_schedule_id.in_(
+            select(RebateScheduleRecord.id).where(RebateScheduleRecord.id != recreated.id,
+                                                  RebateScheduleRecord.channel_id.is_(None),
+                                                  RebateScheduleRecord.holding_group_id == group.id))
+    )).all()
+    assert others == []
 
 
 def test_the_seed_loads_exactly_the_four_channels(rolled_back_session: Session) -> None:
