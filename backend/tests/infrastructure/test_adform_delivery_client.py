@@ -70,7 +70,10 @@ def test_the_data_request_has_the_contracted_body_and_a_bearer_token():
             "date", "campaignID", "campaign", "lineItemID", "lineItem", "lineItemStartDate", "lineItemEndDate",
             "campaignCurrency",
         ],
-        "metrics": ["impressions", "clicks", "cost", "measurableImpressions", "viewImpressionsIAB"],
+        "metrics": [
+            "impressions", "clicks", "cost", "measurableImpressions", "viewImpressionsIAB", "ots",
+            "videoCompletionRate",
+        ],
         "filter": {"date": {"from": "2026-08-03", "to": "2026-08-09"}},
         "paging": {"limit": 0},
     }
@@ -169,11 +172,12 @@ def test_columns_are_read_by_header_name_not_by_position():
     assert (row.impressions, row.key) == (4321, ExternalLineKey("1001", "77"))
 
 
-def test_a_missing_column_is_a_format_error_naming_it():
-    headers = [h for h in COLUMN_HEADERS if h != "viewImpressionsIAB"]
-    row = [cell for cell, header in zip(report_row(), COLUMN_HEADERS) if header != "viewImpressionsIAB"]
+@pytest.mark.parametrize("column", ["viewImpressionsIAB", "ots", "videoCompletionRate"])
+def test_a_missing_column_is_a_format_error_naming_it(column):
+    headers = [h for h in COLUMN_HEADERS if h != column]
+    row = [cell for cell, header in zip(report_row(), COLUMN_HEADERS) if header != column]
 
-    with pytest.raises(DspResponseFormatError, match="viewImpressionsIAB"):
+    with pytest.raises(DspResponseFormatError, match=column):
         _fetch(FakeAdform(rows=[row], headers=headers))
 
 

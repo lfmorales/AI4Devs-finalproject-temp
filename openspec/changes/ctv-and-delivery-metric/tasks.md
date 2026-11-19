@@ -16,8 +16,8 @@
 
 ## 2. Metrics in the Adform Request
 
-- [ ] 2.1 Change `backend/tests/infrastructure/test_adform_delivery_client.py:73` to expect the seven metrics and add `ots` and `videoCompletionRate` to `COLUMN_HEADERS` and `report_row` in `backend/tests/fixtures/fake_adform.py`; extend the missing-column test (`:247`) with both new columns; verify they fail
-- [ ] 2.2 Add `ots` and `videoCompletionRate` to `_METRICS` in `adform_delivery_client.py` and verify 2.1 passes
+- [x] 2.1 Change `backend/tests/infrastructure/test_adform_delivery_client.py:73` to expect the seven metrics and add `ots` and `videoCompletionRate` to `COLUMN_HEADERS` and `report_row` in `backend/tests/fixtures/fake_adform.py`; extend the missing-column test (`:247`) with both new columns; verify they fail
+- [x] 2.2 Add `ots` and `videoCompletionRate` to `_METRICS` in `adform_delivery_client.py` and verify 2.1 passes
 
 ## 3. Row Translation
 

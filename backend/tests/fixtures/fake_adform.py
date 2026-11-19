@@ -9,6 +9,7 @@ import httpx
 COLUMN_HEADERS = [
     "date", "campaignID", "campaign", "lineItemID", "lineItem", "lineItemStartDate", "lineItemEndDate",
     "campaignCurrency", "impressions", "clicks", "cost", "measurableImpressions", "viewImpressionsIAB",
+    "ots", "videoCompletionRate",
 ]
 OPERATION_PATH = "/v1/buyer/stats/operations/op-1"
 LOCATION_PATH = "/v1/buyer/stats/data/op-1"
@@ -29,10 +30,12 @@ def report_row(
     line_item_name: str = "Synthetic Line Item",
     line_start: str | None = "2026-07-01T00:00:00",
     line_end: str | None = "2026-09-30T23:59:59",
+    ots: str = "0",
+    completion_rate: str = "0",
 ) -> list[Any]:
     return [
         date_text, campaign_id, campaign_name, line_item_id, line_item_name, line_start, line_end, currency,
-        impressions, clicks, _Raw(cost), measurable, viewable,
+        impressions, clicks, _Raw(cost), measurable, viewable, _Raw(ots), _Raw(completion_rate),
     ]
 
 

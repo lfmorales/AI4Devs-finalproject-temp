@@ -43,7 +43,11 @@ _DIMENSIONS = [
     "date", "campaignID", "campaign", "lineItemID", "lineItem", "lineItemStartDate", "lineItemEndDate",
     "campaignCurrency",
 ]
-_METRICS = ["impressions", "clicks", "cost", "measurableImpressions", "viewImpressionsIAB"]
+# OTS is the delivery of DOOH lines; the completion rate is a fraction (1 = 100 %), and is not `vtr`, the
+# view-through rate.
+_METRICS = [
+    "impressions", "clicks", "cost", "measurableImpressions", "viewImpressionsIAB", "ots", "videoCompletionRate",
+]
 _REQUIRED_COLUMNS = [*_DIMENSIONS, *_METRICS]
 _REPORTED_CURRENCY = "EUR"
 _NO_CURRENCY = "-"
