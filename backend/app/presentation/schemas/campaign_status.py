@@ -1,9 +1,10 @@
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.domain.entities.campaign_status import CampaignStatusRow
 from app.domain.services.pacing import PacingStatus
+from app.presentation.schemas.quantity import IN_DELIVERY_METRIC, QuantityString
 
 
 class NamedReference(BaseModel):
@@ -20,7 +21,9 @@ class FlightWindowResponse(BaseModel):
 
 
 class PacingResponse(BaseModel):
-    expected_impressions: float
+    expected_impressions: float = Field(
+        description=f"The volume a linear delivery would have reached, {IN_DELIVERY_METRIC}."
+    )
     # Signed (delivered - expected) / expected; None while nothing is expected yet.
     deviation: float | None
     days_remaining: int
@@ -34,8 +37,12 @@ class CampaignStatusResponse(BaseModel):
     agency: NamedReference
     line_number: int
     flight: FlightWindowResponse
-    contracted_impressions: int
-    delivered_impressions: int
+    contracted_impressions: int = Field(description=f"The flight's contracted volume, {IN_DELIVERY_METRIC}.")
+    delivery_metric: str = Field(description="The unit the channel counts delivery in: `impressions` or `ots`.")
+    delivered: QuantityString = Field(
+        description=f"The line's delivery from the flight's start to D-1, {IN_DELIVERY_METRIC}, four decimals."
+    )
+    delivered_impressions: int = Field(description="The real impressions over the same days, whatever the metric.")
     delivery_ratio: float | None
     pacing: PacingResponse
     pacing_flag: bool
@@ -52,6 +59,8 @@ class CampaignStatusResponse(BaseModel):
                 start=row.flight_start, end=row.flight_end,
             ),
             contracted_impressions=row.contracted_impressions,
+            delivery_metric=row.delivery_metric,
+            delivered=row.delivered,
             delivered_impressions=row.delivered_impressions,
             delivery_ratio=row.delivery_ratio,
             pacing=PacingResponse(

@@ -99,3 +99,59 @@ The system SHALL record a campaign line as a `missing_delivery` exception when t
 #### Scenario: Evaluating twice does not duplicate the exception
 - **WHEN** the absence check runs again for a line and period that already has an exception
 - **THEN** no second exception is created
+
+### Requirement: Exceptions are worked, not just listed
+
+The system SHALL let an operations user resolve an exception, SHALL keep an unresolved exception visible until it is, and SHALL record when it was resolved, by whom, and an optional note. Resolving an exception only marks it: it does not reprocess anything, and retained delivery is not moved into the delivery table.
+
+#### Scenario: An exception can be resolved
+- **WHEN** an operations user resolves an exception
+- **THEN** it is marked resolved with the time, the user and the optional note
+- **AND** it leaves the outstanding queue
+- **AND** the record and its retained delivery remain readable
+
+#### Scenario: Resolving does not reprocess
+- **WHEN** an `unmatched_delivery` exception is resolved
+- **THEN** its retained delivery is not added to the delivery table
+
+#### Scenario: New delivery for a resolved pair is retained without reopening it
+- **WHEN** a run retrieves new unmatched delivery for a pair whose exception is already resolved
+- **THEN** the delivery is added to that exception's retained delivery
+- **AND** the exception stays resolved
+
+#### Scenario: Resolving an exception that is already resolved is a conflict
+- **WHEN** an operations user resolves an exception that is already resolved
+- **THEN** the request is rejected as a conflict
+
+#### Scenario: Resolving an exception that does not exist
+- **WHEN** an operations user resolves an exception that does not exist
+- **THEN** the request is rejected as not found
+
+#### Scenario: The queue can be read by status
+- **WHEN** an operations user requests the exceptions with a status of open or resolved
+- **THEN** only the exceptions with that status are returned
+
+#### Scenario: The queue lists the most recently active exceptions first
+- **WHEN** an operations user reads the exception queue
+- **THEN** exceptions are ordered by their last date, most recent first
+- **AND** exceptions with the same last date are ordered by identifier, highest first
+- **AND** exceptions without a last date, such as a missing delivery, come after those that have one, also by identifier, highest first
+
+#### Scenario: The queue shows what was retained without its cost
+- **WHEN** an operations user reads the exception queue
+- **THEN** each unmatched-delivery exception shows its first and last dates, its number of days, and the total impressions and clicks it retains
+- **AND** no media cost is returned
+
+#### Scenario: The retained cost is stored but not exposed
+- **WHEN** delivery is retained on an exception
+- **THEN** its media cost is stored with the rest of the figures
+- **AND** the queue, which only the `operations` role reads, does not return it
+- **AND** costs are read in the margin
+
+#### Scenario: Reading the queue requires the operations role
+- **WHEN** a user without the `operations` role requests the exception queue
+- **THEN** the request is rejected as forbidden
+
+#### Scenario: Resolving requires the operations role
+- **WHEN** a user without the `operations` role resolves an exception
+- **THEN** the request is rejected as forbidden

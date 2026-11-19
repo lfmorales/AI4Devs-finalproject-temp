@@ -6,7 +6,10 @@ from app.domain.entities.ingestion_exception import ExceptionStatus, ExceptionTy
 
 
 class IngestionExceptionResponse(BaseModel):
-    """No media cost: it is stored with the retained delivery but restricted to finance, which this queue is not."""
+    """No media cost: it is stored with the retained delivery but never returned here.
+
+    The queue is read by operations only; cost figures reach the interface through the margin read.
+    """
 
     id: int
     exception_type: ExceptionType

@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from datetime import date
+from decimal import Decimal
 from typing import cast
 
 import pytest
@@ -19,6 +20,7 @@ from tests.fixtures.delivery_data import (
     insert_ingestion_batch,
     replace_flights,
 )
+from tests.fixtures.margin_data import set_volume
 
 TODAY = date(2026, 8, 11)  # D; D-1 is 10 August
 COST_WORDS = ("cost", "cpm", "margin", "rebate", "revenue", "price")
@@ -215,3 +217,83 @@ def test_a_request_without_a_token_is_unauthenticated(client):
 
     assert response.status_code == 401
     assert set(response.json()) == {"code", "message"}
+
+
+def _dooh_line(session: Session, name: str = "Billboard") -> int:
+    """A DOOH flight of 300,000 contracted OTS that delivered 95,000.75 OTS over 4,800 impressions up to D-1."""
+    line = insert_campaign_line(session, campaign_name=name, delivery_metric="ots")
+    set_volume(session, line, 300_000)
+    batch = insert_ingestion_batch(session)
+    insert_delivery(session, line, date(2026, 8, 5), 2_400, batch, ots=Decimal("40000.2500"))
+    insert_delivery(session, line, date(2026, 8, 10), 2_400, batch, ots=Decimal("55000.5000"))
+    return line
+
+
+def test_a_dooh_row_carries_ots_and_impressions_separately(business_client: TestClient, test_db_session: Session) -> None:
+    _dooh_line(test_db_session)
+
+    [row] = _rows(business_client)
+
+    assert row["contracted_impressions"] == 300_000
+    assert row["delivery_metric"] == "ots"
+    assert row["delivered"] == "95000.7500"
+    assert row["delivered_impressions"] == 4_800
+
+
+def test_a_ctv_row_carries_impressions_in_both_fields_whatever_its_ots(
+    business_client: TestClient, test_db_session: Session
+) -> None:
+    line = insert_campaign_line(test_db_session, campaign_name="Connected TV", delivery_metric="impressions")
+    insert_delivery(
+        test_db_session, line, date(2026, 8, 10), 50_000, insert_ingestion_batch(test_db_session),
+        ots=Decimal("50000.0000"),
+    )
+
+    [row] = _rows(business_client)
+
+    assert row["delivery_metric"] == "impressions"
+    assert row["delivered"] == "50000.0000"
+    assert row["delivered_impressions"] == 50_000
+
+
+def test_delivered_is_always_a_text_with_four_decimals(business_client: TestClient, test_db_session: Session) -> None:
+    insert_campaign_line(test_db_session, campaign_name="Nothing delivered yet")
+
+    [row] = _rows(business_client)
+
+    assert row["delivered"] == "0.0000" and isinstance(row["delivered"], str)
+
+
+def test_the_delivery_ratio_stays_a_number_on_the_delivered_volume(
+    business_client: TestClient, test_db_session: Session
+) -> None:
+    _dooh_line(test_db_session)
+
+    [row] = _rows(business_client)
+
+    assert isinstance(row["delivery_ratio"], float)
+    assert row["delivery_ratio"] == pytest.approx(95_000.75 / 300_000)
+
+
+def test_a_trading_user_reads_the_ots_of_a_dooh_row_and_finds_no_money_field_at_any_depth(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session
+) -> None:
+    trading = client_for_roles("trading")
+    trading.app.dependency_overrides[providers.get_today] = lambda: TODAY
+    _dooh_line(test_db_session)
+
+    [row] = _rows(trading)
+
+    assert row["delivered"] == "95000.7500" and row["delivery_metric"] == "ots"
+
+    def keys_of(value: object) -> set[str]:
+        if isinstance(value, dict):
+            return set(value) | {key for item in value.values() for key in keys_of(item)}
+        if isinstance(value, list):
+            return {key for item in value for key in keys_of(item)}
+        return set()
+
+    money_words = (*COST_WORDS, "platform", "amount", "rate", "fee", "euro", "money", "spend", "price")
+    names = keys_of(row)
+    assert {"campaign", "flight", "pacing", "delivered", "delivery_metric"} <= names  # the walk reached the nested keys
+    assert not [name for name in names if any(word in name.lower() for word in money_words)]

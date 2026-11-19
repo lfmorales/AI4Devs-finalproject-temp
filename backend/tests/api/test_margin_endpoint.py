@@ -1,10 +1,14 @@
 """GET /margin: campaigns, lines and flights with totals; closed, pending close, running; operations and finance only."""
 
+from collections.abc import Callable
+from typing import Any
 from datetime import date
 from decimal import Decimal
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.domain.services.flight_margin import round_amount
 from app.infrastructure.persistence.models.margin import (
@@ -35,7 +39,7 @@ def _client(client_for_roles, today: date, roles: tuple[str, ...] = ("finance",)
     return client
 
 
-def _get(client, **params):
+def _get(client: TestClient, **params: object) -> dict[str, Any]:
     response = client.get("/margin", params=params)
     assert response.status_code == 200, response.text
     return response.json()
@@ -287,3 +291,108 @@ def test_delivery_is_aggregated_in_the_database_and_no_delivery_row_reaches_the_
     assert all("sum(daily_deliveries." in s for s in touching_delivery)
     assert not any(s.startswith("select daily_deliveries.") for s in touching_delivery)
     assert _flights(body)[0]["media_cost"] == "10.00"
+
+
+# ---------------------------------------------------------------- delivered and delivery_metric on every level
+
+def _dooh_campaign(session: Session, name: str, first_ots: str = "280000.5000", first_impressions: int = 12_000) -> tuple[int, int]:
+    """A closed DOOH campaign: line 1 of 300,000 contracted OTS, line 2 of 5,000, over one August flight each."""
+    first = insert_campaign_line(session, campaign_name=name, delivery_metric="ots")
+    second = add_line_to_campaign(session, first, 2)
+    set_volume(session, first, 300_000)
+    set_volume(session, second, 5_000)
+    batch = insert_ingestion_batch(session)
+    insert_delivery(session, first, date(2026, 8, 10), first_impressions, batch, ots=Decimal(first_ots))
+    insert_delivery(session, second, date(2026, 8, 10), 300, batch, ots=Decimal("1499.2500"))
+    insert_delivery(session, first, date(2026, 9, 1), 7_777, batch, ots=Decimal("7777.0000"))  # outside the window
+    return first, second
+
+
+def test_a_closed_dooh_flight_reports_ots_and_impressions_separately(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session
+) -> None:
+    first, _ = _dooh_campaign(test_db_session, "Billboards")
+
+    flight = next(f for f in _flights(_get(_client(client_for_roles, SEPTEMBER_FIRST))) if f["contracted_impressions"] == 300_000)
+
+    assert flight["delivery_metric"] == "ots"
+    assert flight["delivered"] == "280000.5000"
+    assert flight["delivered_impressions"] == 12_000
+
+
+def test_a_ctv_flight_reports_impressions_in_both_fields(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session
+) -> None:
+    line = insert_campaign_line(test_db_session, campaign_name="Connected TV")
+    set_volume(test_db_session, line, 200_000)
+    insert_delivery(
+        test_db_session, line, date(2026, 8, 10), 198_500, insert_ingestion_batch(test_db_session),
+        ots=Decimal("55.0000"),
+    )
+
+    (flight,) = _flights(_get(_client(client_for_roles, SEPTEMBER_FIRST)))
+
+    assert (flight["delivery_metric"], flight["delivered"], flight["delivered_impressions"]) == (
+        "impressions", "198500.0000", 198_500,
+    )
+    assert flight["contracted_impressions"] == 200_000
+
+
+def test_a_line_and_a_campaign_add_their_flights_exactly_and_keep_the_one_metric(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session
+) -> None:
+    _dooh_campaign(test_db_session, "Billboards")
+
+    body = _get(_client(client_for_roles, SEPTEMBER_FIRST))
+    (campaign,) = body["campaigns"]
+
+    assert [line["totals"]["delivered"] for line in campaign["lines"]] == ["280000.5000", "1499.2500"]
+    assert {line["totals"]["delivery_metric"] for line in campaign["lines"]} == {"ots"}
+    assert campaign["totals"]["delivered"] == "281499.7500"
+    assert campaign["totals"]["delivered_impressions"] == 12_300
+    assert campaign["totals"]["contracted_impressions"] == 305_000
+    assert campaign["totals"]["delivery_metric"] == "ots"
+
+
+def test_the_totals_of_one_metric_are_summed_with_that_metric(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session
+) -> None:
+    for name, impressions in (("First", 1_000), ("Second", 250)):
+        line = insert_campaign_line(test_db_session, campaign_name=name)
+        insert_delivery(test_db_session, line, date(2026, 8, 10), impressions, insert_ingestion_batch(test_db_session))
+
+    totals = _get(_client(client_for_roles, SEPTEMBER_FIRST))["totals"]
+
+    assert totals["delivery_metric"] == "impressions"
+    assert totals["delivered"] == "1250.0000" and totals["delivered_impressions"] == 1_250
+    assert totals["contracted_impressions"] == 2_000_000
+
+
+def test_totals_that_mix_metrics_null_the_volumes_but_still_sum_impressions_and_amounts(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session
+) -> None:
+    _dooh_campaign(test_db_session, "Billboards")
+    ctv = insert_campaign_line(test_db_session, campaign_name="Connected TV")
+    set_volume(test_db_session, ctv, 200_000)
+    insert_delivery(test_db_session, ctv, date(2026, 8, 10), 198_500, insert_ingestion_batch(test_db_session))
+
+    body = _get(_client(client_for_roles, SEPTEMBER_FIRST))
+
+    totals = body["totals"]
+    assert totals["delivery_metric"] is None and totals["contracted_impressions"] is None and totals["delivered"] is None
+    assert totals["delivered_impressions"] == 210_800
+    assert Decimal(totals["revenue"]) == sum((Decimal(c["totals"]["revenue"]) for c in body["campaigns"]), Decimal(0))
+
+
+def test_reading_and_closing_agree_on_the_volumes_of_a_dooh_flight(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session
+) -> None:
+    _dooh_campaign(test_db_session, "Billboards")
+    client = _client(client_for_roles, SEPTEMBER_FIRST)
+    fields = ("contracted_impressions", "delivered", "delivered_impressions", "delivery_metric")
+
+    before = [{name: f[name] for name in fields} for f in _flights(_get(client))]
+    assert client.post("/margin/closings", json={"year": 2026, "month": 8}).status_code == 200
+    after = [{name: f[name] for name in fields} for f in _flights(_get(client))]
+
+    assert before == after and before[0]["delivered"] == "280000.5000"

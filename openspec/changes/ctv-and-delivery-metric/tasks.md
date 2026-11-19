@@ -80,10 +80,10 @@
 
 ## 13. Response Schemas
 
-- [ ] 13.1 Write failing API tests in `test_campaign_status_endpoint.py`: the DOOH row carries `contracted_impressions` 300000, `delivery_metric` `"ots"`, `delivered` `"95000.7500"` and `delivered_impressions` 4800
-- [ ] 13.2 Write a failing API test in `test_campaign_status_endpoint.py` with a user holding only `trading`: the response for the DOOH row carries `delivered` `"95000.7500"` and `delivery_metric` `"ots"`, and walking every key of the response, however nested, finds no cost, revenue, rebate, platform-cost or margin field
-- [ ] 13.3 Write failing API tests in `test_margin_endpoint.py`: flight, line and campaign carry `delivered` as a four-decimal string and `delivery_metric`; mixed totals carry null `delivery_metric`, `contracted_impressions` and `delivered`
-- [ ] 13.4 Add the fields to `schemas/campaign_status.py` and `schemas/margin.py`, make the totals' `contracted_impressions` nullable, and verify 13.1 to 13.3 and that `test_route_protection.py` passes with `ACCESS_MATRIX` unchanged: no route is added, so no new negative case is needed beyond the existing ones of the three routes. Already done in group 11: `TotalsResponse.contracted_impressions` is nullable in `schemas/margin.py`, with its API test in `test_margin_mixed_delivery_metrics.py`
+- [x] 13.1 Write failing API tests in `test_campaign_status_endpoint.py`: the DOOH row carries `contracted_impressions` 300000, `delivery_metric` `"ots"`, `delivered` `"95000.7500"` and `delivered_impressions` 4800
+- [x] 13.2 Write a failing API test in `test_campaign_status_endpoint.py` with a user holding only `trading`: the response for the DOOH row carries `delivered` `"95000.7500"` and `delivery_metric` `"ots"`, and walking every key of the response, however nested, finds no cost, revenue, rebate, platform-cost or margin field
+- [x] 13.3 Write failing API tests in `test_margin_endpoint.py`: flight, line and campaign carry `delivered` as a four-decimal string and `delivery_metric`; mixed totals carry null `delivery_metric`, `contracted_impressions` and `delivered`
+- [x] 13.4 Add the fields to `schemas/campaign_status.py` and `schemas/margin.py`, make the totals' `contracted_impressions` nullable, and verify 13.1 to 13.3 and that `test_route_protection.py` passes with `ACCESS_MATRIX` unchanged: no route is added, so no new negative case is needed beyond the existing ones of the three routes. Already done in group 11: `TotalsResponse.contracted_impressions` is nullable in `schemas/margin.py`, with its API test in `test_margin_mixed_delivery_metrics.py`
 
 ## 14. Screens
 

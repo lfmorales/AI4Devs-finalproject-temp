@@ -7,6 +7,7 @@ from pydantic import BaseModel, BeforeValidator, Field, PlainSerializer, model_v
 from app.domain.value_objects.margin import MarginTotals
 from app.domain.value_objects.margin_report import FlightReport, FlightState, MarginReport
 from app.domain.value_objects.platform_rate import PlatformRateLevel
+from app.presentation.schemas.quantity import IN_DELIVERY_METRIC, QuantityString
 
 
 class ClosingRequest(BaseModel):
@@ -28,8 +29,16 @@ DecimalString = Annotated[Decimal, PlainSerializer(lambda value: format(value, "
 class TotalsResponse(BaseModel):
     revenue: DecimalString
     contracted_revenue: DecimalString
-    delivered_impressions: int
-    contracted_impressions: int | None
+    delivered_impressions: int = Field(description="The real impressions, always summed whatever the metric.")
+    contracted_impressions: int | None = Field(
+        description=f"The contracted volume, {IN_DELIVERY_METRIC}. Null when the totals mix metrics."
+    )
+    delivery_metric: str | None = Field(
+        description="`impressions` or `ots`. Null when the totals mix metrics or hold no flight."
+    )
+    delivered: QuantityString | None = Field(
+        description=f"The delivered volume, {IN_DELIVERY_METRIC}, four decimals. Null when the totals mix metrics."
+    )
     media_cost: DecimalString
     rebate: DecimalString
     platform_cost: DecimalString
@@ -44,7 +53,8 @@ class TotalsResponse(BaseModel):
     def from_totals(cls, totals: MarginTotals) -> "TotalsResponse":
         return cls(
             revenue=totals.revenue, contracted_revenue=totals.contracted_revenue,
-            delivered_impressions=totals.delivered_impressions, contracted_impressions=totals.contracted_impressions, media_cost=totals.media_cost,
+            delivered_impressions=totals.delivered_impressions, contracted_impressions=totals.contracted_impressions,
+            delivery_metric=totals.delivery_metric, delivered=totals.delivered, media_cost=totals.media_cost,
             rebate=totals.rebate, platform_cost=totals.platform_cost, margin=totals.margin, provisional=totals.provisional,
             flights_counted=totals.flights_counted, below_cost_count=totals.below_cost_count,
             zero_sale_count=totals.zero_sale_count, margin_pct=totals.margin_pct,
@@ -74,8 +84,12 @@ class FlightMarginResponse(BaseModel):
     contracted_revenue: DecimalString
     accrued_days: int
     window_days: int
-    delivered_impressions: int
-    contracted_impressions: int
+    delivered_impressions: int = Field(description="The real impressions inside the flight's window, whatever the metric.")
+    contracted_impressions: int = Field(description=f"The flight's contracted volume, {IN_DELIVERY_METRIC}.")
+    delivery_metric: str = Field(description="The unit the channel counts delivery in: `impressions` or `ots`.")
+    delivered: QuantityString = Field(
+        description=f"The line's delivery inside the flight's window, {IN_DELIVERY_METRIC}, four decimals."
+    )
     media_cost: DecimalString
     rebate: DecimalString
     platform_cost: DecimalString
@@ -90,6 +104,7 @@ class FlightMarginResponse(BaseModel):
         assert margin.platform_cost is not None and margin.margin is not None
         assert margin.contracted_revenue is not None and margin.accrued_days is not None and margin.window_days is not None
         assert margin.delivered_impressions is not None and margin.contracted_impressions is not None
+        assert margin.delivered is not None and margin.delivery_metric is not None
         rates = report.rates
         return cls(
             flight_id=report.flight_id, period_year=report.period_year, period_month=report.period_month,
@@ -97,6 +112,7 @@ class FlightMarginResponse(BaseModel):
             provisional=margin.provisional, below_cost=margin.below_cost, zero_sale=margin.zero_sale, revenue=margin.revenue,
             contracted_revenue=margin.contracted_revenue, accrued_days=margin.accrued_days, window_days=margin.window_days,
             delivered_impressions=margin.delivered_impressions, contracted_impressions=margin.contracted_impressions,
+            delivery_metric=margin.delivery_metric, delivered=margin.delivered,
             media_cost=margin.media_cost, rebate=margin.rebate, platform_cost=margin.platform_cost,
             margin=margin.margin, margin_pct=margin.margin_pct,
             rates=AppliedRatesResponse(
