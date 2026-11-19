@@ -48,7 +48,7 @@ function FlightRow({ flight }: { flight: FlightMargin }) {
         {flight.below_cost && flight.zero_sale ? " " : null}
         {flight.zero_sale && <span className="tag tag-info">Sin venta</span>}
       </td>
-      <td>{deliveryLegend(flight.delivered_impressions, flight.contracted_impressions)}</td>
+      <td>{deliveryLegend(flight.delivered, flight.contracted_impressions, flight.delivery_metric)}</td>
     </tr>
   );
 }

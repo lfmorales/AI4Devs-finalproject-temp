@@ -362,3 +362,66 @@ describe("waiting for the data", () => {
     expect(screen.queryByRole("region", { name: "Totales del periodo" })).not.toBeInTheDocument();
   });
 });
+
+describe("the unit of the delivery legend", () => {
+  const DOOH_FLIGHT = flight({
+    flight_id: 21, contracted_impressions: 300000, delivered_impressions: 12000,
+    delivery_metric: "ots", delivered: "280000.5000",
+  });
+  const CTV_FLIGHT = flight({
+    flight_id: 22, period_month: 7, flight_start: "2026-07-01", flight_end: "2026-07-31",
+    contracted_impressions: 200000, delivered_impressions: 198500, delivery_metric: "impressions", delivered: "198500.0000",
+  });
+
+  const legendsOf = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll(".margin-delivery")).map((element) => plain(element));
+
+  it("reads «Entregado 280.000,5 de 300.000 OTS» on the DOOH flight and «… impresiones» on a CTV one", async () => {
+    installRoutes({ "GET /margin": () => reply(200, margin({
+      campaigns: [
+        campaign({ campaign_id: 1, name: "Pantallas", lines: [line({ campaign_line_id: 10, flights: [DOOH_FLIGHT] })] }),
+        campaign({ campaign_id: 2, name: "Televisión", lines: [line({ campaign_line_id: 11, flights: [CTV_FLIGHT] })] }),
+      ],
+    })) });
+
+    renderAuthenticated(<MarginPage />);
+
+    const dooh = await screen.findByRole("table", { name: "Flights de la línea 1 de Pantallas" });
+    expect(within(dooh).getByText("Entregado 280.000,5 de 300.000 OTS")).toBeInTheDocument();
+    const ctv = screen.getByRole("table", { name: "Flights de la línea 1 de Televisión" });
+    expect(within(ctv).getByText("Entregado 198.500 de 200.000 impresiones")).toBeInTheDocument();
+  });
+
+  it("carries the unit to a line and a campaign of one metric", async () => {
+    const dooh = totals({
+      delivery_metric: "ots", delivered: "281499.7500", contracted_impressions: 305000, delivered_impressions: 12300,
+    });
+    installRoutes({ "GET /margin": () => reply(200, margin({
+      campaigns: [campaign({ name: "Pantallas", totals: dooh, lines: [line({ totals: dooh, flights: [DOOH_FLIGHT] })] })],
+      totals: dooh,
+    })) });
+
+    renderAuthenticated(<MarginPage />);
+
+    const group = await screen.findByRole("group", { name: "Campaña Pantallas" });
+    expect(legendsOf(group)).toContain("Entregado 281.499,75 de 305.000 OTS");
+    const period = screen.getByRole("region", { name: "Totales del periodo" });
+    expect(legendsOf(period)).toEqual(["Entregado 281.499,75 de 305.000 OTS"]);
+  });
+
+  it("shows no legend on a totals level whose metric is null", async () => {
+    const mixed = totals({
+      delivery_metric: null, delivered: null, contracted_impressions: null, delivered_impressions: 210800,
+    });
+    installRoutes({ "GET /margin": () => reply(200, margin({
+      campaigns: [campaign({ name: "Pantallas", lines: [line({ flights: [DOOH_FLIGHT] })] })],
+      totals: mixed,
+    })) });
+
+    renderAuthenticated(<MarginPage />);
+
+    const period = await screen.findByRole("region", { name: "Totales del periodo" });
+    expect(legendsOf(period)).toEqual([]);
+    expect(period).toHaveTextContent("Margen");
+  });
+});

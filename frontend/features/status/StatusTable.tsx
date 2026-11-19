@@ -3,6 +3,8 @@
 import { useState } from "react";
 
 import type { CampaignStatusRow } from "@/lib/api/status";
+import { formatQuantity } from "@/lib/format/decimal";
+import { metricLabel } from "@/lib/format/delivery-metric";
 import { formatFraction, formatImpressions, formatPeriod, NOT_AVAILABLE } from "./format";
 import { nextSort, sortRows, type SortColumn, type SortState } from "./sorting";
 
@@ -44,6 +46,7 @@ export function StatusTable({ rows }: { rows: CampaignStatusRow[] }) {
           <th scope="col">Línea</th>
           <SortableHeader column="period" label="Periodo" sort={sort} onSort={onSort} />
           <th scope="col">Ventana</th>
+          <th scope="col">Unidad</th>
           <th scope="col" className="num">Contratado</th>
           <th scope="col" className="num">Entregado</th>
           <th scope="col" className="num">Ratio</th>
@@ -61,8 +64,9 @@ export function StatusTable({ rows }: { rows: CampaignStatusRow[] }) {
             <td>{row.line_number}</td>
             <td>{formatPeriod(row.flight.year, row.flight.month)}</td>
             <td>{row.flight.start} – {row.flight.end}</td>
+            <td>{metricLabel(row.delivery_metric)}</td>
             <td className="num">{formatImpressions(row.contracted_impressions)}</td>
-            <td className="num">{formatImpressions(row.delivered_impressions)}</td>
+            <td className="num">{formatQuantity(row.delivered)}</td>
             <td className="num">{formatFraction(row.delivery_ratio)}</td>
             <td className="num">{formatImpressions(row.pacing.expected_impressions)}</td>
             <td className="num">{formatFraction(row.pacing.deviation)}</td>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatDecimal, formatMoney, formatPercent, NO_VALUE } from "@/lib/format/decimal";
+import { formatDecimal, formatMoney, formatPercent, formatQuantity, NO_VALUE } from "@/lib/format/decimal";
 
 describe("formatDecimal", () => {
   it("groups thousands with a dot and uses a comma for the decimals", () => {
@@ -52,5 +52,28 @@ describe("formatMoney and formatPercent", () => {
     expect(formatPercent("-5.00")).toBe("-5,00 %");
     expect(formatPercent(null)).toBe(NO_VALUE);
     expect(NO_VALUE).toBe("—");
+  });
+});
+
+describe("formatQuantity", () => {
+  it("shows the decimals of a delivered volume as received, in es-ES, without the zeros that only pad them", () => {
+    expect(formatQuantity("95000.7500")).toBe("95.000,75");
+    expect(formatQuantity("280000.5000")).toBe("280.000,5");
+    expect(formatQuantity("1499.2500")).toBe("1.499,25");
+    expect(formatQuantity("0.0001")).toBe("0,0001");
+  });
+
+  it("shows a whole volume without decimals", () => {
+    expect(formatQuantity("198500.0000")).toBe("198.500");
+    expect(formatQuantity("0.0000")).toBe("0");
+    expect(formatQuantity("12000")).toBe("12.000");
+  });
+
+  it("never rounds: a value beyond what a float holds is shown whole", () => {
+    expect(formatQuantity("9007199254740993.1250")).toBe("9.007.199.254.740.993,125");
+  });
+
+  it("returns what is not a decimal string unchanged", () => {
+    expect(formatQuantity("abc")).toBe("abc");
   });
 });

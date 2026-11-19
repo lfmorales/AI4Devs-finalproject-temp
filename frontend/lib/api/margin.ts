@@ -1,3 +1,5 @@
+import type { DeliveryMetric } from "@/lib/format/delivery-metric";
+
 import type { ApiClient } from "./client";
 import { buildQuery } from "./query";
 
@@ -14,8 +16,14 @@ export interface MarginTotals {
   revenue: DecimalString;
   /** The sale of the whole flights, summed by the server. */
   contracted_revenue: DecimalString;
+  /** The real impressions, always summed. */
   delivered_impressions: number;
-  contracted_impressions: number;
+  /** In the unit of `delivery_metric`; null when the totals mix metrics. */
+  contracted_impressions: number | null;
+  /** Null when the totals mix metrics or hold no flight. */
+  delivery_metric: DeliveryMetric | null;
+  /** In that unit, four decimals; null when the totals mix metrics. */
+  delivered: string | null;
   media_cost: DecimalString;
   rebate: DecimalString;
   platform_cost: DecimalString;
@@ -57,7 +65,11 @@ export interface FlightMargin {
   accrued_days: number;
   window_days: number;
   delivered_impressions: number;
+  /** The flight's contracted volume, in the unit of `delivery_metric`. */
   contracted_impressions: number;
+  delivery_metric: DeliveryMetric;
+  /** The line's delivery inside the window in that unit, four decimals, shown as received. */
+  delivered: string;
   media_cost: DecimalString;
   rebate: DecimalString;
   platform_cost: DecimalString;

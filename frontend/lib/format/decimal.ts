@@ -18,6 +18,14 @@ export function formatDecimal(value: string): string {
   return `${sign}${grouped}${fraction === undefined ? "" : `,${fraction}`}`;
 }
 
+/**
+ * A delivered volume (a four-decimal string of the API) in es-ES. Still text only, never a number: the decimals are
+ * the ones received, minus the trailing zeros that only pad them ("280000.5000" reads 280.000,5; "198500.0000", 198.500).
+ */
+export function formatQuantity(value: string): string {
+  return formatDecimal(value.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, ""));
+}
+
 export function formatMoney(value: string): string {
   return `${formatDecimal(value)}${NO_BREAK_SPACE}€`;
 }

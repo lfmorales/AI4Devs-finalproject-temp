@@ -34,6 +34,8 @@ const STATUS_ROW: CampaignStatusRow = {
   line_number: 1,
   flight: { campaign_period_id: 7, year: 2026, month: 8, start: "2026-08-01", end: "2026-08-31" },
   contracted_impressions: 3100,
+  delivery_metric: "impressions",
+  delivered: "1200.0000",
   delivered_impressions: 1200,
   delivery_ratio: 0.387,
   pacing: { expected_impressions: 1500.5, deviation: -0.2, days_remaining: 20, status: "under_delivering" },

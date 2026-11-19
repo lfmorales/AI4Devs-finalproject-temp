@@ -60,7 +60,8 @@ describe("the states of the status page", () => {
     installRoutes({ "GET /campaign-status": () => reply(200, [{
       campaign: { id: 1, name: "Campaña A" }, agency: { id: 1, name: "Agencia A" }, line_number: 1,
       flight: { campaign_period_id: 7, year: 2026, month: 8, start: "2026-08-01", end: "2026-08-31" },
-      contracted_impressions: 10, delivered_impressions: 5, delivery_ratio: 0.5,
+      contracted_impressions: 10, delivery_metric: "impressions", delivered: "5.0000", delivered_impressions: 5,
+      delivery_ratio: 0.5,
       pacing: { expected_impressions: 5, deviation: 0, days_remaining: 1, status: "on_pace" },
       pacing_flag: false, missing_data_flag: false,
     }]) });

@@ -1,5 +1,9 @@
 import { FLIGHT_MESSAGES } from "./schema";
 
+/** The campaign mixes channels that count delivery in different units. It belongs to the form, not to a line. */
+export const MIXED_METRICS_MESSAGE =
+  "Las líneas de una campaña deben medirse en la misma unidad: no se pueden mezclar canales que miden en OTS con canales que miden en impresiones.";
+
 /** The backend codes about a line's dates and flights, in Spanish. Never the backend's own text. */
 const MESSAGE_BY_CODE: Record<string, string> = {
   line_dates_outside_campaign: FLIGHT_MESSAGES.datesOutside,
@@ -8,6 +12,7 @@ const MESSAGE_BY_CODE: Record<string, string> = {
   flight_volumes_mismatch: FLIGHT_MESSAGES.mismatch,
   flight_volume_not_positive: FLIGHT_MESSAGES.notPositive,
   volume_too_small_for_flights: FLIGHT_MESSAGES.volumeTooSmall,
+  mixed_delivery_metrics: MIXED_METRICS_MESSAGE,
 };
 
 export const SEVERAL_LINES_PREFIX = "En alguna de estas líneas: ";

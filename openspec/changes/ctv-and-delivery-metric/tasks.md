@@ -87,10 +87,10 @@
 
 ## 14. Screens
 
-- [ ] 14.1 Write failing Vitest tests in `frontend/tests/unit/app/status/status-page.test.tsx` that a DOOH row shows its volumes labelled «OTS» with decimals as received and a CTV row «impresiones»
-- [ ] 14.2 Write failing Vitest tests in `frontend/tests/unit/features/margin/messages.test.ts` and `margin-page.test.tsx` that the legend reads «Entregado 280.000,5 de 300.000 OTS» for the DOOH flight, «… impresiones» for a CTV one, and that a totals level with a null metric shows no legend
-- [ ] 14.3 Write a failing test in `frontend/tests/unit/app/campaigns/error-mapping.test.tsx` that `mixed_delivery_metrics` shows its own message, in Spanish, in the form banner (the form-level error) and on no line
-- [ ] 14.4 Update `frontend/lib/api/status.ts` and `margin.ts`, `StatusTable.tsx`, `features/margin/messages.ts` and the form's error messages, and verify 14.1 to 14.3 and the frontend suite, with the no-arithmetic test still passing
+- [x] 14.1 Write failing Vitest tests in `frontend/tests/unit/app/status/status-page.test.tsx` that a DOOH row shows its volumes labelled «OTS» with decimals as received and a CTV row «impresiones»
+- [x] 14.2 Write failing Vitest tests in `frontend/tests/unit/features/margin/messages.test.ts` and `margin-page.test.tsx` that the legend reads «Entregado 280.000,5 de 300.000 OTS» for the DOOH flight, «… impresiones» for a CTV one, and that a totals level with a null metric shows no legend
+- [x] 14.3 Write a failing test in `frontend/tests/unit/app/campaigns/error-mapping.test.tsx` that `mixed_delivery_metrics` shows its own message, in Spanish, in the form banner (the form-level error) and on no line
+- [x] 14.4 Update `frontend/lib/api/status.ts` and `margin.ts`, `StatusTable.tsx`, `features/margin/messages.ts` and the form's error messages, and verify 14.1 to 14.3 and the frontend suite, with the no-arithmetic test still passing
 
 ## 15. E2E with a DOOH Line
 

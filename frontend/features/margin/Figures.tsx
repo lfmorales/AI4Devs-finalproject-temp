@@ -26,9 +26,11 @@ export function Figures({ figured }: { figured: MarginTotals }) {
         </span>
       ))}
       <span id={helpId} hidden>{ACCRUED_HELP}</span>
-      <span className="margin-delivery">
-        {deliveryLegend(figured.delivered_impressions, figured.contracted_impressions)}
-      </span>
+      {figured.delivery_metric !== null && figured.delivered !== null && figured.contracted_impressions !== null && (
+        <span className="margin-delivery">
+          {deliveryLegend(figured.delivered, figured.contracted_impressions, figured.delivery_metric)}
+        </span>
+      )}
     </span>
   );
 }

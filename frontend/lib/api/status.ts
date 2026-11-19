@@ -1,3 +1,5 @@
+import type { DeliveryMetric } from "@/lib/format/delivery-metric";
+
 import type { ApiClient } from "./client";
 
 // Shapes of GET /campaign-status, as published by the backend's OpenAPI schema
@@ -20,6 +22,7 @@ export interface FlightWindow {
 export type PacingStatus = "on_pace" | "under_delivering" | "over_delivering";
 
 export interface Pacing {
+  /** The volume a linear delivery would have reached, in the unit of the row's `delivery_metric`. */
   expected_impressions: number;
   /** A fraction (-0.2 is 20% under the expected delivery); null when nothing was expected yet. */
   deviation: number | null;
@@ -33,7 +36,12 @@ export interface CampaignStatusRow {
   agency: NamedReference;
   line_number: number;
   flight: FlightWindow;
+  /** The flight's contracted volume, in the unit of `delivery_metric`. */
   contracted_impressions: number;
+  delivery_metric: DeliveryMetric;
+  /** The delivery up to D-1 in that unit: a decimal string with four decimals, shown as received. */
+  delivered: string;
+  /** The real impressions over the same days, whatever the metric. */
   delivered_impressions: number;
   /** Delivered over contracted, as a fraction; null when it cannot be computed. */
   delivery_ratio: number | null;

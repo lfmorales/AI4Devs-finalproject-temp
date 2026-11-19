@@ -20,6 +20,8 @@ function row(overrides: Partial<CampaignStatusRow> = {}): CampaignStatusRow {
     line_number: 1,
     flight: { campaign_period_id: 7, year: 2026, month: 8, start: "2026-08-01", end: "2026-08-31" },
     contracted_impressions: 31000,
+    delivery_metric: "impressions",
+    delivered: "12000.0000",
     delivered_impressions: 12000,
     delivery_ratio: 0.387,
     pacing: { expected_impressions: 15000.4, deviation: -0.2, days_remaining: 20, status: "under_delivering" },
@@ -192,5 +194,51 @@ describe("the status page", () => {
 
     await waitFor(() => expect(screen.getByText("Acceso denegado")).toBeInTheDocument());
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+});
+
+describe("the unit of the delivery", () => {
+  const cellsByHeader = async () => {
+    const table = await screen.findByRole("table", { name: "Estado de las campañas" });
+    const headers = within(table).getAllByRole("columnheader").map((h) => plain(h));
+    return (rowIndex: number, name: string) =>
+      plain(within(within(table).getAllByRole("row")[rowIndex]!).getAllByRole("cell")[headers.indexOf(name)]!);
+  };
+
+  it("labels the volumes of a DOOH row «OTS» and shows its decimals as received, in Spanish", async () => {
+    installRoutes({ "GET /campaign-status": () => reply(200, [row({
+      delivery_metric: "ots", contracted_impressions: 300000, delivered: "95000.7500", delivered_impressions: 4800,
+    })]) });
+
+    renderAuthenticated(<StatusPage />);
+
+    const cell = await cellsByHeader();
+    expect(cell(1, "Unidad")).toBe("OTS");
+    expect(cell(1, "Contratado")).toBe("300.000");
+    expect(cell(1, "Entregado")).toBe("95.000,75");
+  });
+
+  it("labels the volumes of a CTV row «impresiones»", async () => {
+    installRoutes({ "GET /campaign-status": () => reply(200, [row({
+      delivery_metric: "impressions", delivered: "50000.0000", delivered_impressions: 50000,
+    })]) });
+
+    renderAuthenticated(<StatusPage />);
+
+    const cell = await cellsByHeader();
+    expect(cell(1, "Unidad")).toBe("impresiones");
+    expect(cell(1, "Entregado")).toBe("50.000");
+  });
+
+  it("labels each row by its own metric when the status mixes channels", async () => {
+    installRoutes({ "GET /campaign-status": () => reply(200, [
+      row({ campaign: { id: 1, name: "Pantallas" }, delivery_metric: "ots", delivered: "10.5000" }),
+      row({ campaign: { id: 2, name: "Televisión" }, delivery_metric: "impressions" }),
+    ]) });
+
+    renderAuthenticated(<StatusPage />);
+
+    const cell = await cellsByHeader();
+    expect([cell(1, "Unidad"), cell(2, "Unidad")]).toEqual(["OTS", "impresiones"]);
   });
 });

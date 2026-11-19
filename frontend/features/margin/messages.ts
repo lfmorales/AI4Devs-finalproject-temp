@@ -1,3 +1,5 @@
+import { formatQuantity } from "@/lib/format/decimal";
+import { metricLabel, type DeliveryMetric } from "@/lib/format/delivery-metric";
 import { formatInteger } from "@/lib/format/integer";
 const MONTH_NAMES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -87,7 +89,7 @@ export function daysLegend(accruedDays: number, windowDays: number): string {
   return `${accruedDays} de ${windowDays} días`;
 }
 
-/** «Entregado X de Y impresiones»: what was delivered of what was contracted, as received. */
-export function deliveryLegend(delivered: number, contracted: number): string {
-  return `Entregado ${formatInteger(delivered)} de ${formatInteger(contracted)} impresiones`;
+/** «Entregado X de Y OTS» or «… impresiones»: what was delivered of what was contracted, in the unit named, as received. */
+export function deliveryLegend(delivered: string, contracted: number, metric: DeliveryMetric): string {
+  return `Entregado ${formatQuantity(delivered)} de ${formatInteger(contracted)} ${metricLabel(metric)}`;
 }

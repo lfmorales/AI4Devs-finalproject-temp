@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { GENERIC_CLOSING_ERROR, closingErrorMessage, monthName, monthOfYear } from "@/features/margin/messages";
+import { GENERIC_CLOSING_ERROR, closingErrorMessage, deliveryLegend, monthName, monthOfYear } from "@/features/margin/messages";
 
 describe("the months in Spanish", () => {
   it("names the twelve months", () => {
@@ -40,5 +40,15 @@ describe("the messages of the closing", () => {
   it("falls back to a generic message for an unknown or missing code", () => {
     expect(closingErrorMessage("something_new", "x", closing)).toBe(GENERIC_CLOSING_ERROR);
     expect(closingErrorMessage(undefined, "x", closing)).toBe(GENERIC_CLOSING_ERROR);
+  });
+});
+
+describe("the delivery legend", () => {
+  it("reads «Entregado 280.000,5 de 300.000 OTS» for a DOOH flight", () => {
+    expect(deliveryLegend("280000.5000", 300000, "ots")).toBe("Entregado 280.000,5 de 300.000 OTS");
+  });
+
+  it("reads «… impresiones» for a flight counted in impressions", () => {
+    expect(deliveryLegend("198500.0000", 200000, "impressions")).toBe("Entregado 198.500 de 200.000 impresiones");
   });
 });

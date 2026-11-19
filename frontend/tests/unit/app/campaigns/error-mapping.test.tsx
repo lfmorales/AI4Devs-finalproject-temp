@@ -32,6 +32,8 @@ const MESSAGES: Record<string, string> = {
   flight_volume_not_positive: "Cada volumen mensual debe ser positivo.",
   volume_too_small_for_flights: "El volumen de la línea es demasiado pequeño para dar impresiones a todos los meses.",
 };
+const MIXED_METRICS_MESSAGE =
+  "Las líneas de una campaña deben medirse en la misma unidad: no se pueden mezclar canales que miden en OTS con canales que miden en impresiones.";
 const PREVIEW_CODES = ["line_dates_outside_campaign", "line_dates_invalid", "volume_too_small_for_flights"];
 const REGISTRATION_CODES = Object.keys(MESSAGES);
 const SEVERAL = "En alguna de estas líneas: ";
@@ -166,5 +168,30 @@ describe("registration 422 codes", () => {
 
     expect(await within(lineSection(0)).findByText(MESSAGES.volume_too_small_for_flights!)).toBeInTheDocument();
     expect(within(lineSection(1)).queryByText(MESSAGES.volume_too_small_for_flights!)).not.toBeInTheDocument();
+  });
+});
+
+describe("mixed_delivery_metrics", () => {
+  it("shows its own message, in Spanish, in the banner of the form and on no line", async () => {
+    installFakeApi({ preview: () => TWO_MONTH_PREVIEW, register: () => reject("mixed_delivery_metrics") });
+    await renderForm();
+    fillCampaignHeader();
+    fillLine(0);
+    useOwnDates(0);
+    addLine();
+    fillLine(1);
+    useOwnDates(1, "2026-08-10", "2026-09-10");
+    await manualLine(1);
+
+    submit();
+
+    const banner = await screen.findByRole("alert");
+    expect(banner).toHaveTextContent(MIXED_METRICS_MESSAGE);
+    for (const index of [0, 1]) {
+      expect(within(lineSection(index)).queryByText(MIXED_METRICS_MESSAGE)).not.toBeInTheDocument();
+      expect(within(lineSection(index)).queryByText(new RegExp(SEVERAL))).not.toBeInTheDocument();
+    }
+    expect(screen.queryByText("backend text")).not.toBeInTheDocument();
+    expect(screen.queryByText("Error al registrar la campaña. Intenta de nuevo más tarde.")).not.toBeInTheDocument();
   });
 });

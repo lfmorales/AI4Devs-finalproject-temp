@@ -8,12 +8,20 @@ import type {
   MarginTotals,
 } from "@/lib/api/margin";
 
+/** What a line counted in impressions delivers in its own unit: the impressions, with the four decimals the API sends. */
+function impressionsAsDelivered(impressions: number): string {
+  return `${impressions}.0000`;
+}
+
 export function totals(overrides: Partial<MarginTotals> = {}): MarginTotals {
+  const delivered_impressions = overrides.delivered_impressions ?? 700000;
   return {
     revenue: "3631.01",
     contracted_revenue: "3631.01",
-    delivered_impressions: 700000,
+    delivered_impressions,
     contracted_impressions: 726202,
+    delivery_metric: "impressions",
+    delivered: impressionsAsDelivered(delivered_impressions),
     media_cost: "1200.00",
     rebate: "907.75",
     platform_cost: "700.00",
@@ -40,6 +48,7 @@ export function rates(overrides: Partial<AppliedRates> = {}): AppliedRates {
 }
 
 export function flight(overrides: Partial<FlightMargin> = {}): FlightMargin {
+  const delivered_impressions = overrides.delivered_impressions ?? 700000;
   return {
     flight_id: 1,
     period_year: 2026,
@@ -54,8 +63,10 @@ export function flight(overrides: Partial<FlightMargin> = {}): FlightMargin {
     contracted_revenue: "3631.01",
     accrued_days: 31,
     window_days: 31,
-    delivered_impressions: 700000,
+    delivered_impressions,
     contracted_impressions: 726202,
+    delivery_metric: "impressions",
+    delivered: impressionsAsDelivered(delivered_impressions),
     media_cost: "1200.00",
     rebate: "907.75",
     platform_cost: "700.00",
