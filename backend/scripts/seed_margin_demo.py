@@ -1,6 +1,7 @@
 """Create synthetic demonstration data to see the states of the margin. Nothing here is real.
 
-It registers four campaigns with neutral names, one line each, with dates relative to today in Madrid:
+It registers four campaigns with neutral names, one line each, on the DEMO channel (counted in impressions), with dates
+relative to today in Madrid:
 
 - DEMO-MARGEN-CERRADO fills the whole previous month: it has ended and is pending close until that month is closed.
 - DEMO-MARGEN-CURSO starts ten days ago and ends next month: it is running, with an invented media cost of 1.60
@@ -8,6 +9,11 @@ It registers four campaigns with neutral names, one line each, with dates relati
 - DEMO-MARGEN-NEGATIVO has the same window and volume and the same CPM, but an invented media cost of 9.00 per
   thousand: it is running and shows "Margen negativo".
 - DEMO-MARGEN-SIN-PRECIO is the same window with a sale CPM of 0.00 and a positive volume: running, "Sin venta".
+
+When the real DOOH channel exists (the masters file and the development seed create it, counted in OTS) it adds a fifth,
+DEMO-MARGEN-DOOH, on that channel: same window as the running ones, its volume contracted in OTS, and invented days that
+carry OTS with decimals and fewer impressions than OTS. Without that channel it adds nothing and creates no channel:
+everything this script creates is named DEMO.
 
 It also invents daily deliveries for each line up to yesterday and a flat example rebate schedule for a
 demonstration holding group. The campaigns go through the registration service, the deliveries through the delivery
@@ -82,6 +88,10 @@ CLOSED_NAME = "DEMO-MARGEN-CERRADO"
 RUNNING_NAME = "DEMO-MARGEN-CURSO"
 NEGATIVE_NAME = "DEMO-MARGEN-NEGATIVO"
 NO_PRICE_NAME = "DEMO-MARGEN-SIN-PRECIO"
+DOOH_NAME = "DEMO-MARGEN-DOOH"
+
+DEMO_CHANNEL = "DEMO Channel"
+DOOH_CHANNEL = "DOOH"
 
 MADRID = "Europe/Madrid"
 BATCH_SOURCE = "demo-margin"
@@ -118,8 +128,10 @@ class DemoCampaign:
     end: date
     volume: int
     sale_cpm: str
-    # Euros per thousand delivered impressions that the invented media cost is worth.
+    # Euros per thousand delivered (in the unit of the channel) that the invented media cost is worth.
     cost_cpm: Decimal
+    channel: str = DEMO_CHANNEL
+    metric: str = "impressions"
 
 
 def _last_day_of_next_month(today: date) -> date:
@@ -140,6 +152,15 @@ def demo_campaigns(today: date) -> list[DemoCampaign]:
         DemoCampaign(NEGATIVE_NAME, "DEMO-MARGEN-PO-NEGATIVO", running_start, running_end, 2_400_000, "6.00", Decimal("9.00")),
         DemoCampaign(NO_PRICE_NAME, "DEMO-MARGEN-PO-SIN-PRECIO", running_start, running_end, 1_000_000, "0.00", Decimal("3.00")),
     ]
+
+
+def dooh_campaign(today: date) -> DemoCampaign:
+    """The DOOH campaign: the window of the running ones, its volume contracted in OTS."""
+    running = demo_campaigns(today)[1]
+    return DemoCampaign(
+        DOOH_NAME, "DEMO-MARGEN-PO-DOOH", running.start, running.end, 1_200_000, "5.00", Decimal("1.50"),
+        channel=DOOH_CHANNEL, metric="ots",
+    )
 
 
 def main(
@@ -189,6 +210,8 @@ def seed(session: Session, today: date, started_at: datetime) -> dict[str, int]:
     masters_created = sum(_load(session, section, items) for section, items in _MASTERS.items())  # type: ignore[arg-type]
     session.commit()
     campaigns = demo_campaigns(today)
+    if session.scalar(select(ChannelRecord.id).where(ChannelRecord.name == DOOH_CHANNEL)) is not None:
+        campaigns.append(dooh_campaign(today))
     created = _register_missing(session, campaigns)
     schedules_created = _ensure_rebate_schedule(session, today)
     _write_deliveries(session, campaigns, today - timedelta(days=1), started_at)
@@ -221,7 +244,6 @@ def _register_missing(session: Session, campaigns: list[DemoCampaign]) -> int:
     }
     line_ids = {
         "dsp_id": _id_of(session, DSPRecord, "DEMO DSP"),
-        "channel_id": _id_of(session, ChannelRecord, "DEMO Channel"),
         "format_id": _id_of(session, FormatRecord, "DEMO Format"),
     }
     created = 0
@@ -237,6 +259,7 @@ def _register_missing(session: Session, campaigns: list[DemoCampaign]) -> int:
             order_received_on=campaign.start,
             lines_data=[{
                 **line_ids,
+                "channel_id": _id_of(session, ChannelRecord, campaign.channel),
                 "scope": "national",
                 "market_description": "DEMO",
                 "contracted_impressions": campaign.volume,
@@ -273,15 +296,27 @@ def _batch(session: Session, window: DeliveryDateRange, started_at: datetime, so
 
 
 def _invented_day(campaign: DemoCampaign, day: date) -> DailyDelivery:
-    """Invented delivery for one day: roughly the contracted pace, with a small ripple by day of the month."""
+    """Invented delivery for one day: roughly the contracted pace, with a small ripple by day of the month.
+
+    A campaign counted in OTS delivers OTS, with up to three quarters of an OTS of decimals, over far fewer impressions
+    (one for every twenty OTS), as a screen is seen by more people than it serves ads to.
+    """
     total_days = (campaign.end - campaign.start).days + 1
-    impressions = campaign.volume // total_days + (day.day % 5) * 1000
-    cost = (Decimal(impressions) / Decimal(1000) * campaign.cost_cpm).quantize(Decimal("0.000001"))
+    volume = campaign.volume // total_days + (day.day % 5) * 1000
+    if campaign.metric == "ots":
+        ots = Decimal(volume) + Decimal(day.day % 4) / Decimal(4)
+        impressions = volume // 20
+        counted = ots
+    else:
+        ots = Decimal(0)
+        impressions = volume
+        counted = Decimal(volume)
+    cost = (counted / Decimal(1000) * campaign.cost_cpm).quantize(Decimal("0.000001"))
     return DailyDelivery(
         campaign_line_id=0, ingestion_batch_id=0, delivery_date=day, impressions=impressions,
         clicks=impressions // 500, media_cost=cost, measurable_impressions=impressions * 9 // 10,
         viewable_impressions=impressions * 7 // 10, banner_size=None, screen=None, line_format=None,
-        ots=Decimal(0), video_completions=0,
+        ots=ots.quantize(Decimal("0.0001")), video_completions=0,
     )
 
 

@@ -2,11 +2,12 @@
 
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
 from app.presentation.dependencies import providers
-from scripts.seed_margin_demo import CLOSED_NAME, NEGATIVE_NAME, NO_PRICE_NAME, RUNNING_NAME, main
+from scripts.seed_margin_demo import CLOSED_NAME, DOOH_NAME, NEGATIVE_NAME, NO_PRICE_NAME, RUNNING_NAME, main
 
 TODAY = date(2026, 10, 28)  # as_of is 27 October
 
@@ -30,11 +31,13 @@ def _states(campaign: dict) -> list[str]:
 def test_before_closing_the_previous_month_is_pending_close_and_the_others_are_running(demo):
     campaigns = _by_campaign(demo.get("/margin").json())
 
-    assert set(campaigns) == {CLOSED_NAME, RUNNING_NAME, NEGATIVE_NAME, NO_PRICE_NAME}
+    # The masters of the test database hold the real DOOH channel, so the DOOH campaign is there too.
+    assert set(campaigns) == {CLOSED_NAME, RUNNING_NAME, NEGATIVE_NAME, NO_PRICE_NAME, DOOH_NAME}
     assert _states(campaigns[CLOSED_NAME]) == ["pending_close"]
     assert _states(campaigns[RUNNING_NAME]) == ["running"]  # the November flight has not started
     assert _states(campaigns[NEGATIVE_NAME]) == ["running"]
     assert _states(campaigns[NO_PRICE_NAME]) == ["running"]
+    assert _states(campaigns[DOOH_NAME]) == ["running"]
 
 
 def test_after_closing_the_previous_month_the_first_campaign_is_closed(demo):
@@ -100,3 +103,14 @@ def test_running_the_command_again_does_not_change_what_the_margin_shows(demo, t
     assert main([], out=lambda line: None, session_factory=lambda: test_db_session, today=TODAY) == 0
 
     assert demo.get("/margin").json() == before
+
+
+def test_the_dooh_campaign_reads_in_ots_with_decimals_and_fewer_impressions(demo: Any) -> None:
+    campaigns = _by_campaign(demo.get("/margin").json())
+
+    flight = campaigns[DOOH_NAME]["lines"][0]["flights"][0]
+    assert flight["delivery_metric"] == "ots"
+    assert Decimal(flight["delivered"]) > flight["delivered_impressions"] > 0
+    assert Decimal(flight["delivered"]) != Decimal(flight["delivered"]).to_integral_value()
+    assert {c["lines"][0]["flights"][0]["delivery_metric"] for n, c in campaigns.items() if n != DOOH_NAME} == {"impressions"}
+    assert campaigns[DOOH_NAME]["totals"]["delivery_metric"] == "ots"

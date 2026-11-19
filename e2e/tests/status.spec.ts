@@ -1,8 +1,12 @@
 import { registerCampaign } from "../support/campaigns";
 import { expect, test } from "../support/fixtures";
+import { formatDecimalEsEs, formatQuantityEsEs, unitLabel } from "../support/format";
 
 interface StatusRow {
   campaign: { id: number; name: string };
+  contracted_impressions: number;
+  delivery_metric: "impressions" | "ots";
+  delivered: string;
   missing_data_flag: boolean;
   pacing_flag: boolean;
 }
@@ -30,6 +34,31 @@ test.describe("the campaign status", () => {
     for (const [index, row] of rows.entries()) {
       await expect(bodyRows.nth(index + 1).getByRole("cell").first()).toHaveText(row.campaign.name);
     }
+  });
+
+  test("says OTS on the DOOH demo row with the volume of the API, and impresiones on the DEMO Channel ones", async ({ operationsSession: page, api }) => {
+    const rows = (await (await api.get("campaign-status")).json()) as StatusRow[];
+    const dooh = rows.filter((row) => row.delivery_metric === "ots");
+    const impressions = rows.filter((row) => row.delivery_metric === "impressions" && row.campaign.name.startsWith("DEMO-MARGEN-"));
+    expect(dooh.map((row) => row.campaign.name), "the DOOH demo row is in GET /api/campaign-status: run reset-data.sh").toContain("DEMO-MARGEN-DOOH");
+    expect(impressions.length, "the DEMO Channel demo rows").toBeGreaterThan(0);
+
+    await page.goto("/status");
+
+    const table = page.getByRole("table", { name: "Estado de las campañas" });
+    // The headers are read at once by allInnerTexts: wait until the table has been drawn.
+    await expect(table.getByRole("columnheader", { name: "Unidad" })).toBeVisible();
+    const headers = (await table.getByRole("columnheader").allInnerTexts()).map((text) => text.trim());
+    const cell = (row: StatusRow, header: string) =>
+      table.getByRole("row").filter({ hasText: row.campaign.name }).getByRole("cell").nth(headers.indexOf(header));
+    for (const row of [...dooh, ...impressions]) {
+      await expect(cell(row, "Unidad")).toHaveText(unitLabel(row.delivery_metric));
+      await expect(cell(row, "Contratado")).toHaveText(formatDecimalEsEs(String(row.contracted_impressions)));
+      await expect(cell(row, "Entregado")).toHaveText(formatQuantityEsEs(row.delivered));
+    }
+    // The DOOH row carries OTS with decimals, which the screen shows as received.
+    const doohRow = dooh.find((row) => row.campaign.name === "DEMO-MARGEN-DOOH");
+    expect(doohRow?.delivered).toMatch(/\.\d{4}$/);
   });
 
   test("shows the two flags of a campaign whose running flight has received no delivery", async ({ operationsSession: page, api }) => {

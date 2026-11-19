@@ -2,8 +2,8 @@ import { appAlert } from "../support/alerts";
 import { registerCampaign } from "../support/campaigns";
 import { expect, test } from "../support/fixtures";
 import {
-  amountsByFlight, campaignCard, campaignField, chooseMonth, closedFlightsMessage, currentMonth, expectStates, flightCell, flightsOf,
-  flightsTable, FRESH_DATABASE_SKIP_REASON, hasPendingClose, integer, isoDate, lastDayOf, madridToday, money, monthName,
+  amountsByFlight, campaignCard, campaignField, chooseMonth, closedFlightsMessage, currentMonth, deliveryLegend, expectStates, flightCell, flightsOf,
+  flightsTable, FRESH_DATABASE_SKIP_REASON, hasPendingClose, isoDate, lastDayOf, madridToday, money, monthName,
   monthOfYear, NOTHING_TO_CLOSE, openAllCards, percent, previousMonth, readMargin, REMOVE_CAMPAIGN_FILTER,
   type MarginResponse, type Month,
 } from "../support/margin";
@@ -64,9 +64,32 @@ test.describe("the margin of the current month, running", () => {
           if (flight.state === "running") {
             await expect(await flightCell(table, index, "Estado")).toContainText(`${flight.accrued_days} de ${flight.window_days} días`);
           }
-          await expect(await flightCell(table, index, "Entrega")).toHaveText(
-            `Entregado ${integer(flight.delivered_impressions)} de ${integer(flight.contracted_impressions)} impresiones`,
-          );
+          await expect(await flightCell(table, index, "Entrega")).toHaveText(deliveryLegend(flight));
+        }
+      }
+    }
+  });
+
+  test("says OTS on the DOOH demo flights and impresiones on those of the DEMO Channel", async ({ operationsSession: page, api }) => {
+    const margin = await readMargin(api, current);
+    const dooh = margin.campaigns.find((campaign) => campaign.name === "DEMO-MARGEN-DOOH");
+    const impressions = margin.campaigns.find((campaign) => campaign.name === "DEMO-MARGEN-CURSO");
+    expect(dooh, "the DOOH demo campaign is in GET /api/margin: run reset-data.sh").toBeDefined();
+    expect(impressions, "the DEMO Channel demo campaign is in GET /api/margin").toBeDefined();
+    if (dooh === undefined || impressions === undefined) return;
+
+    await page.goto("/margin");
+    await chooseMonth(page, current);
+    await openAllCards(page, margin);
+
+    for (const [campaign, metric] of [[dooh, "ots"], [impressions, "impressions"]] as const) {
+      for (const line of campaign.lines) {
+        const table = flightsTable(page, campaign, line);
+        for (const [index, flight] of line.flights.entries()) {
+          expect(flight.delivery_metric).toBe(metric);
+          const legend = await flightCell(table, index, "Entrega");
+          await expect(legend).toHaveText(deliveryLegend(flight));
+          await expect(legend).toContainText(metric === "ots" ? /de [\d.]+ OTS$/ : /de [\d.]+ impresiones$/);
         }
       }
     }

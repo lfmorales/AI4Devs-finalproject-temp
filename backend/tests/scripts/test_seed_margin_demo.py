@@ -6,6 +6,7 @@ from decimal import Decimal
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.infrastructure.persistence.models.campaign import (
     CampaignLinePeriodRecord,
@@ -40,6 +41,7 @@ from scripts.seed_margin_demo import (
     EXIT_NOT_CONFIGURED,
     EXIT_OK,
     NEGATIVE_NAME,
+    DOOH_NAME,
     NO_PRICE_NAME,
     RUNNING_NAME,
     main,
@@ -355,3 +357,106 @@ def test_a_failure_prints_a_status_and_no_detail(rolled_back_session, monkeypatc
 
     assert code == EXIT_FAILED
     assert lines == ["status: failed"]
+
+
+# ---------------------------------------------------------------- the DOOH campaign: OTS on the real channel
+
+def _real_dooh_channel(session: Session) -> ChannelRecord:
+    """The real DOOH channel, counted in OTS, as the masters file and the development seed create it."""
+    channel = session.scalars(select(ChannelRecord).where(ChannelRecord.name == "DOOH")).first()
+    if channel is None:
+        channel = ChannelRecord(name="DOOH", delivery_metric="ots")
+        session.add(channel)
+        session.flush()
+    return channel
+
+
+def _deliveries(session: Session, name: str) -> list[DailyDeliveryRecord]:
+    line = _line(session, name)
+    return list(session.scalars(
+        select(DailyDeliveryRecord).where(DailyDeliveryRecord.campaign_line_id == line.id)
+        .order_by(DailyDeliveryRecord.delivery_date)
+    ))
+
+
+def test_it_adds_one_campaign_on_the_real_dooh_channel_when_that_channel_exists(rolled_back_session: Session) -> None:
+    dooh = _real_dooh_channel(rolled_back_session)
+
+    code, lines = _run(rolled_back_session)
+
+    assert code == EXIT_OK
+    assert DOOH_NAME == "DEMO-MARGEN-DOOH"
+    assert {c.name for c in rolled_back_session.scalars(select(CampaignRecord))} == {*NAMES, DOOH_NAME}
+    assert _line(rolled_back_session, DOOH_NAME).channel_id == dooh.id
+    assert "campaigns created: 5" in lines
+
+
+def test_the_demo_channel_campaigns_stay_in_impressions_with_no_ots(rolled_back_session: Session) -> None:
+    _real_dooh_channel(rolled_back_session)
+
+    _run(rolled_back_session)
+
+    demo = rolled_back_session.scalars(select(ChannelRecord).where(ChannelRecord.name == "DEMO Channel")).one()
+    assert demo.delivery_metric == "impressions"
+    for name in NAMES:
+        assert _line(rolled_back_session, name).channel_id == demo.id
+        assert {row.ots for row in _deliveries(rolled_back_session, name)} == {Decimal(0)}
+
+
+def test_the_dooh_days_carry_ots_with_decimals_and_fewer_impressions_than_ots(rolled_back_session: Session) -> None:
+    _real_dooh_channel(rolled_back_session)
+
+    _run(rolled_back_session)
+
+    rows = _deliveries(rolled_back_session, DOOH_NAME)
+    assert rows
+    assert all(row.impressions > 0 and row.ots > row.impressions for row in rows)
+    assert all(isinstance(row.ots, Decimal) for row in rows)
+    assert any(row.ots != row.ots.to_integral_value() for row in rows), "some days carry OTS with decimals"
+    assert all(row.ots == row.ots.quantize(Decimal("0.0001")) for row in rows)
+    assert all(row.media_cost > 0 for row in rows)
+
+
+def test_a_second_run_with_the_dooh_campaign_changes_no_count_and_says_five_exist(rolled_back_session: Session) -> None:
+    _real_dooh_channel(rolled_back_session)
+    _run(rolled_back_session)
+    first = _counts(rolled_back_session)
+    ots_before = [row.ots for row in _deliveries(rolled_back_session, DOOH_NAME)]
+
+    code, lines = _run(rolled_back_session)
+
+    assert code == EXIT_OK
+    assert _counts(rolled_back_session) == first
+    assert "campaigns created: 0" in lines and "campaigns existing: 5" in lines
+    assert [row.ots for row in _deliveries(rolled_back_session, DOOH_NAME)] == ots_before
+
+
+def test_a_later_day_adds_one_new_dooh_day_with_the_other_four_lines(rolled_back_session: Session) -> None:
+    _real_dooh_channel(rolled_back_session)
+    _run(rolled_back_session)
+    first = rolled_back_session.scalar(select(func.count()).select_from(DailyDeliveryRecord)) or 0
+
+    _run(rolled_back_session, today=date(2026, 10, 29))
+
+    # The four running lines (the DOOH one included) gain one day.
+    assert rolled_back_session.scalar(select(func.count()).select_from(DailyDeliveryRecord)) == first + 4
+
+
+def test_without_a_dooh_channel_it_adds_no_dooh_campaign_and_creates_no_channel(rolled_back_session: Session) -> None:
+    existing = rolled_back_session.scalars(select(ChannelRecord).where(ChannelRecord.name == "DOOH")).first()
+    assert existing is None
+
+    _run(rolled_back_session)
+
+    assert {c.name for c in rolled_back_session.scalars(select(CampaignRecord))} == NAMES
+    assert rolled_back_session.scalars(select(ChannelRecord).where(ChannelRecord.name == "DOOH")).first() is None
+
+
+def test_the_dooh_campaign_registers_in_one_metric_and_keeps_its_name_and_order_demo(rolled_back_session: Session) -> None:
+    _real_dooh_channel(rolled_back_session)
+
+    _run(rolled_back_session)
+
+    campaign = _campaign(rolled_back_session, DOOH_NAME)
+    order = rolled_back_session.get(PurchaseOrderRecord, campaign.purchase_order_id)
+    assert order is not None and order.order_reference.startswith("DEMO-MARGEN-")

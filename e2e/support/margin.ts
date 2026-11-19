@@ -1,6 +1,6 @@
 import { expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 
-import { formatDecimalEsEs } from "./format";
+import { formatDecimalEsEs, formatQuantityEsEs, unitLabel } from "./format";
 
 export type FlightState = "closed" | "pending_close" | "running";
 
@@ -18,6 +18,8 @@ export interface FlightMargin {
   window_days: number;
   delivered_impressions: number;
   contracted_impressions: number;
+  delivery_metric: "impressions" | "ots";
+  delivered: string;
   media_cost: string;
   rebate: string;
   platform_cost: string;
@@ -100,6 +102,10 @@ export function lastDayOf({ year, month }: Month): number {
 export const money = (value: string): string => `${formatDecimalEsEs(value)}${NO_BREAK_SPACE}€`;
 export const percent = (value: string | null): string => (value === null ? "—" : `${formatDecimalEsEs(value)}${NO_BREAK_SPACE}%`);
 export const integer = (value: number): string => formatDecimalEsEs(String(value));
+
+/** «Entregado X de Y OTS» or «… impresiones», from what GET /api/margin gives for a flight. */
+export const deliveryLegend = (flight: FlightMargin): string =>
+  `Entregado ${formatQuantityEsEs(flight.delivered)} de ${integer(flight.contracted_impressions)} ${unitLabel(flight.delivery_metric)}`;
 
 export async function readMargin(api: APIRequestContext, month?: Month): Promise<MarginResponse> {
   const query = month === undefined ? "" : `?year=${month.year}&month=${month.month}`;

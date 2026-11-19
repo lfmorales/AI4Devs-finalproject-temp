@@ -12,6 +12,19 @@ export function formatDecimalEsEs(value: string): string {
   return `${sign}${grouped}${fraction === undefined ? "" : `,${fraction}`}`;
 }
 
+/**
+ * A delivered volume as the application shows it: es-ES, the decimals received minus the trailing zeros that only pad
+ * them ("280000.5000" reads 280.000,5; "198500.0000", 198.500).
+ */
+export function formatQuantityEsEs(value: string): string {
+  return formatDecimalEsEs(value.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, ""));
+}
+
+/** The unit as the application names it: «OTS» or «impresiones». */
+export function unitLabel(metric: "impressions" | "ots"): string {
+  return metric === "ots" ? "OTS" : "impresiones";
+}
+
 /** Today's day of the month in Madrid, where the application's calendar lives. */
 export function madridDayOfMonth(now: Date = new Date()): number {
   return Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Madrid", day: "numeric" }).format(now));

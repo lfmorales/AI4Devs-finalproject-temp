@@ -94,9 +94,9 @@
 
 ## 15. E2E with a DOOH Line
 
-- [ ] 15.1 Write a failing check, in `e2e/support` beside `compose-project.test.mjs`, that the channel chosen by `e2e/support/campaigns.ts` is the `DEMO` one when `GET /api/masters/channels` lists `CTV`, `DEMO Channel`, `Deal`, `Directo` and `DOOH`; make the helper prefer the `DEMO` channel like `campaign-form.ts:26`, and verify the check passes, so the E2E campaigns do not move onto the CTV schedule (design.md decision 1)
-- [ ] 15.2 Write failing tests in `backend/tests/scripts/test_seed_margin_demo.py` that the margin demo keeps `DEMO Channel` counted in impressions and adds one campaign on the real `DOOH` channel whose invented days carry OTS with decimals and fewer impressions than OTS, idempotently; implement it in `scripts/seed_margin_demo.py` and verify, together with `test_seed_margin_demo_states.py` and the exceptions demo tests
-- [ ] 15.3 Write the E2E in `e2e/tests/status.spec.ts` and `e2e/tests/margin.spec.ts`: the DOOH demo row says «OTS» with the volume of `GET /api/campaign-status`, its margin legend says «Entregado … de … OTS», and the `DEMO Channel` rows still say «impresiones»; adjust `margin.spec.ts:68` to read `delivered` and the metric
+- [x] 15.1 Write a failing check, in `e2e/support` beside `compose-project.test.mjs`, that the channel chosen by `e2e/support/campaigns.ts` is the `DEMO` one when `GET /api/masters/channels` lists `CTV`, `DEMO Channel`, `Deal`, `Directo` and `DOOH`; make the helper prefer the `DEMO` channel like `campaign-form.ts:26`, and verify the check passes, so the E2E campaigns do not move onto the CTV schedule (design.md decision 1)
+- [x] 15.2 Write failing tests in `backend/tests/scripts/test_seed_margin_demo.py` that the margin demo keeps `DEMO Channel` counted in impressions and adds one campaign on the real `DOOH` channel whose invented days carry OTS with decimals and fewer impressions than OTS, idempotently; implement it in `scripts/seed_margin_demo.py` and verify, together with `test_seed_margin_demo_states.py` and the exceptions demo tests
+- [x] 15.3 Write the E2E in `e2e/tests/status.spec.ts` and `e2e/tests/margin.spec.ts`: the DOOH demo row says «OTS» with the volume of `GET /api/campaign-status`, its margin legend says «Entregado … de … OTS», and the `DEMO Channel` rows still say «impresiones»; adjust `margin.spec.ts:68` to read `delivered` and the metric
 
 ## 16. Review and Update Existing Unit Tests (MANDATORY)
 
