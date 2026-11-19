@@ -1,0 +1,101 @@
+## RENAMED Requirements
+
+- FROM: `### Requirement: Unmatched rows with no impressions and no cost are ignored and counted`
+- TO: `### Requirement: Unmatched rows with no impressions, no cost and no OTS are ignored and counted`
+
+## MODIFIED Requirements
+
+### Requirement: Unmatched delivery is recorded as an exception
+
+The system SHALL record delivery that resolves to no campaign line as an `unmatched_delivery` exception carrying the DSP and the external identifier pair that failed to match, and SHALL NOT discard it. There SHALL be at most one such exception per DSP and external identifier pair, whatever its status, and it SHALL hold the first and last dates of its retained delivery. The retained delivery keeps impressions, clicks, media cost, measurable impressions and viewable impressions; it does not keep OTS or video completions, because it is never moved into the delivery table.
+
+#### Scenario: Delivery with no campaign line is kept
+- **WHEN** an ingestion run retrieves delivery whose external key matches no campaign line and whose impressions, media cost or OTS is not zero
+- **THEN** an exception is recorded naming that external key and the batch
+- **AND** the delivery figures are retained per date, with impressions, clicks, media cost, measurable impressions and viewable impressions, rather than dropped
+
+#### Scenario: An unmatched row with only OTS is kept
+- **WHEN** a run retrieves an unmatched row with 0 impressions, 0.00 € of media cost and 2,400.5 OTS
+- **THEN** an `unmatched_delivery` exception is recorded for its pair
+- **AND** its retained day holds 0 impressions, 0 clicks and 0.00 € of media cost
+
+#### Scenario: The run completes despite unmatched rows
+- **WHEN** an ingestion run encounters unmatched delivery
+- **THEN** the matched delivery is still stored
+- **AND** the run's outcome reports how many rows went unmatched
+
+#### Scenario: Running the same window again does not duplicate the exception
+- **WHEN** the same window is ingested twice and the same external pair is unmatched both times
+- **THEN** one exception exists for that pair
+- **AND** its retained delivery holds one row per date, the second run's figures replacing the first run's for the dates in the window
+
+#### Scenario: Several unmatched rows for a pair and date are combined
+- **WHEN** a run retrieves more than one unmatched row for the same pair and date
+- **THEN** the retained delivery holds one row for that date with the figures summed
+
+### Requirement: Unmatched rows with no impressions, no cost and no OTS are ignored and counted
+
+The system SHALL NOT record an exception for an unmatched row whose impressions, media cost and OTS are all zero, and SHALL count such rows on the batch as zero unmatched rows. The statistics API returns rows with no impressions for active campaigns, and treating them as exceptions would bury the real ones.
+
+#### Scenario: An unmatched row of zeros is counted, not worked
+- **WHEN** a run retrieves an unmatched row with zero impressions, zero media cost and zero OTS
+- **THEN** no exception is recorded for it
+- **AND** the batch counts it among its zero unmatched rows
+
+#### Scenario: An unmatched row with impressions or cost is worked
+- **WHEN** a run retrieves an unmatched row with impressions or media cost different from zero
+- **THEN** an `unmatched_delivery` exception is recorded for its pair
+
+#### Scenario: An unmatched row with only OTS is worked, not counted as zeros
+- **WHEN** a run retrieves an unmatched row with zero impressions, zero media cost and OTS different from zero
+- **THEN** an `unmatched_delivery` exception is recorded for its pair
+- **AND** the batch does not count it among its zero unmatched rows
+
+### Requirement: A line with no delivery in a finished flight is an exception
+
+The system SHALL record a campaign line as a `missing_delivery` exception when the sum of its delivered volume inside the window of one of its flights is zero, or when it has no delivery row in that window at all. The delivered volume is counted in the delivery metric of the line's channel: OTS for a line whose channel counts OTS, impressions for every other line. Only a line with a validated DSP mapping is evaluated, and only for a flight whose last day (`flight_end`) falls inside the ingestion window, between D-7 and D-1, and on or after the day the mapping was validated. The exception is identified by the line and the flight's campaign period, which is unique per flight, so there SHALL be at most one such exception per line and period. A delivery dated outside every flight of its line is stored all the same, and counts toward a flight only when it lies inside that flight's window.
+
+#### Scenario: A finished flight with no rows is flagged
+- **WHEN** a flight's last day is inside the ingestion window and its mapped line has no delivery row inside the flight's window
+- **THEN** an exception is recorded against that line and period
+
+#### Scenario: A finished flight with only zero impressions is flagged
+- **WHEN** a flight's last day is inside the ingestion window, its line counts impressions, and every delivery row of its mapped line inside the flight's window has zero impressions
+- **THEN** an exception is recorded against that line and period
+
+#### Scenario: A DOOH flight with impressions and no OTS is flagged
+- **WHEN** a DOOH flight's last day is inside the ingestion window and its mapped line delivered 12,000 impressions and 0.0000 OTS inside the flight's window
+- **THEN** an exception is recorded against that line and period
+
+#### Scenario: A DOOH flight with OTS and no impressions is not flagged
+- **WHEN** a DOOH flight's last day is inside the ingestion window and its mapped line delivered 0 impressions and 0.5 OTS inside the flight's window
+- **THEN** no absence exception is raised for that line and period
+
+#### Scenario: A CTV flight with OTS and no impressions is flagged
+- **WHEN** a CTV flight's last day is inside the ingestion window and its mapped line delivered 0 impressions and 300.0 OTS inside the flight's window
+- **THEN** an exception is recorded against that line and period, because CTV counts impressions
+
+#### Scenario: Delivery outside the flight does not count for it
+- **WHEN** a mapped line delivers only on days outside the window of a finished flight
+- **THEN** that flight is flagged
+- **AND** the delivery outside the window is stored
+
+#### Scenario: A flight still running is not flagged for absence
+- **WHEN** a flight's last day is after D-1
+- **THEN** no absence exception is raised for its line
+
+#### Scenario: A flight that ended before the window is not evaluated
+- **WHEN** a flight's last day is before D-7
+- **THEN** no absence exception is raised for its line
+
+#### Scenario: A flight that ended before the mapping was validated is not flagged
+- **WHEN** a line's mapping was validated after the last day of a flight
+- **THEN** no absence exception is raised for that line and period
+
+#### Scenario: A line without a validated mapping is not evaluated
+- **WHEN** a line has no validated DSP mapping
+- **THEN** no absence exception is raised for it, because it could never have received delivery
+
+#### Scenario: Evaluating twice does not duplicate the exception
+- **WHEN** the absence check runs again for a line and period that already has an exception
+- **THEN** no second exception is created
