@@ -1,5 +1,6 @@
 """Unmatched delivery with something in it becomes one exception per DSP and pair, with its figures kept per date."""
 
+from collections.abc import Iterable
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -7,7 +8,7 @@ import pytest
 
 from app.domain.entities.ingestion_batch import IngestionRoute
 from app.domain.entities.ingestion_exception import ExceptionStatus, ExceptionType, IngestionException
-from app.domain.value_objects.delivery import ExternalLineKey
+from app.domain.value_objects.delivery import DailyDelivery, DspDeliveryRow, ExternalLineKey
 from app.domain.value_objects.ingestion import MappedLine
 from tests.fixtures.delivery_rows import daily_delivery, dsp_row
 from tests.fixtures.in_memory_delivery_repository import InMemoryDeliveryRepository
@@ -21,7 +22,7 @@ OTHER_STRANGER = ExternalLineKey("9", "10")
 D5, D6, D7 = date(2026, 8, 5), date(2026, 8, 6), date(2026, 8, 7)
 
 
-def _harness(rows, existing=()):
+def _harness(rows: Iterable[DspDeliveryRow], existing: Iterable[DailyDelivery] = ()) -> IngestionHarness:
     return IngestionHarness(rows=rows, mapped_lines=[MappedLine(LINE, MAPPED)], existing=existing)
 
 
@@ -207,3 +208,25 @@ def test_a_failure_while_recording_rolls_back_the_deliveries_and_the_exceptions(
 
     assert harness.deliveries.rows == {(LINE, D5): previous}
     assert harness.exceptions.exceptions == {}
+
+
+def test_an_unmatched_row_with_only_ots_is_recorded_and_its_retained_day_holds_zeros() -> None:
+    harness = _harness([dsp_row(D5, STRANGER, impressions=0, clicks=0, media_cost=Decimal("0.00"),
+                                ots=Decimal("2400.5000"))])
+
+    result = harness.service.run(DSP_ID, TODAY)
+
+    exception = _only_exception(harness)
+    retained = _retained(harness, exception)[D5]
+    assert (exception.exception_type, exception.key) == (ExceptionType.UNMATCHED_DELIVERY, STRANGER)
+    assert (retained.impressions, retained.clicks, retained.media_cost) == (0, 0, Decimal("0.00"))
+    assert result.zero_unmatched_row_count == 0
+
+
+def test_an_unmatched_row_with_zero_impressions_cost_and_ots_is_counted_and_not_worked() -> None:
+    harness = _harness([dsp_row(D5, STRANGER, impressions=0, media_cost=Decimal("0.00"), ots=Decimal("0.0000"))])
+
+    result = harness.service.run(DSP_ID, TODAY)
+
+    assert harness.exceptions.exceptions == {}
+    assert result.zero_unmatched_row_count == 1

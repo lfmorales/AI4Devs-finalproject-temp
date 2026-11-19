@@ -38,8 +38,8 @@
 
 ## 6. Unmatched Row with OTS
 
-- [ ] 6.1 Write failing tests in `backend/tests/application/test_unmatched_delivery_exceptions.py`: an unmatched row with 0 impressions, 0.00 € and 2,400.5 OTS records an `unmatched_delivery` exception whose retained day holds zeros and is not counted as a zero unmatched row; a row with zero impressions, cost and OTS is counted and not worked
-- [ ] 6.2 Add OTS to `has_something_to_work` in `unmatched_delivery_recording.py` and verify 6.1 passes
+- [x] 6.1 Write failing tests in `backend/tests/application/test_unmatched_delivery_exceptions.py`: an unmatched row with 0 impressions, 0.00 € and 2,400.5 OTS records an `unmatched_delivery` exception whose retained day holds zeros and is not counted as a zero unmatched row; a row with zero impressions, cost and OTS is counted and not worked
+- [x] 6.2 Add OTS to `has_something_to_work` in `unmatched_delivery_recording.py` and verify 6.1 passes
 
 ## 7. Delivery Metric on the Channel (migration)
 

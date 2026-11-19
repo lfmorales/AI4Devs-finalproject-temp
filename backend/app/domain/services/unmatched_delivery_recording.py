@@ -21,8 +21,8 @@ def retain(previous: RetainedDelivery | None, key: ExternalLineKey, row: DspDeli
 
 
 def has_something_to_work(row: DspDeliveryRow) -> bool:
-    """An unmatched row is worth an exception only if it carries impressions or cost."""
-    return row.impressions != 0 or row.media_cost != 0
+    """An unmatched row is worth an exception only if it carries impressions, cost or OTS (a DOOH line has only OTS)."""
+    return row.impressions != 0 or row.media_cost != 0 or row.ots != 0
 
 
 class UnmatchedDeliveryRecorder:
