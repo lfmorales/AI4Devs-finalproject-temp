@@ -75,8 +75,8 @@
 
 ## 12. Line Without Delivery
 
-- [ ] 12.1 Write failing tests in `test_sqlalchemy_ingestion_target_repository.py`: a finished DOOH flight with 12,000 impressions and 0.0000 OTS is a candidate; one with 0 impressions and 0.5 OTS is not; a finished CTV flight with 0 impressions and 300.0 OTS is a candidate
-- [ ] 12.2 Sum the delivered volume by the channel's metric in `find_lines_missing_delivery` and verify 12.1 and `test_missing_delivery_detection.py`
+- [x] 12.1 Write failing tests in `test_sqlalchemy_ingestion_target_repository.py`: a finished DOOH flight with 12,000 impressions and 0.0000 OTS is a candidate; one with 0 impressions and 0.5 OTS is not; a finished CTV flight with 0 impressions and 300.0 OTS is a candidate
+- [x] 12.2 Sum the delivered volume by the channel's metric in `find_lines_missing_delivery` and verify 12.1 and `test_missing_delivery_detection.py`
 
 ## 13. Response Schemas
 

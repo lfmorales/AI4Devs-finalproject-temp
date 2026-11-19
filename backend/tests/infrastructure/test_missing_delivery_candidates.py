@@ -1,12 +1,14 @@
 """Which lines the absence check evaluates, against PostgreSQL. Today is 2026-08-10, so the window is Aug 3 to Aug 9."""
 
 from datetime import date, datetime
+from decimal import Decimal
 
 import pytest
 
 from app.domain.value_objects.delivery import DeliveryDateRange
 from app.domain.value_objects.ingestion import MissingDeliveryCandidate
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.infrastructure.persistence.models.campaign import CampaignLinePeriodRecord
 from app.infrastructure.persistence.repositories.sqlalchemy_ingestion_target_repository import (
@@ -222,5 +224,62 @@ def test_a_flight_still_running_is_not_evaluated_while_an_earlier_one_is(rolled_
 def test_a_flight_ending_today_or_before_the_window_is_not_evaluated(rolled_back_session, dsp_id):
     _line_with_flights(rolled_back_session, dsp_id, "Ends today", [(date(2026, 8, 5), date(2026, 8, 10))])
     _line_with_flights(rolled_back_session, dsp_id, "Ended before", [(date(2026, 7, 20), date(2026, 8, 2))], line_item="2002")
+
+    assert _candidates(rolled_back_session, dsp_id) == ()
+
+
+# ------------------------------------------------------------ the delivery that counts is the one in the channel's metric
+
+def _metric_line(session: Session, dsp_id: int, name: str, metric: str) -> tuple[int, int]:
+    line = insert_campaign_line(session, name, date(2026, 7, 1), date(2026, 8, 7), delivery_metric=metric)
+    insert_mapping(session, line, dsp_id, validated_at=VALIDATED_EARLY)
+    return line, session.scalars(
+        select(CampaignLinePeriodRecord.campaign_period_id).where(CampaignLinePeriodRecord.campaign_line_id == line)
+    ).one()
+
+
+def test_a_dooh_flight_with_impressions_and_no_ots_is_flagged(rolled_back_session: Session, dsp_id: int) -> None:
+    line, period = _metric_line(rolled_back_session, dsp_id, "Dooh impressions only", "ots")
+    insert_delivery(
+        rolled_back_session, line, date(2026, 8, 5), 12_000, insert_ingestion_batch(rolled_back_session),
+        ots=Decimal("0.0000"),
+    )
+
+    assert _candidates(rolled_back_session, dsp_id) == (MissingDeliveryCandidate(line, period),)
+
+
+def test_a_dooh_flight_with_half_an_ots_and_no_impressions_is_not_flagged(rolled_back_session: Session, dsp_id: int) -> None:
+    line, _ = _metric_line(rolled_back_session, dsp_id, "Dooh half ots", "ots")
+    insert_delivery(
+        rolled_back_session, line, date(2026, 8, 5), 0, insert_ingestion_batch(rolled_back_session),
+        ots=Decimal("0.5000"),
+    )
+
+    assert _candidates(rolled_back_session, dsp_id) == ()
+
+
+def test_the_ots_of_a_dooh_flight_counts_only_inside_its_own_window(rolled_back_session: Session, dsp_id: int) -> None:
+    line, period = _metric_line(rolled_back_session, dsp_id, "Dooh ots outside", "ots")
+    insert_delivery(
+        rolled_back_session, line, date(2026, 8, 8), 0, insert_ingestion_batch(rolled_back_session),
+        ots=Decimal("300.0000"),
+    )
+
+    assert _candidates(rolled_back_session, dsp_id) == (MissingDeliveryCandidate(line, period),)
+
+
+def test_a_ctv_flight_with_ots_and_no_impressions_is_flagged(rolled_back_session: Session, dsp_id: int) -> None:
+    line, period = _metric_line(rolled_back_session, dsp_id, "Ctv with ots", "impressions")
+    insert_delivery(
+        rolled_back_session, line, date(2026, 8, 5), 0, insert_ingestion_batch(rolled_back_session),
+        ots=Decimal("300.0000"),
+    )
+
+    assert _candidates(rolled_back_session, dsp_id) == (MissingDeliveryCandidate(line, period),)
+
+
+def test_a_flight_counted_in_impressions_that_delivered_impressions_is_not_flagged(rolled_back_session: Session, dsp_id: int) -> None:
+    line, _ = _metric_line(rolled_back_session, dsp_id, "Ctv delivers", "impressions")
+    insert_delivery(rolled_back_session, line, date(2026, 8, 5), 1, insert_ingestion_batch(rolled_back_session))
 
     assert _candidates(rolled_back_session, dsp_id) == ()

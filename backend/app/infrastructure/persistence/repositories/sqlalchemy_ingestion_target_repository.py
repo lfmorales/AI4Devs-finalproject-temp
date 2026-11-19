@@ -13,6 +13,8 @@ from app.infrastructure.persistence.models.campaign import (
 )
 from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord
 from app.infrastructure.persistence.models.dsp_mapping import DSPMappingRecord
+from app.infrastructure.persistence.models.masters import ChannelRecord
+from app.infrastructure.persistence.repositories.delivered_volume import delivered_in_channel_metric
 
 
 class SqlAlchemyIngestionTargetRepository(IngestionTargetRepository):
@@ -77,8 +79,9 @@ class SqlAlchemyIngestionTargetRepository(IngestionTargetRepository):
         flight = CampaignLinePeriodRecord
         # Summed in the database over the flight's own window, including days older than the ingestion window.
         # Delivery on any other day, even inside another flight of the same line, does not count for this one.
-        impressions_in_flight = (
-            select(func.coalesce(func.sum(DailyDeliveryRecord.impressions), 0))
+        # In the unit of the line's channel: OTS for a DOOH line, impressions for every other.
+        delivered_in_flight = (
+            select(func.coalesce(func.sum(delivered_in_channel_metric()), 0))
             .where(
                 DailyDeliveryRecord.campaign_line_id == flight.campaign_line_id,
                 DailyDeliveryRecord.delivery_date.between(flight.flight_start, flight.flight_end),
@@ -95,11 +98,12 @@ class SqlAlchemyIngestionTargetRepository(IngestionTargetRepository):
         rows = self._session.execute(
             select(flight.campaign_line_id, flight.campaign_period_id)
             .join(CampaignLineRecord, CampaignLineRecord.id == flight.campaign_line_id)
+            .join(ChannelRecord, ChannelRecord.id == CampaignLineRecord.channel_id)
             .where(
                 CampaignLineRecord.dsp_id == dsp_id,
                 flight.flight_end.between(window.start, window.end),
                 mapped_by_flight_end,
-                impressions_in_flight == 0,
+                delivered_in_flight == 0,
             )
             .order_by(flight.campaign_line_id, flight.campaign_period_id)
         ).all()
