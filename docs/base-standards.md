@@ -81,6 +81,17 @@ The economic model, the domain entities and the decisions behind them are specif
 - **Frontend**: `Vitest` with Testing Library.
 - **End-to-end**: `Playwright`, covering the three role flows.
 
+### Type checking
+- **Backend**: `mypy` with the configuration of `backend/pyproject.toml`. Run it from `backend/`, on the files you touched:
+
+  ```
+  uvx --with pydantic --with sqlalchemy --with httpx --with pytest --with alembic mypy <files>
+  ```
+
+  No `--python-executable` is used. The `--with` options are needed because the `pydantic.mypy` plugin named in the configuration fails to load without those dependencies (`No module named 'pydantic'`), and `mypy` then checks nothing.
+  `--with alembic` is needed to check the migrations under `backend/alembic/versions` and the tests that import `alembic`.
+- **Comparing with HEAD**: count the errors of the touched files in a temporary worktree of `HEAD` (`git worktree add --detach <dir> HEAD`, run the same command from its `backend/`, then `git worktree remove --force <dir>`), and compare. Never use `git stash` for it: the stash is shared by every worktree of the repository, so a stash or a pop can take or restore another session's changes.
+
 ## 5. Repository Structure
 
 Application code lives at the repository root, one directory per deployable service. `packages/` is reserved for internal tooling and is not part of the runtime.
