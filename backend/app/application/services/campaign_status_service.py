@@ -28,7 +28,7 @@ class CampaignStatusService:
     def _to_row(figures: FlightDeliveryFigures, day_before: date, missing_data_flag: bool) -> CampaignStatusRow:
         pacing = calculate_pacing(
             figures.contracted_impressions, figures.flight_start, figures.flight_end, day_before,
-            figures.delivered_impressions,
+            figures.delivered,
         )
         ratio = float(figures.delivered) / figures.contracted_impressions if figures.contracted_impressions else None
         return CampaignStatusRow(

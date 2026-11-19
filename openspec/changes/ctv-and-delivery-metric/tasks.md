@@ -62,8 +62,8 @@
 
 ## 10. Pacing
 
-- [ ] 10.1 Write failing tests in `backend/tests/domain/test_pacing.py`: 300,000 OTS from 2026-09-01 to 2026-09-30 at 2026-09-10 with 95,000.75 delivered is −4.99925 % and on pace; 90,000.0000 is −10 % and on pace; 89,999.5000 is −10.0005 % and under-delivering with 20 days remaining
-- [ ] 10.2 Change `calculate_pacing` to take the delivered volume as `Decimal`, pass `delivered` from the status service, and verify 10.1, `test_pacing.py` and a service test that a DOOH flight with 4,800 impressions and 0 OTS is under-delivering
+- [x] 10.1 Write failing tests in `backend/tests/domain/test_pacing.py`: 300,000 OTS from 2026-09-01 to 2026-09-30 at 2026-09-10 with 95,000.75 delivered is −4.99925 % and on pace; 90,000.0000 is −10 % and on pace; 89,999.5000 is −10.0005 % and under-delivering with 20 days remaining
+- [x] 10.2 Change `calculate_pacing` to take the delivered volume as `Decimal`, pass `delivered` from the status service, and verify 10.1, `test_pacing.py` and a service test that a DOOH flight with 4,800 impressions and 0 OTS is under-delivering
 
 ## 11. Margin and Month Close
 

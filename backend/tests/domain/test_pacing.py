@@ -9,7 +9,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.services.pacing import PacingStatus, calculate_pacing
+from app.domain.services.pacing import PacingResult, PacingStatus, calculate_pacing
 
 AUGUST_START = date(2026, 8, 1)
 AUGUST_END = date(2026, 8, 31)
@@ -22,7 +22,7 @@ def _pace(delivered: int, as_of: date = AUGUST_10, contracted: int = 3100):
         period_start=AUGUST_START,
         period_end=AUGUST_END,
         as_of=as_of,
-        delivered_impressions=delivered,
+        delivered=Decimal(delivered),
     )
 
 
@@ -64,7 +64,7 @@ def test_the_boundary_is_exact_when_the_expected_volume_does_not_terminate():
         period_start=date(2026, 8, 1),
         period_end=date(2026, 8, 3),
         as_of=date(2026, 8, 1),
-        delivered_impressions=3,
+        delivered=Decimal(3),
     )
 
     assert pacing.status is PacingStatus.ON_PACE
@@ -107,10 +107,60 @@ def test_deviation_is_the_signed_ratio_to_the_expected_volume():
 
 def test_a_period_ending_before_it_starts_is_rejected():
     with pytest.raises(ValueError):
-        calculate_pacing(100, AUGUST_END, AUGUST_START, AUGUST_10, 0)
+        calculate_pacing(100, AUGUST_END, AUGUST_START, AUGUST_10, Decimal(0))
 
 
 @pytest.mark.parametrize("contracted, delivered", [(-1, 0), (0, -1)])
 def test_negative_volumes_are_rejected(contracted, delivered):
     with pytest.raises(ValueError):
-        calculate_pacing(contracted, AUGUST_START, AUGUST_END, AUGUST_10, delivered)
+        calculate_pacing(contracted, AUGUST_START, AUGUST_END, AUGUST_10, Decimal(delivered))
+
+
+# A DOOH line: 300,000 OTS over September (30 days). By the end of September 10th ten days have elapsed,
+# so 100,000 OTS are expected. The volumes carry decimals: OTS is an absolute count with four decimals.
+SEPTEMBER_START = date(2026, 9, 1)
+SEPTEMBER_END = date(2026, 9, 30)
+SEPTEMBER_10 = date(2026, 9, 10)
+
+
+def _pace_ots(delivered: str) -> PacingResult:
+    return calculate_pacing(300_000, SEPTEMBER_START, SEPTEMBER_END, SEPTEMBER_10, Decimal(delivered))
+
+
+def test_95000_75_ots_of_100000_expected_is_minus_4_99925_percent_and_on_pace() -> None:
+    pacing = _pace_ots("95000.75")
+
+    assert pacing.deviation == Decimal("-0.0499925")
+    assert pacing.status is PacingStatus.ON_PACE
+    assert pacing.is_deviating is False
+
+
+def test_exactly_ten_percent_under_in_ots_is_on_pace() -> None:
+    pacing = _pace_ots("90000.0000")
+
+    assert pacing.deviation == Decimal("-0.1")
+    assert pacing.status is PacingStatus.ON_PACE
+
+
+def test_a_half_ots_beyond_ten_percent_under_is_under_delivering_with_the_days_remaining() -> None:
+    pacing = _pace_ots("89999.5000")
+
+    assert pacing.deviation == Decimal("-0.100005")
+    assert pacing.status is PacingStatus.UNDER_DELIVERING
+    assert pacing.days_remaining == 20
+
+
+def test_exactly_ten_percent_over_in_ots_is_on_pace_and_a_half_ots_more_is_not() -> None:
+    assert _pace_ots("110000.0000").status is PacingStatus.ON_PACE
+    assert _pace_ots("110000.5000").status is PacingStatus.OVER_DELIVERING
+
+
+def test_a_decimal_volume_is_compared_exactly_without_going_through_float() -> None:
+    # 0.1 + 0.2 style traps: 89999.9999 is under the 90,000 boundary by one ten-thousandth only.
+    assert _pace_ots("89999.9999").status is PacingStatus.UNDER_DELIVERING
+    assert _pace_ots("90000.0001").status is PacingStatus.ON_PACE
+
+
+def test_a_negative_decimal_volume_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        _pace_ots("-0.0001")

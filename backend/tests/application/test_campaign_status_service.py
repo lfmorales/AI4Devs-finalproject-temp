@@ -126,3 +126,19 @@ def test_a_ctv_row_carries_its_impressions_in_both_figures() -> None:
 
     assert row.delivered == Decimal(1_000) and row.delivered_impressions == 1_000
     assert row.delivery_metric == "impressions"
+
+
+def test_a_dooh_flight_with_impressions_but_no_ots_is_under_delivering() -> None:
+    [row] = _rows(_figures(contracted=3_100, delivered=4_800, delivered_volume=Decimal(0), delivery_metric="ots"))
+
+    assert row.pacing.status is PacingStatus.UNDER_DELIVERING
+    assert row.pacing_flag is True
+
+
+def test_a_dooh_flight_on_pace_in_ots_is_not_flagged_whatever_its_impressions() -> None:
+    [row] = _rows(_figures(
+        contracted=3_100, delivered=12, delivered_volume=Decimal("1000.0000"), delivery_metric="ots",
+    ))
+
+    assert row.pacing.deviation == 0
+    assert row.pacing_flag is False

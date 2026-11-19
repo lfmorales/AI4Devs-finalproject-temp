@@ -32,12 +32,16 @@ def calculate_pacing(
     period_start: date,
     period_end: date,
     as_of: date,
-    delivered_impressions: int,
+    delivered: Decimal,
 ) -> PacingResult:
-    """Compare delivered volume with a linear delivery of the contracted volume up to and including as_of."""
+    """Compare the delivered volume with a linear delivery of the contracted volume up to and including as_of.
+
+    The delivered volume is in the unit the channel counts (impressions or OTS) and may have decimals. Nothing
+    here goes through float: the expected volume and the deviation are exact fractions, so the 10 % boundary is exact.
+    """
     if period_end < period_start:
         raise ValueError(f"period_end {period_end} must not be before period_start {period_start}")
-    if contracted_impressions < 0 or delivered_impressions < 0:
+    if contracted_impressions < 0 or delivered < 0:
         raise ValueError("volumes must not be negative")
 
     total_days = (period_end - period_start).days + 1
@@ -49,7 +53,7 @@ def calculate_pacing(
     if expected == 0:
         return PacingResult(Decimal(0), None, PacingStatus.ON_PACE, days_remaining)
 
-    deviation = (delivered_impressions - expected) / expected
+    deviation = (Fraction(delivered) - expected) / expected
     if deviation < -PACING_DEVIATION_THRESHOLD:
         status = PacingStatus.UNDER_DELIVERING
     elif deviation > PACING_DEVIATION_THRESHOLD:
