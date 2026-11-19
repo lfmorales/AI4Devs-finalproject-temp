@@ -1,5 +1,6 @@
 """The delivery that counts toward a flight is the line's own, dated inside the flight's window."""
 
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
@@ -88,3 +89,21 @@ def test_no_delivery_is_a_zero_decimal_cost():
 
     assert result.impressions == 0
     assert result.media_cost == Decimal("0")
+
+
+def _ots_delivery(day: date, ots: str, impressions: int) -> DailyDelivery:
+    return replace(_delivery(day, impressions), ots=Decimal(ots))
+
+
+def test_the_window_delivery_is_summed_in_the_metric_of_the_channel() -> None:
+    deliveries = [
+        _ots_delivery(date(2026, 8, 20), "40000.2500", 6_000),
+        _ots_delivery(date(2026, 8, 21), "240000.2500", 6_000),
+        _ots_delivery(date(2026, 9, 2), "999.0000", 1),
+    ]
+
+    in_ots = deliveries_in_window(deliveries, LINE_ID, *AUGUST, delivery_metric="ots")
+    in_impressions = deliveries_in_window(deliveries, LINE_ID, *AUGUST)
+
+    assert (in_ots.delivered, in_ots.impressions) == (Decimal("280000.5000"), 12_000)
+    assert (in_impressions.delivered, in_impressions.impressions) == (Decimal(12_000), 12_000)

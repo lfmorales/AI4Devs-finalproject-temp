@@ -5,13 +5,15 @@ from decimal import Decimal
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.application.services import margin_closing_service
+from app.application.services.margin_query_service import MarginQueryService
 from app.application.services.margin_closing_service import MarginClosingService
 from app.domain.exceptions import PreviousMonthOpenError
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.priced_flights import price_flights
-from app.domain.value_objects.margin import FlightEconomics
+from app.domain.value_objects.margin import FlightEconomics, FlightMargin
 from app.infrastructure.persistence.models.campaign import CampaignLineRecord, CampaignRecord
 from app.infrastructure.persistence.models.margin import (
     AppliedRateBracketRecord,
@@ -23,7 +25,11 @@ from app.infrastructure.persistence.models.margin import (
 from app.infrastructure.persistence.models.masters import AgencyRecord
 from app.infrastructure.persistence.repositories import sqlalchemy_margin_repositories
 from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories import (
+    SqlAlchemyAppliedRateRepository,
     SqlAlchemyMarginClosingTransaction,
+    SqlAlchemyMarginReadRepository,
+    SqlAlchemyPlatformRateRepository,
+    SqlAlchemyRebateScheduleRepository,
 )
 from tests.fixtures.delivery_data import (
     add_line_to_campaign,
@@ -319,4 +325,36 @@ def test_changing_the_system_rate_after_closing_does_not_move_the_frozen_flight(
 
     rolled_back_session.refresh(frozen)
     assert frozen.platform_rate == Decimal("1.000000")
+    assert len(_rows(rolled_back_session)) == 1
+
+
+def test_closing_a_dooh_month_freezes_a_platform_cost_on_impressions_and_changes_none_of_its_delivery(
+    rolled_back_session: Session, user_id: int
+) -> None:
+    line_id = insert_campaign_line(rolled_back_session, delivery_metric="ots")
+    insert_delivery(
+        rolled_back_session, line_id, date(2026, 8, 10), 12_000, insert_ingestion_batch(rolled_back_session),
+        ots=Decimal("280000.5000"),
+    )
+
+    def read() -> FlightMargin:
+        service = MarginQueryService(
+            SqlAlchemyMarginReadRepository(rolled_back_session), SqlAlchemyRebateScheduleRepository(rolled_back_session),
+            SqlAlchemyPlatformRateRepository(rolled_back_session), SqlAlchemyAppliedRateRepository(rolled_back_session),
+            today=lambda: SEPTEMBER_FIRST,
+        )
+        (campaign,) = service.get_margin().campaigns
+        (line,) = campaign.lines
+        (flight,) = line.flights
+        return flight.margin
+
+    before = read()
+    _service(rolled_back_session).close_month(2026, 8, user_id)
+    after = read()
+
+    assert before.platform_cost == after.platform_cost == Decimal("12.00")  # 12,000 impressions, not 280.00 €
+    for margin in (before, after):
+        assert (margin.delivered, margin.delivered_impressions, margin.delivery_metric) == (
+            Decimal("280000.5000"), 12_000, "ots",
+        )
     assert len(_rows(rolled_back_session)) == 1

@@ -29,12 +29,18 @@ def flight_status(flight: FlightEconomics, as_of: date) -> FlightStatus:
 def calculate_flight_margin(flight: FlightEconomics, as_of: date) -> FlightMargin:
     """The margin of one flight as of D-1. Revenue never reads the delivered volume.
 
+    Revenue is on the contracted volume, in the unit of the metric (300,000 OTS at 5.00 € earn 1,500.00 €); the platform
+    cost is on the real delivered impressions, never on OTS.
+
     A running flight pro-rates revenue and rebate by elapsed contract days of its own window; media cost and
     platform cost come from what was delivered and are not pro-rated.
     """
     status = flight_status(flight, as_of)
     if status is FlightStatus.NOT_STARTED:
-        return FlightMargin(status, None, None, None, None, None, provisional=False, below_cost=False)
+        return FlightMargin(
+            status, None, None, None, None, None, provisional=False, below_cost=False,
+            delivery_metric=flight.delivery_metric,
+        )
 
     full_revenue = Decimal(flight.contracted_impressions) / _THOUSAND * flight.sale_cpm
     full_rebate = flight.rebate_amount
@@ -67,4 +73,6 @@ def calculate_flight_margin(flight: FlightEconomics, as_of: date) -> FlightMargi
         window_days=flight.total_days,
         delivered_impressions=flight.delivered_impressions,
         contracted_impressions=flight.contracted_impressions,
+        delivered=flight.delivered,
+        delivery_metric=flight.delivery_metric,
     )

@@ -2,7 +2,7 @@ from datetime import date
 
 from decimal import Decimal
 
-from sqlalchemy import Numeric, case, cast, func, select
+from sqlalchemy import Numeric, cast, func, select
 from sqlalchemy.orm import Session, aliased
 
 from app.domain.entities.campaign_status import FlightDeliveryFigures
@@ -15,6 +15,7 @@ from app.infrastructure.persistence.models.campaign import (
 )
 from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord
 from app.infrastructure.persistence.models.masters import AgencyRecord, ChannelRecord
+from app.infrastructure.persistence.repositories.delivered_volume import delivered_in_channel_metric
 
 
 class SqlAlchemyCampaignStatusRepository(CampaignStatusRepository):
@@ -25,12 +26,8 @@ class SqlAlchemyCampaignStatusRepository(CampaignStatusRepository):
         flight = CampaignLinePeriodRecord
         # The aggregates run in the database over the indexed (line, date) pair: no delivery row is fetched.
         # The delivered volume is summed in the unit the line's channel counts in, as a four-decimal number.
-        in_channel_metric = case(
-            (ChannelRecord.delivery_metric == "ots", DailyDeliveryRecord.ots),
-            else_=cast(DailyDeliveryRecord.impressions, Numeric(18, 4)),
-        )
         delivered = (
-            select(cast(func.coalesce(func.sum(in_channel_metric), 0), Numeric(18, 4)))
+            select(cast(func.coalesce(func.sum(delivered_in_channel_metric()), 0), Numeric(18, 4)))
             .where(
                 DailyDeliveryRecord.campaign_line_id == flight.campaign_line_id,
                 DailyDeliveryRecord.delivery_date.between(flight.flight_start, as_of),

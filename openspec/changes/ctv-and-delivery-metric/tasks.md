@@ -67,11 +67,11 @@
 
 ## 11. Margin and Month Close
 
-- [ ] 11.1 Write failing repository tests in `test_margin_repositories.py` that `list_flights` and `open_ended_flights` return, for a DOOH flight, `delivered` 280000.5000, `delivered_impressions` 12000 and metric `ots`
-- [ ] 11.2 Write failing domain tests in `test_flight_margin.py` that the closed DOOH flight of 300,000 OTS at 5.00 € has revenue 1,500.00 € and, at 1.00 € per thousand, platform cost 12.00 €, and in `test_margin_totals.py` that a line and a campaign sum `delivered` exactly (280,000.50 plus 1,499.25 is 281,499.75) and keep their one metric
-- [ ] 11.3 Add `delivered` and `delivery_metric` to `FlightFacts`, `FlightEconomics`, `FlightMargin`, `MarginTotals` and `WindowDelivery`, sum them in the repositories and in `margin_totals.py`, keep the platform cost on `delivered_impressions`, and verify 11.1 and 11.2
-- [ ] 11.4 Write a failing test that the grand total of `MarginQueryService` with a DOOH and a CTV campaign has null `delivery_metric`, `contracted_impressions` and `delivered`, `delivered_impressions` 210,800 and every amount summed; and that totals of impressions campaigns only are summed with metric `impressions`; implement and verify
-- [ ] 11.5 Write a failing test in `test_margin_closing_service.py` that closing the DOOH flight's month freezes a platform cost of 12.00 € and that the flight reads the same `delivered`, `delivered_impressions` and metric before and after the close; verify it passes
+- [x] 11.1 Write failing repository tests in `test_margin_repositories.py` that `list_flights` and `open_ended_flights` return, for a DOOH flight, `delivered` 280000.5000, `delivered_impressions` 12000 and metric `ots`
+- [x] 11.2 Write failing domain tests in `test_flight_margin.py` that the closed DOOH flight of 300,000 OTS at 5.00 € has revenue 1,500.00 € and, at 1.00 € per thousand, platform cost 12.00 €, and in `test_margin_totals.py` that a line and a campaign sum `delivered` exactly (280,000.50 plus 1,499.25 is 281,499.75) and keep their one metric
+- [x] 11.3 Add `delivered` and `delivery_metric` to `FlightFacts`, `FlightEconomics`, `FlightMargin`, `MarginTotals` and `WindowDelivery`, sum them in the repositories and in `margin_totals.py`, keep the platform cost on `delivered_impressions`, and verify 11.1 and 11.2
+- [x] 11.4 Write a failing test that the grand total of `MarginQueryService` with a DOOH and a CTV campaign has null `delivery_metric`, `contracted_impressions` and `delivered`, `delivered_impressions` 210,800 and every amount summed; and that totals of impressions campaigns only are summed with metric `impressions`; implement and verify
+- [x] 11.5 Write a failing test in `test_margin_closing_service.py` that closing the DOOH flight's month freezes a platform cost of 12.00 € and that the flight reads the same `delivered`, `delivered_impressions` and metric before and after the close; verify it passes
 
 ## 12. Line Without Delivery
 
@@ -83,7 +83,7 @@
 - [ ] 13.1 Write failing API tests in `test_campaign_status_endpoint.py`: the DOOH row carries `contracted_impressions` 300000, `delivery_metric` `"ots"`, `delivered` `"95000.7500"` and `delivered_impressions` 4800
 - [ ] 13.2 Write a failing API test in `test_campaign_status_endpoint.py` with a user holding only `trading`: the response for the DOOH row carries `delivered` `"95000.7500"` and `delivery_metric` `"ots"`, and walking every key of the response, however nested, finds no cost, revenue, rebate, platform-cost or margin field
 - [ ] 13.3 Write failing API tests in `test_margin_endpoint.py`: flight, line and campaign carry `delivered` as a four-decimal string and `delivery_metric`; mixed totals carry null `delivery_metric`, `contracted_impressions` and `delivered`
-- [ ] 13.4 Add the fields to `schemas/campaign_status.py` and `schemas/margin.py`, make the totals' `contracted_impressions` nullable, and verify 13.1 to 13.3 and that `test_route_protection.py` passes with `ACCESS_MATRIX` unchanged: no route is added, so no new negative case is needed beyond the existing ones of the three routes
+- [ ] 13.4 Add the fields to `schemas/campaign_status.py` and `schemas/margin.py`, make the totals' `contracted_impressions` nullable, and verify 13.1 to 13.3 and that `test_route_protection.py` passes with `ACCESS_MATRIX` unchanged: no route is added, so no new negative case is needed beyond the existing ones of the three routes. Already done in group 11: `TotalsResponse.contracted_impressions` is nullable in `schemas/margin.py`, with its API test in `test_margin_mixed_delivery_metrics.py`
 
 ## 14. Screens
 

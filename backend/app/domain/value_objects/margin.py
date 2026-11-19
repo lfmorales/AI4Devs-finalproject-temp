@@ -1,7 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
+from typing import cast
 
 
 _ONE_HUNDRED = Decimal(100)
@@ -32,7 +33,9 @@ class FlightEconomics:
 
     `rebate_amount` is the exact rebate of the whole flight, unrounded: the bracket engine produces it.
     `media_cost` and `delivered_impressions` are the line's delivery inside the flight's window.
-    `platform_rate` is euros per thousand delivered impressions.
+    `platform_rate` is euros per thousand delivered impressions: the platform cost is on the real impressions
+    whichever the delivery metric. `delivered` is the delivery in the unit of the metric (`delivery_metric`: impressions or
+    OTS, with decimals); omitted, it is the impressions. Revenue reads neither: it is the contracted volume's.
     """
 
     flight_start: date
@@ -43,8 +46,12 @@ class FlightEconomics:
     media_cost: Decimal
     rebate_amount: Decimal
     platform_rate: Decimal
+    delivery_metric: str = "impressions"
+    delivered: Decimal = field(default=cast(Decimal, None))
 
     def __post_init__(self) -> None:
+        if self.delivered is None:
+            object.__setattr__(self, "delivered", Decimal(self.delivered_impressions))
         if self.flight_start > self.flight_end:
             raise ValueError("flight_start must be <= flight_end")
         for name in ("sale_cpm", "media_cost", "rebate_amount", "platform_rate"):
@@ -77,6 +84,10 @@ class FlightMargin:
     # The line's deliveries inside the flight's window and the flight's contracted volume. None when not started.
     delivered_impressions: int | None = None
     contracted_impressions: int | None = None
+    # The same delivery in the unit of the metric, and that unit. The metric is known before the flight starts;
+    # `delivered` is None until then.
+    delivered: Decimal | None = None
+    delivery_metric: str | None = None
 
     @property
     def margin_pct(self) -> Decimal | None:
@@ -103,7 +114,12 @@ class MarginTotals:
     zero_sale_count: int = 0
     contracted_revenue: Decimal = Decimal("0.00")
     delivered_impressions: int = 0
-    contracted_impressions: int = 0
+    # `contracted_impressions` and `delivered` are in the unit of `delivery_metric`. Where the flights counted
+    # in two metrics (a grand total over DOOH and CTV campaigns) they cannot be added: all three are None. The real
+    # `delivered_impressions` is always a count of impressions and is always summed. No flights: metric None, zeros.
+    contracted_impressions: int | None = 0
+    delivered: Decimal | None = Decimal(0)
+    delivery_metric: str | None = None
 
     @property
     def zero_sale(self) -> bool:
@@ -121,3 +137,5 @@ class WindowDelivery:
 
     impressions: int
     media_cost: Decimal
+    # The delivery in the unit of the metric: its OTS when the line counts in OTS, its impressions otherwise.
+    delivered: Decimal

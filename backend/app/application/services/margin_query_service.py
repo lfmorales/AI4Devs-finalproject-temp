@@ -142,6 +142,7 @@ def _margin_from_frozen(flight: ReadFlight, frozen: FrozenRates, as_of: date) ->
             contracted_impressions=facts.contracted_impressions, sale_cpm=facts.sale_cpm,
             delivered_impressions=facts.delivered_impressions, media_cost=facts.media_cost,
             rebate_amount=frozen.rebate_amount, platform_rate=Decimal(frozen.platform_rate),
+            delivery_metric=facts.delivery_metric, delivered=facts.delivered,
         ),
         as_of,
     )

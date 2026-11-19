@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import exists, func, select, text
+from sqlalchemy import Numeric, cast, exists, func, select, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -36,6 +36,7 @@ from app.infrastructure.persistence.models.margin import (
     RebateScheduleRecord,
 )
 from app.infrastructure.persistence.models.masters import AgencyRecord, ChannelRecord
+from app.infrastructure.persistence.repositories.delivered_volume import delivered_in_channel_metric
 
 # The first key of the advisory locks that serialise the closing of a month; the second is year * 100 + month.
 _CLOSING_LOCK_NAMESPACE = 4242
@@ -158,14 +159,20 @@ class SqlAlchemyMarginFlightRepository(MarginFlightRepository):
             DailyDeliveryRecord.delivery_date.between(flight.flight_start, flight.flight_end),
         )
         # Both aggregates run in the database over the indexed (line, date) pair: no delivery row is fetched.
-        delivered = select(func.coalesce(func.sum(DailyDeliveryRecord.impressions), 0)).where(*window).scalar_subquery()
+        delivered_impressions = (
+            select(func.coalesce(func.sum(DailyDeliveryRecord.impressions), 0)).where(*window).scalar_subquery()
+        )
+        # The delivery in the channel's own unit, as a four-decimal number (OTS has decimals, impressions do not).
+        delivered = select(
+            cast(func.coalesce(func.sum(delivered_in_channel_metric()), 0), Numeric(18, 4))
+        ).where(*window).scalar_subquery()
         media_cost = select(func.coalesce(func.sum(DailyDeliveryRecord.media_cost), 0)).where(*window).scalar_subquery()
         rows = self._session.execute(
             select(
                 flight.id, CampaignLineRecord.id, CampaignRecord.id, flight.flight_start, flight.flight_end,
                 AgencyRecord.holding_group_id, AgencyRecord.id, CampaignRecord.campaign_type_id,
                 ChannelRecord.name, ChannelRecord.id, CampaignLineRecord.scope, flight.contracted_impressions,
-                CampaignLineRecord.sale_cpm, delivered, media_cost,
+                CampaignLineRecord.sale_cpm, delivered_impressions, media_cost, ChannelRecord.delivery_metric, delivered,
             )
             .select_from(flight)
             .join(CampaignLineRecord, CampaignLineRecord.id == flight.campaign_line_id)
@@ -187,6 +194,7 @@ class SqlAlchemyMarginFlightRepository(MarginFlightRepository):
                 group_id=row[5], agency_id=row[6], campaign_type_id=row[7], channel=row[8], channel_id=row[9],
                 scope=row[10], contracted_impressions=int(row[11]), sale_cpm=row[12],
                 delivered_impressions=int(row[13]), media_cost=Decimal(row[14]),
+                delivery_metric=row[15], delivered=Decimal(row[16]),
             )
             for row in rows
         ]
@@ -228,19 +236,25 @@ class SqlAlchemyMarginReadRepository(MarginReadRepository):
             DailyDeliveryRecord.delivery_date.between(flight.flight_start, flight.flight_end),
         )
         # Both aggregates run in the database over the indexed (line, date) pair: no delivery row is fetched.
-        delivered = select(func.coalesce(func.sum(DailyDeliveryRecord.impressions), 0)).where(*window).scalar_subquery()
+        delivered_impressions = (
+            select(func.coalesce(func.sum(DailyDeliveryRecord.impressions), 0)).where(*window).scalar_subquery()
+        )
+        # The delivery in the channel's own unit, as a four-decimal number (OTS has decimals, impressions do not).
+        delivered = select(
+            cast(func.coalesce(func.sum(delivered_in_channel_metric()), 0), Numeric(18, 4))
+        ).where(*window).scalar_subquery()
         media_cost = select(func.coalesce(func.sum(DailyDeliveryRecord.media_cost), 0)).where(*window).scalar_subquery()
         query = (
             select(
                 flight.id, CampaignLineRecord.id, CampaignRecord.id, flight.flight_start, flight.flight_end,
                 AgencyRecord.holding_group_id, AgencyRecord.id, CampaignRecord.campaign_type_id,
                 ChannelRecord.name, ChannelRecord.id, CampaignLineRecord.scope, flight.contracted_impressions,
-                CampaignLineRecord.sale_cpm, delivered, media_cost,
+                CampaignLineRecord.sale_cpm, delivered_impressions, media_cost,
                 CampaignRecord.name, CampaignRecord.status, CampaignLineRecord.line_number,
                 CampaignPeriodRecord.period_year, CampaignPeriodRecord.period_month,
                 applied.id, applied.rebate_amount, applied.platform_rate, applied.effective_rate, applied.ladder_step,
                 applied.agency_exception, applied.zero_reason, applied.source_year, applied.position_before,
-                applied.position_after,
+                applied.position_after, ChannelRecord.delivery_metric, delivered,
             )
             .select_from(flight)
             .join(CampaignLineRecord, CampaignLineRecord.id == flight.campaign_line_id)
@@ -267,6 +281,7 @@ class SqlAlchemyMarginReadRepository(MarginReadRepository):
                 group_id=row[5], agency_id=row[6], campaign_type_id=row[7], channel=row[8], channel_id=row[9],
                 scope=row[10], contracted_impressions=int(row[11]), sale_cpm=row[12],
                 delivered_impressions=int(row[13]), media_cost=Decimal(row[14]),
+                delivery_metric=row[30], delivered=Decimal(row[31]),
             )
             frozen = None if row[20] is None else FrozenRates(
                 rebate_amount=row[21], platform_rate=row[22], effective_rate=row[23], ladder_step=int(row[24]),

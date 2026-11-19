@@ -29,7 +29,7 @@ class TotalsResponse(BaseModel):
     revenue: DecimalString
     contracted_revenue: DecimalString
     delivered_impressions: int
-    contracted_impressions: int
+    contracted_impressions: int | None
     media_cost: DecimalString
     rebate: DecimalString
     platform_cost: DecimalString

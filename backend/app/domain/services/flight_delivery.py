@@ -7,17 +7,24 @@ from app.domain.value_objects.margin import WindowDelivery
 
 
 def deliveries_in_window(
-    deliveries: Iterable[DailyDelivery], campaign_line_id: int, flight_start: date, flight_end: date
+    deliveries: Iterable[DailyDelivery],
+    campaign_line_id: int,
+    flight_start: date,
+    flight_end: date,
+    delivery_metric: str = "impressions",
 ) -> WindowDelivery:
     """Sum one line's delivery dated from `flight_start` to `flight_end`, both included.
 
     A delivery stored outside every flight of its line, or belonging to another line, counts toward nothing.
-    The media cost is summed as stored, without rounding: rounding is the margin's job, once per amount.
+    The media cost is summed as stored, without rounding: rounding is the margin's job, once per amount. `delivered` is
+    the volume in the delivery metric (OTS or impressions); `impressions` is always the real impressions.
     """
     impressions = 0
     media_cost = Decimal(0)
+    delivered = Decimal(0)
     for delivery in deliveries:
         if delivery.campaign_line_id == campaign_line_id and flight_start <= delivery.delivery_date <= flight_end:
             impressions += delivery.impressions
             media_cost += delivery.media_cost
-    return WindowDelivery(impressions=impressions, media_cost=media_cost)
+            delivered += delivery.ots if delivery_metric == "ots" else Decimal(delivery.impressions)
+    return WindowDelivery(impressions=impressions, media_cost=media_cost, delivered=delivered)

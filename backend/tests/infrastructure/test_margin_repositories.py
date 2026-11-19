@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.domain.services.platform_rate import resolve_platform_rate
 from app.domain.services.priced_flights import price_flights
@@ -22,6 +23,7 @@ from app.infrastructure.persistence.models.masters import AgencyRecord, ChannelR
 from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories import (
     SqlAlchemyAppliedRateRepository,
     SqlAlchemyMarginFlightRepository,
+    SqlAlchemyMarginReadRepository,
     SqlAlchemyPlatformRateRepository,
     SqlAlchemyRebateScheduleRepository,
 )
@@ -329,3 +331,58 @@ def test_the_opening_position_feeds_the_next_closing(rolled_back_session):
 
     assert august.rebate.position_before == Decimal("5000.00")
     assert august.rebate.rebate == Decimal("1000.00") * Decimal("0.10") + Decimal("4000.00") * Decimal("0.30")
+
+
+# ---------------------------------------------------------------- delivery counted in the channel's metric
+
+def _dooh_august(session: Session) -> int:
+    line_id = _line(session, delivery_metric="ots")
+    batch = insert_ingestion_batch(session)
+    insert_delivery(session, line_id, date(2026, 8, 10), 7_000, batch, ots=Decimal("140000.2500"))
+    insert_delivery(session, line_id, date(2026, 8, 20), 5_000, batch, ots=Decimal("140000.2500"))
+    insert_delivery(session, line_id, date(2026, 9, 1), 9_999, batch, ots=Decimal("9999.0000"))  # outside the window
+    return line_id
+
+
+def test_open_ended_dooh_flights_carry_ots_as_delivered_and_the_real_impressions(rolled_back_session: Session) -> None:
+    _dooh_august(rolled_back_session)
+
+    (flight,) = SqlAlchemyMarginFlightRepository(rolled_back_session).open_ended_flights(2026, 8, AS_OF)
+
+    assert flight.delivered == Decimal("280000.5000") and str(flight.delivered) == "280000.5000"
+    assert flight.delivered_impressions == 12_000
+    assert flight.delivery_metric == "ots"
+
+
+def test_list_flights_carries_ots_as_delivered_and_the_real_impressions_for_a_dooh_flight(rolled_back_session: Session) -> None:
+    _dooh_august(rolled_back_session)
+
+    (read,) = SqlAlchemyMarginReadRepository(rolled_back_session).list_flights(AS_OF)
+
+    assert read.facts.delivered == Decimal("280000.5000")
+    assert read.facts.delivered_impressions == 12_000
+    assert read.facts.delivery_metric == "ots"
+
+
+def test_a_flight_counted_in_impressions_delivers_its_impressions_in_both_figures_in_both_reads(rolled_back_session: Session) -> None:
+    line_id = _line(rolled_back_session)
+    insert_delivery(
+        rolled_back_session, line_id, date(2026, 8, 10), 1_500, insert_ingestion_batch(rolled_back_session),
+        ots=Decimal("777.0000"),
+    )
+
+    (opened,) = SqlAlchemyMarginFlightRepository(rolled_back_session).open_ended_flights(2026, 8, AS_OF)
+    (read,) = SqlAlchemyMarginReadRepository(rolled_back_session).list_flights(AS_OF)
+
+    for facts in (opened, read.facts):
+        assert (facts.delivered, facts.delivered_impressions, facts.delivery_metric) == (
+            Decimal(1_500), 1_500, "impressions",
+        )
+
+
+def test_a_flight_without_delivery_has_zero_delivered_in_its_metric(rolled_back_session: Session) -> None:
+    _line(rolled_back_session, delivery_metric="ots")
+
+    (flight,) = SqlAlchemyMarginFlightRepository(rolled_back_session).open_ended_flights(2026, 8, AS_OF)
+
+    assert flight.delivered == 0 and isinstance(flight.delivered, Decimal) and flight.delivered_impressions == 0

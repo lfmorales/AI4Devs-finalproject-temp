@@ -312,3 +312,49 @@ def test_a_running_flight_can_be_below_cost():
     result = calculate_flight_margin(_september_flight(media_cost="900.00"), as_of=date(2026, 9, 10))
 
     assert result.below_cost is True
+
+
+def _dooh_flight() -> FlightEconomics:
+    # 300,000 OTS contracted at 5.00 €; 280,000.50 OTS delivered, over 12,000 real impressions.
+    return FlightEconomics(
+        flight_start=AUGUST_START, flight_end=AUGUST_END, contracted_impressions=300_000,
+        sale_cpm=Decimal("5.00"), delivered_impressions=12_000, media_cost=Decimal("0.00"),
+        rebate_amount=Decimal("0"), platform_rate=Decimal("1.00"),
+        delivery_metric="ots", delivered=Decimal("280000.5000"),
+    )
+
+
+def test_a_closed_dooh_flight_earns_the_revenue_of_its_contracted_ots() -> None:
+    result = calculate_flight_margin(_dooh_flight(), as_of=AFTER_AUGUST)
+
+    assert result.revenue == Decimal("1500.00")
+
+
+def test_the_platform_cost_of_a_dooh_flight_is_on_its_real_impressions_not_on_its_ots() -> None:
+    result = calculate_flight_margin(_dooh_flight(), as_of=AFTER_AUGUST)
+
+    assert result.platform_cost == Decimal("12.00")  # 12,000 impressions at 1.00 € per thousand, not 280.00 €
+    assert result.margin == Decimal("1488.00")
+
+
+def test_the_margin_carries_the_delivered_volume_in_the_metric_and_the_real_impressions() -> None:
+    result = calculate_flight_margin(_dooh_flight(), as_of=AFTER_AUGUST)
+
+    assert (result.delivered, result.delivered_impressions, result.delivery_metric) == (
+        Decimal("280000.5000"), 12_000, "ots",
+    )
+
+
+def test_a_flight_counted_in_impressions_delivers_its_impressions_in_both_figures() -> None:
+    result = calculate_flight_margin(_flight(), as_of=AFTER_AUGUST)
+
+    assert (result.delivered, result.delivered_impressions, result.delivery_metric) == (
+        Decimal(700_000), 700_000, "impressions",
+    )
+
+
+def test_a_flight_that_has_not_started_names_its_metric_and_has_no_volume() -> None:
+    result = calculate_flight_margin(_dooh_flight(), as_of=date(2026, 7, 31))
+
+    assert result.status is FlightStatus.NOT_STARTED
+    assert result.delivery_metric == "ots" and result.delivered is None

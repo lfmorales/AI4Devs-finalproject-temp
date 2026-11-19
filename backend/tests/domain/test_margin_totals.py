@@ -160,3 +160,61 @@ def test_a_flight_whose_rebate_and_platform_cost_make_its_margin_negative_is_cou
     assert negative.margin == Decimal("-3.00") and negative.below_cost is True
     assert (line.below_cost_count, campaign.below_cost_count) == (1, 1)
     assert line.margin == Decimal("7.00")  # -3.00 + 10.00: the flagged flight keeps its true value
+
+
+def _economics(metric: str, delivered: str, impressions: int, contracted: int = 1000) -> FlightMargin:
+    return calculate_flight_margin(
+        FlightEconomics(
+            flight_start=date(2026, 8, 1), flight_end=date(2026, 8, 31), contracted_impressions=contracted,
+            sale_cpm=Decimal("10.00"), delivered_impressions=impressions, media_cost=Decimal("0.00"),
+            rebate_amount=Decimal("0"), platform_rate=Decimal("1.00"),
+            delivery_metric=metric, delivered=Decimal(delivered),
+        ),
+        as_of=AS_OF,
+    )
+
+
+def test_a_line_sums_the_delivered_volume_exactly_and_keeps_its_one_metric() -> None:
+    total = total_flights([_economics("ots", "280000.5000", 12_000), _economics("ots", "1499.2500", 30)])
+
+    assert total.delivered == Decimal("281499.7500")
+    assert total.delivered_impressions == 12_030
+    assert total.delivery_metric == "ots"
+    assert total.contracted_impressions == 2_000
+
+
+def test_a_campaign_sums_the_delivered_volume_of_its_lines_and_keeps_the_metric() -> None:
+    line_a = total_flights([_economics("ots", "280000.5000", 12_000)])
+    line_b = total_flights([_economics("ots", "1499.2500", 30)])
+
+    total = total_lines([line_a, line_b])
+
+    assert total.delivered == Decimal("281499.7500") and total.delivery_metric == "ots"
+    assert total.delivered_impressions == 12_030 and total.contracted_impressions == 2_000
+
+
+def test_totals_of_lines_counted_in_impressions_are_summed_with_the_metric_impressions() -> None:
+    total = total_lines([
+        total_flights([_economics("impressions", "500", 500)]),
+        total_flights([_economics("impressions", "250", 250)]),
+    ])
+
+    assert (total.delivery_metric, total.delivered, total.contracted_impressions) == ("impressions", Decimal(750), 2_000)
+
+
+def test_mixed_metrics_have_no_metric_no_delivered_and_no_contracted_but_real_impressions_and_amounts() -> None:
+    dooh = total_flights([_economics("ots", "280000.5000", 12_000, contracted=300_000)])
+    ctv = total_flights([_economics("impressions", "198800", 198_800, contracted=200_000)])
+
+    total = total_lines([dooh, ctv])
+
+    assert total.delivery_metric is None and total.delivered is None and total.contracted_impressions is None
+    assert total.delivered_impressions == 210_800
+    assert total.revenue == dooh.revenue + ctv.revenue
+    assert total.platform_cost == dooh.platform_cost + ctv.platform_cost
+
+
+def test_no_lines_total_zero_without_a_metric() -> None:
+    total = total_lines([])
+
+    assert total.delivery_metric is None and total.delivered == 0 and total.contracted_impressions == 0
