@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 
 from app.domain.services.pacing import PacingResult
 
@@ -19,7 +20,11 @@ class FlightDeliveryFigures:
     flight_start: date
     flight_end: date
     contracted_impressions: int
-    # The line's impressions from flight_start up to the day being evaluated.
+    # The unit the channel counts delivery in: "impressions" or "ots".
+    delivery_metric: str
+    # The line's delivery in that unit from flight_start up to the day being evaluated.
+    delivered: Decimal
+    # The line's real impressions over the same days, whatever the metric.
     delivered_impressions: int
     # The latest delivery date of any line of the campaign; None when the campaign has no delivery at all.
     campaign_latest_delivery_date: date | None
@@ -40,6 +45,8 @@ class CampaignStatusRow:
     flight_start: date
     flight_end: date
     contracted_impressions: int
+    delivery_metric: str
+    delivered: Decimal
     delivered_impressions: int
     delivery_ratio: float | None
     pacing: PacingResult

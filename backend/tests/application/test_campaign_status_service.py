@@ -1,6 +1,7 @@
 """Pacing, the missing-data flag and the ordering of the daily status, over figures from a fake repository."""
 
 from datetime import date
+from decimal import Decimal
 
 from app.application.services.campaign_status_service import CampaignStatusService
 from app.domain.entities.campaign_status import FlightDeliveryFigures
@@ -29,12 +30,16 @@ def _figures(
     contracted: int = 3_100,
     delivered: int = 1_000,
     latest: date | None = date(2026, 8, 10),
+    delivery_metric: str = "impressions",
+    delivered_volume: Decimal | None = None,
 ) -> FlightDeliveryFigures:
     # A 31-day flight, 10 days elapsed at D-1: 1_000 impressions are expected.
     return FlightDeliveryFigures(
         campaign_id=campaign_id, campaign_name=campaign_name, agency_id=1, agency_name=agency_name,
         line_number=line_number, campaign_period_id=1, period_year=2026, period_month=8,
         flight_start=date(2026, 8, 1), flight_end=date(2026, 8, 31), contracted_impressions=contracted,
+        delivery_metric=delivery_metric,
+        delivered=Decimal(delivered) if delivered_volume is None else delivered_volume,
         delivered_impressions=delivered, campaign_latest_delivery_date=latest,
     )
 
@@ -103,3 +108,21 @@ def test_rows_with_any_flag_come_first_then_agency_campaign_and_line():
         ("C pacing", 1), ("C pacing", 2), ("Z missing", 1),   # flagged: agency Alpha before Beta
         ("B ok", 1), ("B ok", 2), ("A ok", 1),                # not flagged: Alpha before Beta
     ]
+
+
+def test_a_dooh_row_carries_its_ots_and_its_impressions_and_the_ratio_is_on_the_ots() -> None:
+    [row] = _rows(_figures(
+        contracted=300_000, delivered=4_800, delivered_volume=Decimal("95000.7500"), delivery_metric="ots",
+    ))
+
+    assert row.delivered == Decimal("95000.7500")
+    assert row.delivered_impressions == 4_800
+    assert row.delivery_metric == "ots"
+    assert row.delivery_ratio == float(Decimal("95000.7500")) / 300_000
+
+
+def test_a_ctv_row_carries_its_impressions_in_both_figures() -> None:
+    [row] = _rows(_figures(contracted=3_100, delivered=1_000, delivery_metric="impressions"))
+
+    assert row.delivered == Decimal(1_000) and row.delivered_impressions == 1_000
+    assert row.delivery_metric == "impressions"

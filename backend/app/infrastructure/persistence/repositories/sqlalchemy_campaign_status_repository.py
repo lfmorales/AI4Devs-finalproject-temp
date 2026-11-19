@@ -1,6 +1,8 @@
 from datetime import date
 
-from sqlalchemy import func, select
+from decimal import Decimal
+
+from sqlalchemy import Numeric, case, cast, func, select
 from sqlalchemy.orm import Session, aliased
 
 from app.domain.entities.campaign_status import FlightDeliveryFigures
@@ -12,7 +14,7 @@ from app.infrastructure.persistence.models.campaign import (
     CampaignRecord,
 )
 from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord
-from app.infrastructure.persistence.models.masters import AgencyRecord
+from app.infrastructure.persistence.models.masters import AgencyRecord, ChannelRecord
 
 
 class SqlAlchemyCampaignStatusRepository(CampaignStatusRepository):
@@ -21,8 +23,21 @@ class SqlAlchemyCampaignStatusRepository(CampaignStatusRepository):
 
     def list_running_flights(self, as_of: date) -> list[FlightDeliveryFigures]:
         flight = CampaignLinePeriodRecord
-        # Both aggregates run in the database over the indexed (line, date) pair: no delivery row is fetched.
+        # The aggregates run in the database over the indexed (line, date) pair: no delivery row is fetched.
+        # The delivered volume is summed in the unit the line's channel counts in, as a four-decimal number.
+        in_channel_metric = case(
+            (ChannelRecord.delivery_metric == "ots", DailyDeliveryRecord.ots),
+            else_=cast(DailyDeliveryRecord.impressions, Numeric(18, 4)),
+        )
         delivered = (
+            select(cast(func.coalesce(func.sum(in_channel_metric), 0), Numeric(18, 4)))
+            .where(
+                DailyDeliveryRecord.campaign_line_id == flight.campaign_line_id,
+                DailyDeliveryRecord.delivery_date.between(flight.flight_start, as_of),
+            )
+            .scalar_subquery()
+        )
+        delivered_impressions = (
             select(func.coalesce(func.sum(DailyDeliveryRecord.impressions), 0))
             .where(
                 DailyDeliveryRecord.campaign_line_id == flight.campaign_line_id,
@@ -43,10 +58,11 @@ class SqlAlchemyCampaignStatusRepository(CampaignStatusRepository):
                 CampaignLineRecord.line_number, flight.campaign_period_id,
                 CampaignPeriodRecord.period_year, CampaignPeriodRecord.period_month,
                 flight.flight_start, flight.flight_end, flight.contracted_impressions,
-                delivered, latest_of_campaign,
+                ChannelRecord.delivery_metric, delivered, delivered_impressions, latest_of_campaign,
             )
             .select_from(flight)
             .join(CampaignLineRecord, CampaignLineRecord.id == flight.campaign_line_id)
+            .join(ChannelRecord, ChannelRecord.id == CampaignLineRecord.channel_id)
             .join(CampaignRecord, CampaignRecord.id == CampaignLineRecord.campaign_id)
             .join(AgencyRecord, AgencyRecord.id == CampaignRecord.agency_id)
             .join(CampaignPeriodRecord, CampaignPeriodRecord.id == flight.campaign_period_id)
@@ -57,4 +73,11 @@ class SqlAlchemyCampaignStatusRepository(CampaignStatusRepository):
             )
             .order_by(CampaignRecord.id, CampaignLineRecord.line_number)
         ).all()
-        return [FlightDeliveryFigures(*row[:10], int(row[10]), int(row[11]), row[12]) for row in rows]
+        return [
+            FlightDeliveryFigures(
+                *row[:10], contracted_impressions=int(row[10]), delivery_metric=row[11],
+                delivered=Decimal(row[12]), delivered_impressions=int(row[13]),
+                campaign_latest_delivery_date=row[14],
+            )
+            for row in rows
+        ]

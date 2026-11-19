@@ -53,8 +53,11 @@ def insert_campaign_line(
     dsp_id: int | None = None,
     line_start: date | None = None,
     line_end: date | None = None,
+    delivery_metric: str = "impressions",
 ) -> int:
     """Persist a campaign with one period, one numbered line under it and the line's flight; return the line id.
+
+    The line's channel counts delivery in `delivery_metric` (impressions or ots).
 
     The line runs over the campaign's dates unless line_start / line_end narrow it. The period and the
     flight cover the line, so rules that read a flight window see the same days as the line.
@@ -64,7 +67,7 @@ def insert_campaign_line(
     campaign_type = CampaignTypeRecord(name=f"{campaign_name} type")
     sector = SectorRecord(name=f"{campaign_name} sector")
     sales_rep = SalesRepRecord(name=f"{campaign_name} rep")
-    channel = ChannelRecord(name=f"{campaign_name} channel")
+    channel = ChannelRecord(name=f"{campaign_name} channel", delivery_metric=delivery_metric)
     line_format = FormatRecord(name=f"{campaign_name} format")
     session.add_all([holding_group, advertiser, campaign_type, sector, sales_rep, channel, line_format])
     session.flush()
@@ -243,11 +246,13 @@ def insert_delivery(
     impressions: int,
     batch_id: int,
     media_cost: Decimal = Decimal("0"),
+    ots: Decimal = Decimal(0),
 ) -> None:
     from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord
 
     session.add(DailyDeliveryRecord(
         campaign_line_id=campaign_line_id, ingestion_batch_id=batch_id, delivery_date=delivery_day,
         impressions=impressions, clicks=0, media_cost=media_cost, measurable_impressions=0, viewable_impressions=0,
+        ots=ots,
     ))
     session.flush()

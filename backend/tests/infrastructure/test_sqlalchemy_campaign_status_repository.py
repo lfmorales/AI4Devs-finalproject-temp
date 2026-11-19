@@ -1,8 +1,10 @@
 """The flight-level aggregate behind the daily status, against PostgreSQL: one query, delivery summed in the database."""
 
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy import event
+from sqlalchemy.orm import Session
 
 from app.infrastructure.persistence.repositories.sqlalchemy_campaign_status_repository import (
     SqlAlchemyCampaignStatusRepository,
@@ -139,3 +141,65 @@ def test_the_aggregate_is_read_in_one_statement_whatever_the_number_of_rows(roll
 
     assert len(rows) == 3
     assert len(statements) == 1
+
+
+def test_a_dooh_flight_delivers_in_ots_and_keeps_its_real_impressions(rolled_back_session: Session) -> None:
+    line = insert_campaign_line(rolled_back_session, delivery_metric="ots")
+    batch = insert_ingestion_batch(rolled_back_session)
+    insert_delivery(rolled_back_session, line, date(2026, 8, 5), 2_400, batch, ots=Decimal("40000.2500"))
+    insert_delivery(rolled_back_session, line, date(2026, 8, 10), 2_400, batch, ots=Decimal("55000.5000"))
+    insert_delivery(rolled_back_session, line, date(2026, 8, 11), 9_000, batch, ots=Decimal("9000.0000"))  # after D-1
+
+    [figures] = _running(rolled_back_session)
+
+    assert figures.delivered == Decimal("95000.7500")
+    assert str(figures.delivered) == "95000.7500"
+    assert figures.delivered_impressions == 4_800
+    assert figures.delivery_metric == "ots"
+
+
+def test_a_ctv_flight_delivers_its_impressions_in_both_figures(rolled_back_session: Session) -> None:
+    line = insert_campaign_line(rolled_back_session, delivery_metric="impressions")
+    batch = insert_ingestion_batch(rolled_back_session)
+    insert_delivery(rolled_back_session, line, date(2026, 8, 5), 1_200, batch)
+    insert_delivery(rolled_back_session, line, date(2026, 8, 10), 300, batch)
+
+    [figures] = _running(rolled_back_session)
+
+    assert figures.delivered == Decimal(1_500)
+    assert figures.delivered_impressions == 1_500
+    assert figures.delivery_metric == "impressions"
+
+
+def test_ots_stored_on_an_impressions_line_is_not_counted(rolled_back_session: Session) -> None:
+    line = insert_campaign_line(rolled_back_session, delivery_metric="impressions")
+    insert_delivery(
+        rolled_back_session, line, date(2026, 8, 10), 700, insert_ingestion_batch(rolled_back_session),
+        ots=Decimal("123456.0000"),
+    )
+
+    [figures] = _running(rolled_back_session)
+
+    assert figures.delivered == Decimal(700)
+
+
+def test_a_flight_with_no_delivery_has_zero_delivered_in_its_metric(rolled_back_session: Session) -> None:
+    insert_campaign_line(rolled_back_session, delivery_metric="ots")
+
+    [figures] = _running(rolled_back_session)
+
+    assert figures.delivered == 0 and figures.delivered_impressions == 0
+    assert figures.delivery_metric == "ots"
+
+
+def test_a_dooh_row_with_impressions_and_no_ots_still_sets_the_latest_delivery_date(rolled_back_session: Session) -> None:
+    line = insert_campaign_line(rolled_back_session, delivery_metric="ots")
+    batch = insert_ingestion_batch(rolled_back_session)
+    insert_delivery(rolled_back_session, line, date(2026, 8, 8), 0, batch, ots=Decimal("500.0000"))
+    insert_delivery(rolled_back_session, line, date(2026, 8, 10), 12, batch, ots=Decimal(0))
+
+    [figures] = _running(rolled_back_session)
+
+    assert figures.campaign_latest_delivery_date == date(2026, 8, 10)
+    assert figures.delivered == Decimal("500.0000")
+    assert figures.delivered_impressions == 12

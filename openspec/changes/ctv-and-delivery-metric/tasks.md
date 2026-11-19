@@ -57,8 +57,8 @@
 
 ## 9. Daily Status
 
-- [ ] 9.1 Write failing repository tests in `test_sqlalchemy_campaign_status_repository.py`: a DOOH flight that delivered 95,000.75 OTS and 4,800 impressions up to D-1 returns `delivered` 95000.7500, `delivered_impressions` 4800 and metric `ots`; a CTV flight returns its impressions in both; a DOOH row with 12 impressions and 0 OTS on D-1 still sets the latest delivery date
-- [ ] 9.2 Sum the delivered volume by the channel's metric in `sqlalchemy_campaign_status_repository.py`, add `delivered` and `delivery_metric` to `FlightDeliveryFigures` and `CampaignStatusRow`, compute the ratio on `delivered`, keep pacing on `delivered_impressions` until task 10, and verify 9.1 and `test_campaign_status_service.py`
+- [x] 9.1 Write failing repository tests in `test_sqlalchemy_campaign_status_repository.py`: a DOOH flight that delivered 95,000.75 OTS and 4,800 impressions up to D-1 returns `delivered` 95000.7500, `delivered_impressions` 4800 and metric `ots`; a CTV flight returns its impressions in both; a DOOH row with 12 impressions and 0 OTS on D-1 still sets the latest delivery date
+- [x] 9.2 Sum the delivered volume by the channel's metric in `sqlalchemy_campaign_status_repository.py`, add `delivered` and `delivery_metric` to `FlightDeliveryFigures` and `CampaignStatusRow`, compute the ratio on `delivered`, keep pacing on `delivered_impressions` until task 10, and verify 9.1 and `test_campaign_status_service.py`
 
 ## 10. Pacing
 

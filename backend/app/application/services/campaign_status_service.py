@@ -30,12 +30,13 @@ class CampaignStatusService:
             figures.contracted_impressions, figures.flight_start, figures.flight_end, day_before,
             figures.delivered_impressions,
         )
-        ratio = figures.delivered_impressions / figures.contracted_impressions if figures.contracted_impressions else None
+        ratio = float(figures.delivered) / figures.contracted_impressions if figures.contracted_impressions else None
         return CampaignStatusRow(
             campaign_id=figures.campaign_id, campaign_name=figures.campaign_name, agency_id=figures.agency_id,
             agency_name=figures.agency_name, line_number=figures.line_number,
             campaign_period_id=figures.campaign_period_id, period_year=figures.period_year,
             period_month=figures.period_month, flight_start=figures.flight_start, flight_end=figures.flight_end,
-            contracted_impressions=figures.contracted_impressions, delivered_impressions=figures.delivered_impressions,
+            contracted_impressions=figures.contracted_impressions, delivery_metric=figures.delivery_metric,
+            delivered=figures.delivered, delivered_impressions=figures.delivered_impressions,
             delivery_ratio=ratio, pacing=pacing, pacing_flag=pacing.is_deviating, missing_data_flag=missing_data_flag,
         )
