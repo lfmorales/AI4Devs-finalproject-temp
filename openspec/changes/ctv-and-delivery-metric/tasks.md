@@ -100,7 +100,7 @@
 
 ## 16. Review and Update Existing Unit Tests (MANDATORY)
 
-- [ ] 16.1 Review every backend and frontend test that builds a delivery row, a flight or a margin response (`tests/fixtures/delivery_rows.py`, `delivery_data.py`, `frontend/tests/helpers/margin-data.ts`) so it carries the new fields, and that no test still names `OOH` or `Digital` as a channel; verify with `git grep -nwE "OOH|Digital" -- backend/tests backend/scripts frontend/tests e2e deploy`
+- [x] 16.1 Review every backend and frontend test that builds a delivery row, a flight or a margin response (`tests/fixtures/delivery_rows.py`, `delivery_data.py`, `frontend/tests/helpers/margin-data.ts`) so it carries the new fields, and that no test still names `OOH` or `Digital` as a channel; verify with `git grep -nwE "OOH|Digital" -- backend/tests backend/scripts frontend/tests e2e deploy`
 
 ## 17. Run Unit Tests and Verify Database State (MANDATORY)
 
