@@ -13,7 +13,7 @@ from app.application.services.margin_closing_service import MarginClosingService
 from app.domain.exceptions import PreviousMonthOpenError
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.priced_flights import price_flights
-from app.domain.value_objects.margin import FlightEconomics, FlightMargin
+from app.domain.value_objects.margin import FlightMargin
 from app.infrastructure.persistence.models.campaign import CampaignLineRecord, CampaignRecord
 from app.infrastructure.persistence.models.margin import (
     AppliedRateBracketRecord,
@@ -39,6 +39,7 @@ from tests.fixtures.delivery_data import (
     insert_user,
     replace_flights,
 )
+from tests.fixtures.flight_inputs import flight_economics
 
 SEPTEMBER_FIRST = date(2026, 9, 1)  # D; as_of is 31 August, so August is over
 
@@ -300,7 +301,7 @@ def test_pending_close_figures_are_the_figures_closing_freezes(rolled_back_sessi
     for item in pending:
         row = frozen[item.facts.flight_id]
         margin_from_frozen = calculate_flight_margin(
-            FlightEconomics(
+            flight_economics(
                 flight_start=item.facts.flight_start, flight_end=item.facts.flight_end,
                 contracted_impressions=item.facts.contracted_impressions, sale_cpm=item.facts.sale_cpm,
                 delivered_impressions=item.facts.delivered_impressions, media_cost=item.facts.media_cost,

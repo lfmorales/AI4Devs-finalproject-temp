@@ -17,6 +17,7 @@ from pathlib import Path
 from app.domain.services.priced_flights import price_flights
 from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight
 from app.domain.value_objects.rebate import Bracket, RebateSchedule
+from tests.fixtures.flight_inputs import flight_facts
 
 SHEET_PATH = Path(__file__).resolve().parents[1] / "private" / "mes_en_curso.csv"
 SKIP_REASON = f"the private sheet {SHEET_PATH.name} is not present in tests/private/ (it is ignored by git)"
@@ -133,7 +134,7 @@ def split_rows(rows: list[SheetRow]) -> tuple[list[SheetRow], list[SheetRow], li
 
 def facts_of(row: SheetRow, flight_start: date = MONTH_START) -> FlightFacts:
     assert row.oc_cpm is not None and row.days_oc is not None
-    return FlightFacts(
+    return flight_facts(
         flight_id=row.number, campaign_line_id=row.number, campaign_id=row.number,
         flight_start=flight_start, flight_end=flight_start + timedelta(days=row.days_oc - 1),
         group_id=row.number, agency_id=row.number, campaign_type_id=1, channel="Directo", channel_id=1,

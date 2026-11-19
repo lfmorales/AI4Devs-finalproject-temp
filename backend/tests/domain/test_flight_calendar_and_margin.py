@@ -11,6 +11,7 @@ from app.domain.services.margin_totals import total_flights
 from app.domain.services.period_expansion import PeriodExpansionService
 from app.domain.value_objects.flight import FlightWindow
 from app.domain.value_objects.margin import FlightEconomics, FlightStatus
+from tests.fixtures.flight_inputs import flight_economics
 
 
 def _flights(line_start: date, line_end: date) -> list[FlightWindow]:
@@ -69,7 +70,7 @@ def test_no_flight_ever_crosses_a_month_or_a_year(start_day: int, end_day: int):
 
 
 def _economics(window: FlightWindow, contracted_impressions: int) -> FlightEconomics:
-    return FlightEconomics(
+    return flight_economics(
         flight_start=window.flight_start,
         flight_end=window.flight_end,
         contracted_impressions=contracted_impressions,

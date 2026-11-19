@@ -5,7 +5,8 @@ from decimal import Decimal
 
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.margin_totals import total_flights, total_lines
-from app.domain.value_objects.margin import FlightEconomics, FlightMargin
+from app.domain.value_objects.margin import FlightMargin
+from tests.fixtures.flight_inputs import flight_economics
 
 AS_OF = date(2026, 9, 10)
 
@@ -20,7 +21,7 @@ def _flight(
     rebate_amount: str = "0",
 ) -> FlightMargin:
     return calculate_flight_margin(
-        FlightEconomics(
+        flight_economics(
             flight_start=flight_start,
             flight_end=flight_end,
             contracted_impressions=contracted_impressions,
@@ -164,7 +165,7 @@ def test_a_flight_whose_rebate_and_platform_cost_make_its_margin_negative_is_cou
 
 def _economics(metric: str, delivered: str, impressions: int, contracted: int = 1000) -> FlightMargin:
     return calculate_flight_margin(
-        FlightEconomics(
+        flight_economics(
             flight_start=date(2026, 8, 1), flight_end=date(2026, 8, 31), contracted_impressions=contracted,
             sale_cpm=Decimal("10.00"), delivered_impressions=impressions, media_cost=Decimal("0.00"),
             rebate_amount=Decimal("0"), platform_rate=Decimal("1.00"),

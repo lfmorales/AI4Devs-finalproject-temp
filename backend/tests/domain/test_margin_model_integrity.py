@@ -13,6 +13,7 @@ from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.margin_totals import total_flights, total_lines
 from app.domain.value_objects import margin
 from app.domain.value_objects.margin import FlightEconomics
+from tests.fixtures.flight_inputs import flight_economics
 
 MARGIN_MODULES = (margin, flight_margin, margin_totals, flight_delivery, platform_rate)
 # The pricing function carries the channel as data for the rebate rules; it never branches on it.
@@ -31,7 +32,7 @@ def _flight(
     end: date = date(2026, 8, 31),
     rebate_amount: str = "907.7525",
 ) -> FlightEconomics:
-    return FlightEconomics(
+    return flight_economics(
         flight_start=start,
         flight_end=end,
         contracted_impressions=contracted_impressions,

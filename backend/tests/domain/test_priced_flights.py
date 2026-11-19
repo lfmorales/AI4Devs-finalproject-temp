@@ -8,6 +8,7 @@ from app.domain.value_objects.margin import FlightStatus
 from app.domain.value_objects.platform_rate import PlatformRateLevel
 from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates
 from app.domain.value_objects.rebate import Bracket, CounterKey, LadderStep, RebateSchedule
+from tests.fixtures.flight_inputs import flight_facts
 
 GROUP = 10
 AGENCY = 20
@@ -35,7 +36,7 @@ def facts(
     agency_id: int = AGENCY,
     campaign_type_id: int = 7,
 ) -> FlightFacts:
-    return FlightFacts(
+    return flight_facts(
         flight_id=flight_id, campaign_line_id=line_id, campaign_id=1, flight_start=flight_start, flight_end=flight_end,
         group_id=GROUP, agency_id=agency_id, campaign_type_id=campaign_type_id, channel="Directo", channel_id=3,
         scope="national", contracted_impressions=contracted_impressions, sale_cpm=Decimal(sale_cpm),

@@ -6,10 +6,10 @@ from decimal import Decimal
 
 from app.domain.services.flight_margin import calculate_flight_margin, round_amount
 from app.domain.services.rebate_engine import calculate_rebates
-from app.domain.value_objects.margin import FlightEconomics
 from app.domain.value_objects.rebate import Bracket, CounterKey, LadderStep, RebateFlight, RebateSchedule
 from tests.domain.test_rebate_engine import AS_OF, GROUP, TWO_BRACKETS, group_schedule, month_flight
 from tests.domain.test_rebate_ladder import AGENCY
+from tests.fixtures.flight_inputs import flight_economics
 
 FLAT_30 = (Bracket(Decimal(0), None, Decimal("0.30")),)
 
@@ -161,7 +161,7 @@ def test_the_margin_prorates_a_running_flights_full_rebate_by_elapsed_days():
     results = by_id(calculate_rebates([group_schedule()], [closed_august, september], as_of))
     full_rebate = results[2].rebate
     margin = calculate_flight_margin(
-        FlightEconomics(
+        flight_economics(
             flight_start=date(2026, 9, 1), flight_end=date(2026, 9, 30),
             contracted_impressions=6_000_000, sale_cpm=Decimal("5.00"),
             delivered_impressions=0, media_cost=Decimal(0), rebate_amount=full_rebate, platform_rate=Decimal("1.00"),

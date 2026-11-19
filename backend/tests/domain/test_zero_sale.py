@@ -9,6 +9,7 @@ from app.domain.services.priced_flights import price_flights
 from app.domain.value_objects.margin import FlightEconomics, FlightStatus
 from app.domain.value_objects.priced_flight import PlatformRates
 from tests.domain.test_priced_flights import AGENCY, GROUP, facts, schedule
+from tests.fixtures.flight_inputs import flight_economics
 
 AS_OF = date(2026, 9, 5)
 AUGUST = (date(2026, 8, 1), date(2026, 8, 31))
@@ -21,7 +22,7 @@ def _economics(sale_cpm: str = "0.00", **overrides: object) -> FlightEconomics:
         "rebate_amount": Decimal("0"), "platform_rate": Decimal("1.00"),
     }
     values.update(overrides)
-    return FlightEconomics(**values)  # type: ignore[arg-type]
+    return flight_economics(**values)  # type: ignore[arg-type]
 
 
 def test_a_flight_without_a_price_has_no_revenue_and_a_margin_of_minus_its_costs():

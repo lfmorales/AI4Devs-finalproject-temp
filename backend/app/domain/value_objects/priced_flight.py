@@ -1,6 +1,5 @@
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import cast
 from datetime import date
 from decimal import Decimal
 
@@ -16,7 +15,7 @@ class FlightFacts:
 
     `channel` is the channel's name, the value the rebate rules key on; `channel_id` is kept to persist it.
     `delivered_impressions` and `media_cost` are the line's delivery inside the flight's window. `delivered` is that
-    delivery in the unit of the channel (`delivery_metric`: impressions or OTS); omitted, it is the impressions.
+    delivery in the unit of the channel (`delivery_metric`: impressions or OTS), with decimals.
     """
 
     flight_id: int
@@ -34,12 +33,8 @@ class FlightFacts:
     sale_cpm: Decimal
     delivered_impressions: int
     media_cost: Decimal
-    delivery_metric: str = "impressions"
-    delivered: Decimal = field(default=cast(Decimal, None))
-
-    def __post_init__(self) -> None:
-        if self.delivered is None:
-            object.__setattr__(self, "delivered", Decimal(self.delivered_impressions))
+    delivery_metric: str
+    delivered: Decimal
 
 
 @dataclass(frozen=True)

@@ -13,6 +13,7 @@ from pathlib import Path
 from app.domain.services.priced_flights import price_flights
 from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight
 from app.domain.value_objects.rebate import Bracket, RebateSchedule
+from tests.fixtures.flight_inputs import flight_facts
 
 SHEET_PATH = Path(__file__).resolve().parents[1] / "private" / "mes_cerrado_directo.csv"
 SKIP_REASON = f"the private sheet {SHEET_PATH.name} is not present in tests/private/ (it is ignored by git)"
@@ -92,7 +93,7 @@ def split_rows(rows: list[SheetRow]) -> tuple[list[SheetRow], list[SheetRow]]:
 
 def facts_of(row: SheetRow) -> FlightFacts:
     """A line with one whole-month flight in its own holding group, so that no row shares a counter with another."""
-    return FlightFacts(
+    return flight_facts(
         flight_id=row.number, campaign_line_id=row.number, campaign_id=row.number,
         flight_start=FLIGHT_START, flight_end=FLIGHT_END, group_id=row.number, agency_id=row.number,
         campaign_type_id=1, channel="Directo", channel_id=1, scope="national",

@@ -14,6 +14,7 @@ import pytest
 from app.domain.services import flight_margin
 from app.domain.services.flight_margin import calculate_flight_margin, round_amount
 from app.domain.value_objects.margin import FlightEconomics, FlightStatus
+from tests.fixtures.flight_inputs import flight_economics
 
 AUGUST_START = date(2026, 8, 1)
 AUGUST_END = date(2026, 8, 31)
@@ -30,7 +31,7 @@ def _flight(
     flight_start: date = AUGUST_START,
     flight_end: date = AUGUST_END,
 ) -> FlightEconomics:
-    return FlightEconomics(
+    return flight_economics(
         flight_start=flight_start,
         flight_end=flight_end,
         contracted_impressions=contracted_impressions,
@@ -94,7 +95,7 @@ def test_each_amount_is_rounded_exactly_once(monkeypatch: pytest.MonkeyPatch):
 
 def test_a_float_input_is_refused():
     with pytest.raises(TypeError):
-        FlightEconomics(
+        flight_economics(
             flight_start=AUGUST_START,
             flight_end=AUGUST_END,
             contracted_impressions=1000,
@@ -316,7 +317,7 @@ def test_a_running_flight_can_be_below_cost():
 
 def _dooh_flight() -> FlightEconomics:
     # 300,000 OTS contracted at 5.00 €; 280,000.50 OTS delivered, over 12,000 real impressions.
-    return FlightEconomics(
+    return flight_economics(
         flight_start=AUGUST_START, flight_end=AUGUST_END, contracted_impressions=300_000,
         sale_cpm=Decimal("5.00"), delivered_impressions=12_000, media_cost=Decimal("0.00"),
         rebate_amount=Decimal("0"), platform_rate=Decimal("1.00"),

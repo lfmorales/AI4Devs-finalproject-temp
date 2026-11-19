@@ -1,8 +1,7 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
-from typing import cast
 
 
 _ONE_HUNDRED = Decimal(100)
@@ -35,7 +34,7 @@ class FlightEconomics:
     `media_cost` and `delivered_impressions` are the line's delivery inside the flight's window.
     `platform_rate` is euros per thousand delivered impressions: the platform cost is on the real impressions
     whichever the delivery metric. `delivered` is the delivery in the unit of the metric (`delivery_metric`: impressions or
-    OTS, with decimals); omitted, it is the impressions. Revenue reads neither: it is the contracted volume's.
+    OTS, with decimals). Revenue reads neither: it is the contracted volume's.
     """
 
     flight_start: date
@@ -46,15 +45,13 @@ class FlightEconomics:
     media_cost: Decimal
     rebate_amount: Decimal
     platform_rate: Decimal
-    delivery_metric: str = "impressions"
-    delivered: Decimal = field(default=cast(Decimal, None))
+    delivery_metric: str
+    delivered: Decimal
 
     def __post_init__(self) -> None:
-        if self.delivered is None:
-            object.__setattr__(self, "delivered", Decimal(self.delivered_impressions))
         if self.flight_start > self.flight_end:
             raise ValueError("flight_start must be <= flight_end")
-        for name in ("sale_cpm", "media_cost", "rebate_amount", "platform_rate"):
+        for name in ("sale_cpm", "media_cost", "rebate_amount", "platform_rate", "delivered"):
             _require_decimal(name, getattr(self, name))
 
     @property

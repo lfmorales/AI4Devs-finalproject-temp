@@ -7,7 +7,8 @@ import pytest
 
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.margin_totals import total_flights, total_lines
-from app.domain.value_objects.margin import FlightEconomics, margin_percentage
+from app.domain.value_objects.margin import margin_percentage
+from tests.fixtures.flight_inputs import flight_economics
 
 AS_OF = date(2026, 9, 5)
 
@@ -15,7 +16,7 @@ AS_OF = date(2026, 9, 5)
 def _flight(contracted_impressions: int = 726_202, sale_cpm: str = "5.00", media_cost: str = "1200.00",
             rebate_amount: str = "907.7525", delivered: int = 700_000, start=date(2026, 8, 1), end=date(2026, 8, 31)):
     return calculate_flight_margin(
-        FlightEconomics(
+        flight_economics(
             flight_start=start, flight_end=end, contracted_impressions=contracted_impressions,
             sale_cpm=Decimal(sale_cpm), delivered_impressions=delivered, media_cost=Decimal(media_cost),
             rebate_amount=Decimal(rebate_amount), platform_rate=Decimal("1.00"),
@@ -65,7 +66,7 @@ def test_a_flight_that_has_not_started_has_no_percentage():
 
 def test_a_running_flight_has_the_percentage_of_its_pro_rated_figures():
     running = calculate_flight_margin(
-        FlightEconomics(
+        flight_economics(
             flight_start=date(2026, 9, 1), flight_end=date(2026, 9, 30), contracted_impressions=300_000,
             sale_cpm=Decimal("5.00"), delivered_impressions=90_000, media_cost=Decimal("150.00"),
             rebate_amount=Decimal("300.00"), platform_rate=Decimal("1.00"),
