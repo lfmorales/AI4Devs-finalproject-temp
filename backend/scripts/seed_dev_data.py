@@ -4,7 +4,9 @@ This script idempotently loads:
 - Roles: operations, business, finance, trading
 - Master data: holding groups, agencies, advertisers, DSPs, channels, formats, campaign types, sectors, sales reps
 - Developer user: email from SEED_USER_EMAIL env var, assigned the operations and finance roles
-- Margin example data (fictitious): one rebate schedule for the default group and one platform rate
+- Channels: the closed catalogue Directo, Deal, DOOH and CTV
+- Margin example data (fictitious): one any-channel rebate schedule for the default group, one for CTV only,
+  and one platform rate
 
 Run: DATABASE_URL=... SEED_USER_EMAIL=dev@example.com python -m scripts.seed_dev_data
 """
@@ -70,10 +72,10 @@ def seed(session: Session, seed_email: str) -> None:
     """))
     print("✓ DSPs seeded")
 
-    # 6. Seed channels (if not exist)
+    # 6. Seed channels (if not exist): the closed catalogue. Each channel keeps its own rebate counter.
     session.execute(text("""
         INSERT INTO channels (name) VALUES
-        ('Digital'), ('OOH'), ('DOOH')
+        ('Directo'), ('Deal'), ('DOOH'), ('CTV')
         ON CONFLICT (name) DO NOTHING
     """))
     print("✓ Channels seeded")
@@ -128,13 +130,15 @@ def seed(session: Session, seed_email: str) -> None:
         """), {"email": seed_email, "role": role_name})
         print(f"✓ Assigned {role_name} role to {seed_email}")
 
-    # 13. Margin example data. FICTITIOUS: one rebate schedule and one platform rate so the margin screens have
-    # something to calculate with in development. They are not the negotiated figures.
+    # 13. Margin example data. FICTITIOUS: one any-channel rebate schedule and one platform rate so the margin
+    # screens have something to calculate with in development. They are not the negotiated figures.
     session.execute(text("""
         INSERT INTO rebate_schedules (holding_group_id, valid_from)
         SELECT g.id, DATE '2026-01-01' FROM holding_groups g
         WHERE g.name = 'Default Holding Group'
-          AND NOT EXISTS (SELECT 1 FROM rebate_schedules s WHERE s.holding_group_id = g.id)
+          AND NOT EXISTS (
+              SELECT 1 FROM rebate_schedules s WHERE s.holding_group_id = g.id AND s.channel_id IS NULL
+          )
     """))
     session.execute(text("""
         INSERT INTO rebate_brackets (rebate_schedule_id, position, lower, upper, rate)
@@ -143,9 +147,33 @@ def seed(session: Session, seed_email: str) -> None:
         JOIN holding_groups g ON g.id = s.holding_group_id AND g.name = 'Default Holding Group'
         CROSS JOIN (VALUES (1, 0::numeric, 100000::numeric, 0.10::numeric), (2, 100000::numeric, NULL::numeric, 0.15::numeric))
             AS b(position, lower, upper, rate)
-        WHERE NOT EXISTS (SELECT 1 FROM rebate_brackets x WHERE x.rebate_schedule_id = s.id)
+        WHERE s.channel_id IS NULL
+          AND NOT EXISTS (SELECT 1 FROM rebate_brackets x WHERE x.rebate_schedule_id = s.id)
     """))
     print("✓ Example rebate schedule seeded (fictitious)")
+
+    # 13b. A second FICTITIOUS schedule of the same group for CTV only, so a CTV line resolves a channel-specific
+    # schedule (group and channel) while every other channel keeps the any-channel one.
+    session.execute(text("""
+        INSERT INTO rebate_schedules (holding_group_id, channel_id, valid_from)
+        SELECT g.id, c.id, DATE '2026-01-01'
+        FROM holding_groups g JOIN channels c ON c.name = 'CTV'
+        WHERE g.name = 'Default Holding Group'
+          AND NOT EXISTS (
+              SELECT 1 FROM rebate_schedules s WHERE s.holding_group_id = g.id AND s.channel_id = c.id
+          )
+    """))
+    session.execute(text("""
+        INSERT INTO rebate_brackets (rebate_schedule_id, position, lower, upper, rate)
+        SELECT s.id, b.position, b.lower, b.upper, b.rate
+        FROM rebate_schedules s
+        JOIN holding_groups g ON g.id = s.holding_group_id AND g.name = 'Default Holding Group'
+        JOIN channels c ON c.id = s.channel_id AND c.name = 'CTV'
+        CROSS JOIN (VALUES (1, 0::numeric, 50000::numeric, 0.05::numeric), (2, 50000::numeric, NULL::numeric, 0.08::numeric))
+            AS b(position, lower, upper, rate)
+        WHERE NOT EXISTS (SELECT 1 FROM rebate_brackets x WHERE x.rebate_schedule_id = s.id)
+    """))
+    print("✓ Example CTV rebate schedule seeded (fictitious)")
     session.execute(text("""
         INSERT INTO platform_rate_settings (level, agency_id, rate_per_thousand, created_by)
         SELECT 'agency', a.id, 1.10, u.id FROM agencies a, users u

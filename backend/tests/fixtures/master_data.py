@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 
-def seed_master_data(session: Session):
+def seed_master_data(session: Session) -> None:
     """Populate database with test master data (no test user).
 
     Tests that need a user should create one with a unique email to avoid
@@ -67,9 +67,10 @@ def seed_master_data(session: Session):
 
     session.execute(text("""
         INSERT INTO channels (name) VALUES
-        ('Digital'),
-        ('OOH'),
-        ('DOOH')
+        ('Directo'),
+        ('Deal'),
+        ('DOOH'),
+        ('CTV')
         ON CONFLICT (name) DO NOTHING
     """))
 
@@ -107,7 +108,7 @@ def seed_master_data(session: Session):
     session.commit()
 
 
-def cleanup_master_data(session: Session):
+def cleanup_master_data(session: Session) -> None:
     """Clean up test data."""
     session.execute(text("DELETE FROM campaign_lines"))
     session.execute(text("DELETE FROM campaign_periods"))

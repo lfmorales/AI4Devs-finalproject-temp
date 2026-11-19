@@ -4,15 +4,15 @@
 
 ## 0. Setup: Create Feature Branch (MANDATORY - FIRST STEP)
 
-- [ ] 0.1 Verify `git branch --show-current` reports `feature/ctv-and-delivery-metric` and `git status --short` is empty before the first code change
+- [x] 0.1 Verify `git branch --show-current` reports `feature/ctv-and-delivery-metric` and `git status --short` is empty before the first code change
 
 ## 1. Channels in Seeds, Fixtures and the Masters File
 
-- [ ] 1.1 Write failing tests in `backend/tests/scripts/test_seed_dev_data.py` that the seed loads exactly `Directo`, `Deal`, `DOOH` and `CTV` and no `OOH` or `Digital`, and that it adds, next to the existing any-channel schedule of `Default Holding Group`, a fictitious schedule with `channel_id` = CTV and no agency or scope; adjust the existing assertion at `:74` so it selects the any-channel schedule
-- [ ] 1.2 Write a failing test that a CTV line of `Default Holding Group` resolves the CTV schedule at the group-and-channel step and a `Directo` line of the same group resolves the any-channel schedule, against the seeded development data
-- [ ] 1.3 Change `backend/scripts/seed_dev_data.py` to the four channels and the CTV schedule, idempotent like the rest of the seed, and verify 1.1 and 1.2 pass
-- [ ] 1.4 Write a failing test that `tests/fixtures/master_data.py` loads `Directo`, `Deal`, `DOOH`, `CTV` with ids 1 to 4 in that order; change the fixture and verify the backend suite still passes with `channel_id=1` now `Directo`
-- [ ] 1.5 Write a failing test in `backend/tests/scripts/test_load_masters.py` that `deploy/masters.example.json` passes `--check` and lists exactly the four channels; replace `Example Channel` with them and verify it passes
+- [x] 1.1 Write failing tests in `backend/tests/scripts/test_seed_dev_data.py` that the seed loads exactly `Directo`, `Deal`, `DOOH` and `CTV` and no `OOH` or `Digital`, and that it adds, next to the existing any-channel schedule of `Default Holding Group`, a fictitious schedule with `channel_id` = CTV and no agency or scope; adjust the existing assertion at `:74` so it selects the any-channel schedule
+- [x] 1.2 Write a failing test that a CTV line of `Default Holding Group` resolves the CTV schedule at the group-and-channel step and a `Directo` line of the same group resolves the any-channel schedule, against the seeded development data
+- [x] 1.3 Change `backend/scripts/seed_dev_data.py` to the four channels and the CTV schedule, idempotent like the rest of the seed, and verify 1.1 and 1.2 pass
+- [x] 1.4 Write a failing test that `tests/fixtures/master_data.py` loads `Directo`, `Deal`, `DOOH`, `CTV` with ids 1 to 4 in that order; change the fixture and verify the backend suite still passes with `channel_id=1` now `Directo`
+- [x] 1.5 Write a failing test in `backend/tests/scripts/test_load_masters.py` that `deploy/masters.example.json` passes `--check` and lists exactly the four channels; replace `Example Channel` with them and verify it passes
 
 ## 2. Metrics in the Adform Request
 

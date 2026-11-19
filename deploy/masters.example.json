@@ -14,7 +14,10 @@
     { "name": "Displayce", "is_active": false }
   ],
   "channels": [
-    { "name": "Example Channel" }
+    { "name": "Directo" },
+    { "name": "Deal" },
+    { "name": "DOOH" },
+    { "name": "CTV" }
   ],
   "formats": [
     { "name": "Example Format" }

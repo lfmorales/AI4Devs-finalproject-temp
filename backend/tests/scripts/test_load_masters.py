@@ -3,6 +3,7 @@
 import json
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.infrastructure.persistence.models.masters import (
     AdvertiserRecord,
@@ -171,7 +172,27 @@ def test_the_example_file_of_the_repository_loads(rolled_back_session):
     assert code == EXIT_OK
     after = _rows(rolled_back_session)
     assert {section: after[section] - before[section] for section in MODELS} == {
-        "holding_groups": 1, "agencies": 1, "advertisers": 1, "dsps": 3, "channels": 1, "formats": 1,
+        "holding_groups": 1, "agencies": 1, "advertisers": 1, "dsps": 3, "channels": 4, "formats": 1,
         "campaign_types": 1, "sectors": 1, "sales_reps": 1,
     }
     assert "Example" not in "\n".join(lines)
+
+
+def test_the_example_file_passes_the_check_and_lists_exactly_the_four_channels(
+    rolled_back_session: Session,
+) -> None:
+    import pytest
+
+    from tests.conftest import BACKEND_ROOT
+
+    example = BACKEND_ROOT.parent / "deploy" / "masters.example.json"
+    if not example.exists():
+        pytest.skip("deploy/masters.example.json is outside this image: run it from a checkout")
+    before = _rows(rolled_back_session)
+
+    code, _ = _run(rolled_back_session, str(example), "--check")
+
+    assert code == EXIT_OK
+    assert _rows(rolled_back_session) == before
+    channels = json.loads(example.read_text(encoding="utf-8"))["channels"]
+    assert [channel["name"] for channel in channels] == ["Directo", "Deal", "DOOH", "CTV"]
