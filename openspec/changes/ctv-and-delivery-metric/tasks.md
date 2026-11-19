@@ -27,8 +27,8 @@
 
 ## 4. Combination per Line and Day
 
-- [ ] 4.1 Write failing tests in `backend/tests/domain/test_delivery_combination.py`: 410 impressions with 7,500.50 OTS plus 90 with 1,499.25 give 500 and 8999.7500; 1,000 impressions at 0.75 plus 3 at 0.5 give 752 completions; no rate field exists on `DailyDelivery`
-- [ ] 4.2 Add `ots` and `video_completions` to `DailyDelivery`, sum them in `_from_row` and `_add`, and verify 4.1 passes
+- [x] 4.1 Write failing tests in `backend/tests/domain/test_delivery_combination.py`: 410 impressions with 7,500.50 OTS plus 90 with 1,499.25 give 500 and 8999.7500; 1,000 impressions at 0.75 plus 3 at 0.5 give 752 completions; no rate field exists on `DailyDelivery`
+- [x] 4.2 Add `ots` and `video_completions` to `DailyDelivery`, sum them in `_from_row` and `_add`, and verify 4.1 passes
 
 ## 5. Storage (migration)
 

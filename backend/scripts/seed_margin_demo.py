@@ -281,6 +281,7 @@ def _invented_day(campaign: DemoCampaign, day: date) -> DailyDelivery:
         campaign_line_id=0, ingestion_batch_id=0, delivery_date=day, impressions=impressions,
         clicks=impressions // 500, media_cost=cost, measurable_impressions=impressions * 9 // 10,
         viewable_impressions=impressions * 7 // 10, banner_size=None, screen=None, line_format=None,
+        ots=Decimal(0), video_completions=0,
     )
 
 

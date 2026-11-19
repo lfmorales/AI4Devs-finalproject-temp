@@ -91,6 +91,9 @@ class DailyDelivery:
     screen: str | None
     # Contrast data only; the configured channel is authoritative.
     line_format: str | None
+    # Absolute counts, summed over the combined rows; a rate is never stored.
+    ots: Decimal
+    video_completions: int
 
     def __post_init__(self) -> None:
         _require_decimal_media_cost(self.media_cost)

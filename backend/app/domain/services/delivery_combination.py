@@ -34,6 +34,8 @@ def _from_row(campaign_line_id: int, ingestion_batch_id: int, row: DspDeliveryRo
         banner_size=row.banner_size,
         screen=row.screen,
         line_format=row.line_format,
+        ots=row.ots,
+        video_completions=row.video_completions,
     )
 
 
@@ -51,6 +53,8 @@ def _add(total: DailyDelivery, row: DspDeliveryRow) -> DailyDelivery:
         banner_size=_shared(total.banner_size, row.banner_size),
         screen=_shared(total.screen, row.screen),
         line_format=_shared(total.line_format, row.line_format),
+        ots=total.ots + row.ots,
+        video_completions=total.video_completions + row.video_completions,
     )
 
 

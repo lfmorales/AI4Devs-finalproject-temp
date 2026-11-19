@@ -50,6 +50,8 @@ def daily_delivery(
     impressions: int = 1000,
     media_cost: Decimal = Decimal("5.0000"),
     line_format: str | None = None,
+    ots: Decimal = Decimal(0),
+    video_completions: int = 0,
 ) -> DailyDelivery:
     return DailyDelivery(
         campaign_line_id=campaign_line_id,
@@ -63,6 +65,8 @@ def daily_delivery(
         banner_size=None,
         screen=None,
         line_format=line_format,
+        ots=ots,
+        video_completions=video_completions,
     )
 
 

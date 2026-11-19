@@ -1,10 +1,11 @@
 """Several external line items mapped to one campaign line become one record per line and day."""
 
+from dataclasses import fields
 from datetime import date
 from decimal import Decimal
 
 from app.domain.services.delivery_combination import combine_daily_deliveries
-from app.domain.value_objects.delivery import ExternalLineKey
+from app.domain.value_objects.delivery import DailyDelivery, ExternalLineKey
 from tests.fixtures.delivery_rows import dsp_row, external_key
 
 DAY = date(2026, 8, 3)
@@ -74,3 +75,36 @@ def test_rows_are_consumed_lazily_from_any_iterable():
     rows = ((1, dsp_row(DAY)) for _ in range(3))
 
     assert combine_daily_deliveries(rows, ingestion_batch_id=BATCH)[0].impressions == 3000
+
+
+def test_ots_are_summed_next_to_the_impressions_and_never_replace_them() -> None:
+    first = dsp_row(DAY, external_key("c", "1"), impressions=410, ots=Decimal("7500.5000"))
+    second = dsp_row(DAY, external_key("c", "2"), impressions=90, ots=Decimal("1499.2500"))
+
+    record = combine_daily_deliveries([(1, first), (1, second)], ingestion_batch_id=BATCH)[0]
+
+    assert (record.impressions, record.ots) == (500, Decimal("8999.7500"))
+
+
+def test_completions_are_summed_as_counts() -> None:
+    # 1,000 impressions at a rate of 0.75 and 3 at 0.5 were already counted per row: 750 and 2 (1.5 half to even).
+    first = dsp_row(DAY, external_key("c", "1"), impressions=1000, video_completions=750)
+    second = dsp_row(DAY, external_key("c", "2"), impressions=3, video_completions=2)
+
+    record = combine_daily_deliveries([(1, first), (1, second)], ingestion_batch_id=BATCH)[0]
+
+    assert record.video_completions == 752
+
+
+def test_a_single_row_keeps_its_own_ots_and_completions() -> None:
+    record = combine_daily_deliveries(
+        [(1, dsp_row(DAY, ots=Decimal("7500.1234"), video_completions=40615))], ingestion_batch_id=BATCH)[0]
+
+    assert (record.ots, record.video_completions) == (Decimal("7500.1234"), 40615)
+
+
+def test_no_rate_is_held_on_a_stored_delivery() -> None:
+    names = {field.name for field in fields(DailyDelivery)}
+
+    assert {"ots", "video_completions"} <= names
+    assert not [name for name in names if "rate" in name]
