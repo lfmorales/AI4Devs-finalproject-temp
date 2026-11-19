@@ -254,3 +254,74 @@ def test_a_report_lacking_a_catalogue_column_is_a_format_error_naming_it(column)
 
     with pytest.raises(DspResponseFormatError, match=column):
         _fetch(FakeAdform(rows=[row], headers=headers))
+
+
+def _cells(**overrides: object) -> dict[str, object]:
+    """One report row as the client sees it, keyed by column name; `overrides` replace single cells."""
+    cells: dict[str, object] = dict(zip(
+        COLUMN_HEADERS,
+        [cell.text if hasattr(cell, "text") else cell for cell in report_row()],
+        strict=True,
+    ))
+    cells.update(overrides)
+    return cells
+
+
+def _as_cell(form: str, written: str) -> object:
+    """The same written number as a Decimal, as a text or as a float (a test double may hand over a float)."""
+    return {"decimal": Decimal(written), "text": written, "float": float(written)}[form]
+
+
+CELL_FORMS = ["decimal", "text", "float"]
+
+
+@pytest.mark.parametrize("form", CELL_FORMS)
+@pytest.mark.parametrize(("written", "expected"), [
+    ("7500.12345", Decimal("7500.1234")),
+    ("100.00035", Decimal("100.0004")),
+    ("12", Decimal("12.0000")),
+])
+def test_ots_is_read_as_a_decimal_of_four_places_half_to_even(form: str, written: str, expected: Decimal) -> None:
+    row = AdformDeliveryClient._to_delivery_row(_cells(ots=_as_cell(form, written)))
+
+    assert row.ots == expected
+    assert isinstance(row.ots, Decimal)
+
+
+@pytest.mark.parametrize("form", CELL_FORMS)
+@pytest.mark.parametrize(("impressions", "rate", "expected"), [
+    (50000, "0.8123", 40615),
+    (5, "0.5", 2),
+    (3, "0.5", 2),
+    (100, "0.575", 58),
+])
+def test_completions_are_the_rate_times_the_impressions_rounded_half_to_even(
+    form: str, impressions: int, rate: str, expected: int,
+) -> None:
+    row = AdformDeliveryClient._to_delivery_row(
+        _cells(impressions=impressions, videoCompletionRate=_as_cell(form, rate)))
+
+    assert row.video_completions == expected
+    assert isinstance(row.video_completions, int)
+
+
+@pytest.mark.parametrize("empty", [None, "", "-"])
+def test_an_empty_ots_or_rate_cell_is_zero_and_ots_never_falls_back_to_impressions(empty: str | None) -> None:
+    row = AdformDeliveryClient._to_delivery_row(
+        _cells(impressions=1200, ots=empty, videoCompletionRate=empty))
+
+    assert (row.impressions, row.ots, row.video_completions) == (1200, Decimal(0), 0)
+
+
+@pytest.mark.parametrize("column", ["ots", "videoCompletionRate"])
+def test_an_unreadable_ots_or_rate_cell_is_a_format_error_naming_the_column(column: str) -> None:
+    with pytest.raises(DspResponseFormatError, match=column):
+        AdformDeliveryClient._to_delivery_row(_cells(**{column: "n/a"}))
+
+
+def test_the_ots_and_the_completions_of_a_report_reach_the_row_through_the_client() -> None:
+    fake = FakeAdform(rows=[report_row(impressions=100, ots="100.00035", completion_rate="0.575")])
+
+    row = _fetch(fake)[0]
+
+    assert (row.ots, row.video_completions) == (Decimal("100.0004"), 58)

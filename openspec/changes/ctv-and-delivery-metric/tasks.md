@@ -21,9 +21,9 @@
 
 ## 3. Row Translation
 
-- [ ] 3.1 Write failing tests for `_to_delivery_row`: 7,500.12345 OTS read as 7500.1234; 50,000 impressions at 0.8123 give 40,615 completions; 5 and 3 impressions at 0.5 give 2 and 2 (half to even); 100 impressions at 0.575 give 58, not the 57 of `round()` on a float, and 100.00035 OTS give 100.0004, not 100.0003, both with the cell given as a `Decimal`, a text and a `float`; an empty `ots` cell and a `"-"` rate give 0 and 0 with 1,200 impressions, never 1,200 OTS; `"n/a"` in `ots` raises `DspResponseFormatError`
-- [ ] 3.2 Write failing value-object tests that `DspDeliveryRow` carries `ots: Decimal` and `video_completions: int`
-- [ ] 3.3 Add the two fields to `DspDeliveryRow`, read the cells as `Decimal(str(value))` rounded with `quantize` and `ROUND_HALF_EVEN`, never with `round()` or through `float` (design.md decision 5), give `tests/fixtures/delivery_rows.py` zero defaults, and verify 3.1 and 3.2 pass with the rest of the ingestion tests
+- [x] 3.1 Write failing tests for `_to_delivery_row`: 7,500.12345 OTS read as 7500.1234; 50,000 impressions at 0.8123 give 40,615 completions; 5 and 3 impressions at 0.5 give 2 and 2 (half to even); 100 impressions at 0.575 give 58, not the 57 of `round()` on a float, and 100.00035 OTS give 100.0004, not 100.0003, both with the cell given as a `Decimal`, a text and a `float`; an empty `ots` cell and a `"-"` rate give 0 and 0 with 1,200 impressions, never 1,200 OTS; `"n/a"` in `ots` raises `DspResponseFormatError`
+- [x] 3.2 Write failing value-object tests that `DspDeliveryRow` carries `ots: Decimal` and `video_completions: int`
+- [x] 3.3 Add the two fields to `DspDeliveryRow`, read the cells as `Decimal(str(value))` rounded with `quantize` and `ROUND_HALF_EVEN`, never with `round()` or through `float` (design.md decision 5), give `tests/fixtures/delivery_rows.py` zero defaults, and verify 3.1 and 3.2 pass with the rest of the ingestion tests
 
 ## 4. Combination per Line and Day
 

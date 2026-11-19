@@ -36,3 +36,16 @@ def test_a_delivery_row_keeps_media_cost_exact():
     row = dsp_row(date(2026, 8, 1), media_cost=Decimal("0.1") + Decimal("0.2"))
 
     assert row.media_cost == Decimal("0.3")
+
+
+def test_a_delivery_row_carries_ots_as_a_decimal_and_completions_as_an_integer() -> None:
+    row = dsp_row(date(2026, 8, 1), ots=Decimal("7500.1234"), video_completions=40615)
+
+    assert row.ots == Decimal("7500.1234")
+    assert row.video_completions == 40615
+
+
+def test_a_delivery_row_without_them_reports_zero_ots_and_zero_completions() -> None:
+    row = dsp_row(date(2026, 8, 1))
+
+    assert (row.ots, row.video_completions) == (Decimal(0), 0)

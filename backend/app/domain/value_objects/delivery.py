@@ -65,6 +65,9 @@ class DspDeliveryRow:
     banner_size: str | None
     screen: str | None
     line_format: str | None
+    # OTS (the delivery of DOOH lines, four places) and video completions: absolute counts, never a rate.
+    ots: Decimal
+    video_completions: int
     # Only for attributed rows from a DSP that names its line items.
     catalog: LineCatalogInfo | None = None
 

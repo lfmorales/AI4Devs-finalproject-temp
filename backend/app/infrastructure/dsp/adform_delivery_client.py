@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 from typing import Any
 
 import httpx
@@ -51,6 +51,10 @@ _METRICS = [
 _REQUIRED_COLUMNS = [*_DIMENSIONS, *_METRICS]
 _REPORTED_CURRENCY = "EUR"
 _NO_CURRENCY = "-"
+_OTS_PLACES = Decimal("0.0001")
+_WHOLE = Decimal(1)
+# Adform leaves these two cells empty when a line has no OTS or no video: that is zero, not a failed run.
+_EMPTY_CELLS = (None, "", "-")
 
 
 @dataclass(frozen=True)
@@ -199,6 +203,7 @@ class AdformDeliveryClient(DspDeliveryClient):
     def _to_delivery_row(cells: dict[str, Any]) -> DspDeliveryRow:
         try:
             line_item_id = int(cells["lineItemID"])
+            impressions = int(cells["impressions"])
             currency = str(cells["campaignCurrency"])
             catalog = None
             if is_unattributed(line_item_id, currency):
@@ -214,7 +219,7 @@ class AdformDeliveryClient(DspDeliveryClient):
             return DspDeliveryRow(
                 key=key,
                 delivery_date=date.fromisoformat(str(cells["date"])[:10]),
-                impressions=int(cells["impressions"]),
+                impressions=impressions,
                 clicks=int(cells["clicks"]),
                 media_cost=Decimal(cells["cost"]),
                 measurable_impressions=int(cells["measurableImpressions"]),
@@ -222,10 +227,32 @@ class AdformDeliveryClient(DspDeliveryClient):
                 banner_size=None,
                 screen=None,
                 line_format=None,
+                ots=_ots(cells["ots"]),
+                video_completions=_completions(cells["videoCompletionRate"], impressions),
                 catalog=catalog,
             )
         except (ValueError, TypeError, InvalidOperation):
             raise DspResponseFormatError("A report row holds a value of an unexpected type") from None
+
+
+def _decimal_or_zero(cell: Any, column: str) -> Decimal:
+    """The cell as the decimal that was written (never through a binary float); an empty cell is zero."""
+    if cell in _EMPTY_CELLS:
+        return Decimal(0)
+    try:
+        return Decimal(str(cell))
+    except InvalidOperation:
+        raise DspResponseFormatError(f"The column {column} holds a value that is not a number") from None
+
+
+def _ots(cell: Any) -> Decimal:
+    return _decimal_or_zero(cell, "ots").quantize(_OTS_PLACES, rounding=ROUND_HALF_EVEN)
+
+
+def _completions(rate_cell: Any, impressions: int) -> int:
+    """Completed views of one row: the rate (a fraction) times its impressions, half to even. Rates are never summed."""
+    completions = _decimal_or_zero(rate_cell, "videoCompletionRate") * impressions
+    return int(completions.quantize(_WHOLE, rounding=ROUND_HALF_EVEN))
 
 
 def _date_or_none(value: Any) -> date | None:

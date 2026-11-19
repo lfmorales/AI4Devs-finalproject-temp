@@ -21,6 +21,8 @@ def dsp_row(
     banner_size: str | None = None,
     screen: str | None = None,
     line_format: str | None = None,
+    ots: Decimal = Decimal(0),
+    video_completions: int = 0,
     unattributed: bool = False,
     catalog: LineCatalogInfo | None = None,
 ) -> DspDeliveryRow:
@@ -35,6 +37,8 @@ def dsp_row(
         banner_size=banner_size,
         screen=screen,
         line_format=line_format,
+        ots=ots,
+        video_completions=video_completions,
         catalog=catalog,
     )
 
