@@ -5,6 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.domain.entities.ingestion_batch import BatchStatus, IngestionRoute
 from app.domain.value_objects.delivery import DeliveryDateRange
@@ -110,3 +111,23 @@ def test_a_batch_is_started_running_and_finished_with_its_counts(rolled_back_ses
     finished = rolled_back_session.get(IngestionBatchRecord, batch_id)
     assert (finished.status, finished.finished_at, finished.row_count, finished.ignored_row_count,
             finished.zero_unmatched_row_count) == ("failed", datetime(2026, 8, 10, 2, 5), 9, 3, 4)
+
+
+def test_a_dooh_day_of_ots_and_a_ctv_day_of_completions_read_back_exactly(rolled_back_session: Session) -> None:
+    dooh_line = insert_campaign_line(rolled_back_session, "DOOH campaign")
+    ctv_line = insert_campaign_line(rolled_back_session, "CTV campaign")
+    batch_id = insert_ingestion_batch(rolled_back_session)
+
+    SqlAlchemyDeliveryRepository(rolled_back_session).add_all([
+        daily_delivery(dooh_line, date(2026, 8, 2), batch_id, impressions=500, ots=Decimal("8999.7500")),
+        daily_delivery(ctv_line, date(2026, 8, 2), batch_id, impressions=50000, video_completions=40615),
+    ])
+    rolled_back_session.expire_all()
+
+    stored = {
+        row.campaign_line_id: row for row in rolled_back_session.scalars(select(DailyDeliveryRecord))
+    }
+    assert (stored[dooh_line].impressions, stored[dooh_line].ots, stored[dooh_line].video_completions) == (
+        500, Decimal("8999.7500"), 0)
+    assert (stored[ctv_line].impressions, stored[ctv_line].ots, stored[ctv_line].video_completions) == (
+        50000, Decimal("0.0000"), 40615)

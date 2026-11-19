@@ -4,8 +4,9 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import Numeric, inspect, select
+from sqlalchemy import BigInteger, Engine, Numeric, inspect, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.infrastructure.persistence.models.campaign import CampaignLineRecord
 from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord
@@ -114,3 +115,37 @@ def test_media_cost_column_holds_six_decimals_in_the_schema(test_engine):
     media_cost = next(c for c in inspect(test_engine).get_columns("daily_deliveries") if c["name"] == "media_cost")
 
     assert (media_cost["type"].precision, media_cost["type"].scale) == (18, 6)
+
+
+def test_ots_and_completions_are_not_null_columns_with_a_zero_default_in_the_model() -> None:
+    columns = DailyDeliveryRecord.__table__.c
+    ots_type, completions_type = columns.ots.type, columns.video_completions.type
+
+    assert isinstance(ots_type, Numeric)
+    assert (ots_type.precision, ots_type.scale) == (18, 4)
+    assert isinstance(completions_type, BigInteger)
+    assert (columns.ots.nullable, columns.video_completions.nullable) == (False, False)
+    assert (str(columns.ots.server_default.arg), str(columns.video_completions.server_default.arg)) == ("0", "0")
+
+
+def test_ots_and_completions_are_not_null_columns_with_a_zero_default_in_the_schema(test_engine: Engine) -> None:
+    columns = {c["name"]: c for c in inspect(test_engine).get_columns("daily_deliveries")}
+    ots_type = columns["ots"]["type"]
+
+    assert isinstance(ots_type, Numeric)
+    assert (ots_type.precision, ots_type.scale) == (18, 4)
+    assert isinstance(columns["video_completions"]["type"], BigInteger)
+    assert (columns["ots"]["nullable"], columns["video_completions"]["nullable"]) == (False, False)
+    assert (columns["ots"]["default"], columns["video_completions"]["default"]) == ("0", "0")
+
+
+def test_a_delivery_stored_without_them_reads_zero_ots_and_zero_completions(rolled_back_session: Session) -> None:
+    line_id = insert_campaign_line(rolled_back_session)
+    batch_id = insert_ingestion_batch(rolled_back_session)
+    rolled_back_session.add(_delivery(line_id, batch_id))
+    rolled_back_session.flush()
+    rolled_back_session.expire_all()
+
+    stored = rolled_back_session.scalars(select(DailyDeliveryRecord)).one()
+
+    assert (stored.ots, stored.video_completions) == (Decimal("0.0000"), 0)

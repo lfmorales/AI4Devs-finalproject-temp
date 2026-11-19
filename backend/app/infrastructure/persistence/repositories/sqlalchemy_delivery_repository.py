@@ -49,6 +49,8 @@ def _as_row(delivery: DailyDelivery) -> dict[str, Any]:
         "banner_size": delivery.banner_size,
         "screen": delivery.screen,
         "line_format": delivery.line_format,
+        "ots": delivery.ots,
+        "video_completions": delivery.video_completions,
     }
 
 

@@ -32,9 +32,9 @@
 
 ## 5. Storage (migration)
 
-- [ ] 5.1 Write failing model tests in `backend/tests/infrastructure/test_delivery_models.py` that `daily_deliveries.ots` is `Numeric(18,4) NOT NULL DEFAULT 0` and `video_completions` is `BigInteger NOT NULL DEFAULT 0`, and a repository test in `test_sqlalchemy_delivery_repository.py` that a DOOH day of 8999.7500 OTS and a CTV day of 40,615 completions read back exactly
-- [ ] 5.2 Add the columns and generate the Alembic migration with `--autogenerate`; review it by hand; verify `upgrade head`, `downgrade -1` and `upgrade head` on a database holding delivery rows, that the old rows read 0.0000 OTS and 0 completions, and the schema-sync test
-- [ ] 5.3 Write the two fields in `sqlalchemy_delivery_repository.py` and verify 5.1 and `test_ingestion_service_postgres.py` extended with one DOOH and one CTV line from the fake Adform report
+- [x] 5.1 Write failing model tests in `backend/tests/infrastructure/test_delivery_models.py` that `daily_deliveries.ots` is `Numeric(18,4) NOT NULL DEFAULT 0` and `video_completions` is `BigInteger NOT NULL DEFAULT 0`, and a repository test in `test_sqlalchemy_delivery_repository.py` that a DOOH day of 8999.7500 OTS and a CTV day of 40,615 completions read back exactly
+- [x] 5.2 Add the columns and generate the Alembic migration with `--autogenerate`; review it by hand; verify `upgrade head`, `downgrade -1` and `upgrade head` on a database holding delivery rows, that the old rows read 0.0000 OTS and 0 completions, and the schema-sync test
+- [x] 5.3 Write the two fields in `sqlalchemy_delivery_repository.py` and verify 5.1 and `test_ingestion_service_postgres.py` extended with one DOOH and one CTV line from the fake Adform report
 
 ## 6. Unmatched Row with OTS
 

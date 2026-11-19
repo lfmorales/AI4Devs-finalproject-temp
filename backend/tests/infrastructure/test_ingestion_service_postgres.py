@@ -5,10 +5,12 @@ from decimal import Decimal
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.application.services.delivery_ingestion_service import DeliveryIngestionService
 from app.domain.entities.ingestion_batch import IngestionRoute
 from app.domain.value_objects.delivery import ExternalLineKey
+from app.infrastructure.dsp.adform_delivery_client import AdformDeliveryClient
 from app.infrastructure.persistence.models.delivery import (
     DailyDeliveryRecord,
     IngestionBatchRecord,
@@ -25,6 +27,7 @@ from tests.fixtures.delivery_data import (
     seeded_dsp_id,
 )
 from tests.fixtures.delivery_rows import dsp_row
+from tests.fixtures.fake_adform import FakeAdform, report_row
 from tests.fixtures.dsp_delivery_client import InMemoryDspDeliveryClient
 
 TODAY = date(2026, 8, 10)
@@ -160,3 +163,30 @@ def test_delivery_outside_every_flight_of_its_line_is_stored_all_the_same(rolled
 
     stored = rolled_back_session.scalars(select(DailyDeliveryRecord)).one()
     assert (stored.campaign_line_id, stored.delivery_date, stored.impressions) == (setup.line_id, D5, 700)
+
+
+def test_a_dooh_line_and_a_ctv_line_of_an_adform_report_are_stored_with_their_ots_and_completions(
+    rolled_back_session: Session,
+) -> None:
+    dsp_id = seeded_dsp_id(rolled_back_session)
+    dooh_line = insert_campaign_line(rolled_back_session, "DOOH campaign")
+    ctv_line = insert_campaign_line(rolled_back_session, "CTV campaign")
+    insert_mapping(rolled_back_session, dooh_line, dsp_id, "1001", "2001")
+    insert_mapping(rolled_back_session, ctv_line, dsp_id, "1001", "2002")
+    fake = FakeAdform(rows=[
+        report_row(line_item_id=2001, impressions=500, ots="8999.75"),
+        report_row(line_item_id=2002, impressions=50000, completion_rate="0.8123"),
+    ])
+    client = AdformDeliveryClient(
+        client_id="synthetic-client-id", client_secret="synthetic-client-secret", http_client=fake.client(),
+        sleep=lambda _seconds: None, today=lambda: TODAY)
+    service = DeliveryIngestionService(
+        client, lambda: SqlAlchemyUnitOfWork(lambda: rolled_back_session), lambda: datetime(2026, 8, 10, 2, 0))
+
+    service.run(dsp_id, TODAY, route=IngestionRoute.API)
+
+    stored = {row.campaign_line_id: row for row in rolled_back_session.scalars(select(DailyDeliveryRecord))}
+    assert (stored[dooh_line].impressions, stored[dooh_line].ots, stored[dooh_line].video_completions) == (
+        500, Decimal("8999.7500"), 0)
+    assert (stored[ctv_line].impressions, stored[ctv_line].ots, stored[ctv_line].video_completions) == (
+        50000, Decimal("0.0000"), 40615)

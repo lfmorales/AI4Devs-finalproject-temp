@@ -77,6 +77,9 @@ class DailyDeliveryRecord(Base):
     screen: Mapped[str | None] = mapped_column(String, nullable=True)
     # Contrast data only: no calculation reads it. The configured channel is authoritative.
     line_format: Mapped[str | None] = mapped_column(String, nullable=True)
+    # OTS (the delivery of DOOH lines) and video completions: absolute counts. Rows stored before they existed read zero.
+    ots: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=4), nullable=False, server_default=text("0"))
+    video_completions: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
 
 
 class IngestionExceptionRecord(Base):
