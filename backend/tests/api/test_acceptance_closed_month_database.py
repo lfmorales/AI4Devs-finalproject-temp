@@ -58,6 +58,7 @@ def chosen() -> dict[str, SheetRow]:
 def month(client_for_roles, test_db_session, chosen):
     """The five lines created, their schedules and platform rates set through the API, and the month closed."""
     finance = client_for_roles("finance")
+    operations = client_for_roles("operations")  # rates and schedules are set by operations only
     finance.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
     batch = insert_ingestion_batch(test_db_session)
 
@@ -65,10 +66,10 @@ def month(client_for_roles, test_db_session, chosen):
         line_id = insert_campaign_line(test_db_session, campaign_name=name)
         set_volume(test_db_session, line_id, contracted, cpm)
         insert_delivery(test_db_session, line_id, date(2026, 8, 10), served, batch, cost)
-        assert finance.post("/margin/platform-rates", json={
+        assert operations.post("/margin/platform-rates", json={
             "level": "line", "campaign_line_id": line_id, "rate_per_thousand": platform_cpm}).status_code == 201
         if rebate_rate is not None:
-            assert finance.post("/margin/rebate-schedules", json={
+            assert operations.post("/margin/rebate-schedules", json={
                 "holding_group_id": group_of(test_db_session, line_id), "valid_from": "2026-01-01",
                 "brackets": [{"lower": "0", "upper": None, "rate": rebate_rate}]}).status_code == 201
 

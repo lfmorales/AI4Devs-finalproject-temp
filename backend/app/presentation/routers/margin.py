@@ -34,7 +34,7 @@ def close_month(
     user: Annotated[User, Depends(require_roles(RoleName.OPERATIONS, RoleName.FINANCE))],
     service: Annotated[MarginClosingService, Depends(get_margin_closing_service)],
 ) -> ClosingResponse:
-    """Freeze the rates of the flights that ended in a month. Idempotent. Requires: finance role."""
+    """Freeze the rates of the flights that ended in a month. Idempotent. Requires: operations or finance role."""
     result = service.close_month(body.year, body.month, closed_by=user.id)
     return ClosingResponse(year=result.year, month=result.month, closed=result.closed, already_closed=result.already_closed)
 
@@ -47,7 +47,7 @@ def get_margin(
     month: Annotated[int | None, Query(ge=1, le=12)] = None,
     campaign_id: Annotated[int | None, Query(ge=1)] = None,
 ) -> MarginResponse:
-    """The margin per campaign, line and flight. Writes nothing. Requires: finance role."""
+    """The margin per campaign, line and flight. Writes nothing. Requires: operations or finance role."""
     return MarginResponse.from_report(service.get_margin(year, month, campaign_id))
 
 
@@ -57,7 +57,7 @@ def create_rebate_schedule(
     _user: Annotated[User, Depends(require_roles(RoleName.OPERATIONS))],
     service: Annotated[MarginMastersService, Depends(get_margin_masters_service)],
 ) -> RebateScheduleResponse:
-    """Create a rebate schedule with its brackets. Requires: finance role."""
+    """Create a rebate schedule with its brackets. Requires: operations role."""
     brackets = tuple(Bracket(item.lower, item.upper, item.rate) for item in body.brackets)
     schedule_id = service.create_schedule(NewRebateSchedule(
         holding_group_id=body.holding_group_id, agency_id=body.agency_id, channel_id=body.channel_id,
@@ -76,7 +76,7 @@ def set_platform_rate(
     user: Annotated[User, Depends(require_roles(RoleName.OPERATIONS))],
     service: Annotated[MarginMastersService, Depends(get_margin_masters_service)],
 ) -> PlatformRateResponse:
-    """Set a platform rate at a level; the latest setting of a level and key is the one in force. Requires: finance."""
+    """Set a platform rate at a level; the latest setting of a level and key is the one in force. Requires: operations role."""
     setting = service.set_platform_rate(NewPlatformRateSetting(
         level=body.level, rate_per_thousand=body.rate_per_thousand, created_by=user.id,
         campaign_line_id=body.campaign_line_id, agency_id=body.agency_id, campaign_type_id=body.campaign_type_id,
