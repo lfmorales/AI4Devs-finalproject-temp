@@ -55,7 +55,7 @@ class MasterRepositoryImpl(MasterRepositoryInterface):
         channel = self.session.query(ChannelRecord).filter_by(id=channel_id).first()
         if not channel:
             return None
-        return Channel(id=channel.id, name=channel.name)
+        return Channel(id=channel.id, name=channel.name, delivery_metric=channel.delivery_metric)
 
     async def get_format(self, format_id: int):
         """Validate format exists."""

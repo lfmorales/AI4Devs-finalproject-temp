@@ -72,10 +72,10 @@ def seed(session: Session, seed_email: str) -> None:
     """))
     print("✓ DSPs seeded")
 
-    # 6. Seed channels (if not exist): the closed catalogue. Each channel keeps its own rebate counter.
+    # 6. Seed channels (if not exist): the closed catalogue. Each channel keeps its own rebate counter; DOOH counts its volume in OTS, the others in impressions.
     session.execute(text("""
-        INSERT INTO channels (name) VALUES
-        ('Directo'), ('Deal'), ('DOOH'), ('CTV')
+        INSERT INTO channels (name, delivery_metric) VALUES
+        ('Directo', 'impressions'), ('Deal', 'impressions'), ('DOOH', 'ots'), ('CTV', 'impressions')
         ON CONFLICT (name) DO NOTHING
     """))
     print("✓ Channels seeded")

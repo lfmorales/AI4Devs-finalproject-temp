@@ -66,11 +66,11 @@ def seed_master_data(session: Session) -> None:
     """))
 
     session.execute(text("""
-        INSERT INTO channels (name) VALUES
-        ('Directo'),
-        ('Deal'),
-        ('DOOH'),
-        ('CTV')
+        INSERT INTO channels (name, delivery_metric) VALUES
+        ('Directo', 'impressions'),
+        ('Deal', 'impressions'),
+        ('DOOH', 'ots'),
+        ('CTV', 'impressions')
         ON CONFLICT (name) DO NOTHING
     """))
 

@@ -34,7 +34,10 @@ SECTIONS = (
 _KEYS = {section: {"name"} for section in SECTIONS} | {
     "agencies": {"name", "holding_group"},
     "dsps": {"name", "is_active"},
+    "channels": {"name", "delivery_metric"},
 }
+# The unit in which a channel's volume is counted; a channel created without one counts impressions.
+DELIVERY_METRICS = ("impressions", "ots")
 # The ingestion looks the DSP up by this name.
 REQUIRED_DSP = "Adform"
 
@@ -163,6 +166,8 @@ def _check_structure(content: dict[str, Any]) -> list[str]:
                 problems.append(f"{where}: holding_group is required")
             if section == "dsps" and "is_active" in item and not isinstance(item["is_active"], bool):
                 problems.append(f"{where}: is_active must be true or false")
+            if section == "channels" and "delivery_metric" in item and item["delivery_metric"] not in DELIVERY_METRICS:
+                problems.append(f"{where}: delivery_metric must be impressions or ots")
     return problems
 
 
@@ -179,6 +184,12 @@ def _check_references(session: Session, content: dict[str, Any]) -> list[str]:
         group = _group_of(item) if isinstance(item, dict) else None
         if group is not None and group not in file_groups | stored_groups:
             problems.append(f"agencies[{position}]: the holding group is neither in the file nor stored")
+
+    stored_metrics: dict[str, str] = dict(session.execute(text("SELECT name, delivery_metric FROM channels")).tuples().all())
+    for position, item in enumerate(content.get("channels", [])):
+        name = _name_of(item)
+        if name in stored_metrics and "delivery_metric" in item and item["delivery_metric"] != stored_metrics[name]:
+            problems.append(f"channels[{position}]: the delivery metric differs from the stored one")
 
     file_dsps = {name for item in content.get("dsps", []) if (name := _name_of(item))}
     stored_adform = session.execute(text("SELECT 1 FROM dsps WHERE name = :name"), {"name": REQUIRED_DSP}).first()
@@ -220,6 +231,14 @@ def _insert(section: str, item: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
                 " ON CONFLICT (name) DO NOTHING"
             ),
             {"name": name, "is_active": item.get("is_active")},
+        )
+    if section == "channels":
+        return (
+            text(
+                "INSERT INTO channels (name, delivery_metric) VALUES (:name, COALESCE(:delivery_metric, 'impressions'))"
+                " ON CONFLICT (name) DO NOTHING"
+            ),
+            {"name": name, "delivery_metric": item.get("delivery_metric")},
         )
     return text(f"INSERT INTO {section} (name) VALUES (:name) ON CONFLICT (name) DO NOTHING"), {"name": name}
 

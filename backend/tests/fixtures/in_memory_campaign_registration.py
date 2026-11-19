@@ -4,15 +4,18 @@ from types import SimpleNamespace
 
 from app.domain.entities.campaign import Campaign
 from app.domain.repositories.campaign_repository import CampaignRepository
-from app.domain.repositories.master_repository import MasterRepository
+from app.domain.repositories.master_repository import Channel, MasterRepository
 from app.domain.repositories.purchase_order_repository import PurchaseOrderRepository
 
 
 class InMemoryMasterRepository(MasterRepository):
-    """Every reference exists except the ids listed as unknown."""
+    """Every reference exists except the ids listed as unknown; channels count impressions except those listed as OTS."""
 
-    def __init__(self, unknown_channel_ids: frozenset[int] = frozenset()) -> None:
+    def __init__(
+        self, unknown_channel_ids: frozenset[int] = frozenset(), ots_channel_ids: frozenset[int] = frozenset(),
+    ) -> None:
         self._unknown_channel_ids = unknown_channel_ids
+        self._ots_channel_ids = ots_channel_ids
 
     async def _known(self, identifier: int):
         return SimpleNamespace(id=identifier, name="fixture", is_active=True)
@@ -25,8 +28,11 @@ class InMemoryMasterRepository(MasterRepository):
     async def get_sector(self, sector_id): return await self._known(sector_id)
     async def get_sales_rep(self, sales_rep_id): return await self._known(sales_rep_id)
 
-    async def get_channel(self, channel_id):
-        return None if channel_id in self._unknown_channel_ids else await self._known(channel_id)
+    async def get_channel(self, channel_id: int) -> Channel | None:
+        if channel_id in self._unknown_channel_ids:
+            return None
+        metric = "ots" if channel_id in self._ots_channel_ids else "impressions"
+        return Channel(id=channel_id, name="fixture", delivery_metric=metric)
 
 
 class InMemoryPurchaseOrderRepository(PurchaseOrderRepository):

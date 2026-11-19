@@ -2,11 +2,19 @@
 
 import copy
 import json
+from pathlib import Path
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
-from app.infrastructure.persistence.models.masters import AdvertiserRecord, AgencyRecord, DSPRecord, HoldingGroupRecord
+from app.infrastructure.persistence.models.masters import (
+    AdvertiserRecord,
+    AgencyRecord,
+    ChannelRecord,
+    DSPRecord,
+    HoldingGroupRecord,
+)
 from scripts.load_masters import EXIT_INVALID, EXIT_OK, main
 from tests.scripts.test_load_masters import FILE_CONTENT, MODELS, _rows
 
@@ -192,3 +200,61 @@ def test_no_output_of_any_mode_carries_a_name_from_the_file(rolled_back_session,
 
     text = "\n".join(outputs)
     assert not [word for word in ("Zanzibar", "Quimera", "Ficticia") if word in text]
+
+
+def test_delivery_metric_is_an_accepted_channel_key(rolled_back_session: Session, tmp_path: Path) -> None:
+    content = _valid()
+    content["channels"] = [{"name": "Canal Quimera", "delivery_metric": "impressions"}]
+
+    code, _ = _run(rolled_back_session, _file(tmp_path, content), "--check")
+
+    assert code == EXIT_OK
+
+
+@pytest.mark.parametrize("metric", ["views", "OTS", "", None, 3])
+def test_an_unknown_delivery_metric_is_rejected_by_position_and_nothing_is_written(
+    rolled_back_session: Session, tmp_path: Path, metric: str | int | None,
+) -> None:
+    content = _valid()
+    content["channels"].append({"name": "Canal Zanzibar", "delivery_metric": metric})
+
+    lines = _assert_rejected_and_nothing_written(rolled_back_session, tmp_path, content, "channels[1]")
+
+    assert "views" not in "\n".join(lines)
+
+
+def test_delivery_metric_is_not_a_key_of_the_other_sections(rolled_back_session: Session, tmp_path: Path) -> None:
+    content = _valid()
+    content["formats"][0]["delivery_metric"] = "ots"
+
+    _assert_rejected_and_nothing_written(rolled_back_session, tmp_path, content, "formats[0]: unknown key")
+
+
+def test_a_file_naming_an_existing_ots_channel_as_impressions_is_rejected_and_writes_nothing(
+    rolled_back_session: Session, tmp_path: Path,
+) -> None:
+    rolled_back_session.add(ChannelRecord(name="Canal Tercero", delivery_metric="ots"))
+    rolled_back_session.commit()  # the loader rolls its session back when it rejects a file
+    content = _valid()
+    content["channels"] = [{"name": "Canal Uno"}, {"name": "Canal Dos"},
+                           {"name": "Canal Tercero", "delivery_metric": "impressions"}]
+
+    lines = _assert_rejected_and_nothing_written(rolled_back_session, tmp_path, content, "channels[2]")
+
+    assert "Canal Tercero" not in "\n".join(lines)
+    assert rolled_back_session.scalar(
+        select(ChannelRecord.delivery_metric).where(ChannelRecord.name == "Canal Tercero")) == "ots"
+
+
+def test_the_same_disagreement_is_reported_by_the_check_and_writes_nothing(rolled_back_session: Session, tmp_path: Path) -> None:
+    rolled_back_session.add(ChannelRecord(name="Canal Tercero", delivery_metric="ots"))
+    rolled_back_session.commit()  # the loader rolls its session back when it rejects a file
+    content = _valid()
+    content["channels"] = [{"name": "Canal Tercero", "delivery_metric": "impressions"}]
+    before = _rows(rolled_back_session)
+
+    code, lines = _run(rolled_back_session, _file(tmp_path, content), "--check")
+
+    assert code == EXIT_INVALID
+    assert any("channels[0]" in line for line in lines)
+    assert _rows(rolled_back_session) == before

@@ -1,6 +1,6 @@
 """Master data tables: agencies, advertisers, DSPs, channels, formats, campaign types, sectors, sales reps."""
 
-from sqlalchemy import String, Boolean, ForeignKey
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.persistence.base import Base
@@ -38,9 +38,14 @@ class DSPRecord(Base):
 
 class ChannelRecord(Base):
     __tablename__ = "channels"
+    __table_args__ = (
+        CheckConstraint("delivery_metric IN ('impressions', 'ots')", name="ck_channels_delivery_metric"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    # The unit of the contracted and delivered volume of the channel's lines: impressions, or OTS for DOOH.
+    delivery_metric: Mapped[str] = mapped_column(String, nullable=False, server_default=text("'impressions'"))
 
 
 class FormatRecord(Base):

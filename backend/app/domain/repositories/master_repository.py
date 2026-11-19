@@ -31,6 +31,8 @@ class Channel:
     """Master data: channel (tipo_plataforma)."""
     id: int
     name: str
+    # "impressions" or "ots": the unit in which the volume of the channel's lines is counted.
+    delivery_metric: str
 
 
 @dataclass

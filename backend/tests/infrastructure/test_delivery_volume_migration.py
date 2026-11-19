@@ -114,11 +114,11 @@ def test_downgrade_removes_the_columns_and_keeps_the_row_and_upgrade_restores_th
     assert tuple(_delivery(engine)) == (1000, Decimal("5.500000"), Decimal("0.0000"), 0)
 
 
-def test_the_down_revision_is_the_roles_migration_and_it_is_the_only_head(scratch: tuple[Config, Engine]) -> None:
+def test_the_down_revision_is_the_roles_migration_and_the_history_has_one_head(scratch: tuple[Config, Engine]) -> None:
     from alembic.script import ScriptDirectory
 
     config, _ = scratch
     script = ScriptDirectory.from_config(config)
 
     assert script.get_revision(AFTER).down_revision == BEFORE
-    assert script.get_heads() == [AFTER]
+    assert len(script.get_heads()) == 1

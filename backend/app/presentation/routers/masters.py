@@ -24,6 +24,12 @@ class MasterItem(BaseModel):
     name: str
 
 
+class ChannelItem(BaseModel):
+    id: int
+    name: str
+    delivery_metric: str
+
+
 class DSPItem(BaseModel):
     id: int
     name: str
@@ -77,7 +83,7 @@ async def get_active_dsps(
 
 @router.get(
     "/channels",
-    response_model=list[MasterItem],
+    response_model=list[ChannelItem],
     dependencies=[Depends(require_roles(RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE))]
 )
 async def get_channels(
@@ -86,7 +92,7 @@ async def get_channels(
 ):
     """Get all channels for form picker."""
     channels = session.query(ChannelRecord).order_by(ChannelRecord.name).all()
-    return [{"id": c.id, "name": c.name} for c in channels]
+    return [{"id": c.id, "name": c.name, "delivery_metric": c.delivery_metric} for c in channels]
 
 
 @router.get(

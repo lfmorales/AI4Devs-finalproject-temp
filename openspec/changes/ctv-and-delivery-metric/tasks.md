@@ -43,11 +43,11 @@
 
 ## 7. Delivery Metric on the Channel (migration)
 
-- [ ] 7.1 Write failing model tests that `channels.delivery_metric` is `NOT NULL`, defaults to `impressions` and refuses any value other than `impressions` and `ots`
-- [ ] 7.2 Add the column with its check and generate the Alembic migration, adding by hand `UPDATE channels SET delivery_metric = 'ots' WHERE name = 'DOOH'`; write a migration test that a database holding `DOOH`, `Directo` and `DEMO Channel` upgrades to `ots`, `impressions`, `impressions`; verify `upgrade head`, `downgrade -1`, `upgrade head` and the schema-sync test
-- [ ] 7.3 Write failing tests that the development seed, `tests/fixtures/master_data.py` and `deploy/masters.example.json` give `DOOH` the metric `ots` and the other three `impressions`; update the three and verify
-- [ ] 7.4 Write failing tests in `test_load_masters_validation.py` and `test_load_masters.py`: `delivery_metric` is an accepted channel key; `views` is rejected; a new channel is created with its metric; a file naming an existing `ots` channel as `impressions` is rejected reporting `channels[2]` with nothing written; then implement in `scripts/load_masters.py` and verify
-- [ ] 7.5 Write a failing test that the master repository's `Channel` carries `delivery_metric`, implement it, and return it from the in-memory registration fixture
+- [x] 7.1 Write failing model tests that `channels.delivery_metric` is `NOT NULL`, defaults to `impressions` and refuses any value other than `impressions` and `ots`
+- [x] 7.2 Add the column with its check and generate the Alembic migration, adding by hand `UPDATE channels SET delivery_metric = 'ots' WHERE name = 'DOOH'`; write a migration test that a database holding `DOOH`, `Directo` and `DEMO Channel` upgrades to `ots`, `impressions`, `impressions`; verify `upgrade head`, `downgrade -1`, `upgrade head` and the schema-sync test
+- [x] 7.3 Write failing tests that the development seed, `tests/fixtures/master_data.py` and `deploy/masters.example.json` give `DOOH` the metric `ots` and the other three `impressions`; update the three and verify
+- [x] 7.4 Write failing tests in `test_load_masters_validation.py` and `test_load_masters.py`: `delivery_metric` is an accepted channel key; `views` is rejected; a new channel is created with its metric; a file naming an existing `ots` channel as `impressions` is rejected reporting `channels[2]` with nothing written; then implement in `scripts/load_masters.py` and verify
+- [x] 7.5 Write a failing test that the master repository's `Channel` carries `delivery_metric`, implement it, and return it from the in-memory registration fixture
 
 ## 8. One Delivery Metric per Campaign
 

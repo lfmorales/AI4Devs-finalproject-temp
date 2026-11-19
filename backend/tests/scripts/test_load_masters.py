@@ -1,6 +1,7 @@
 """The master data loader against PostgreSQL: additive, idempotent, atomic, and silent about the file's content."""
 
 import json
+from pathlib import Path
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -196,3 +197,47 @@ def test_the_example_file_passes_the_check_and_lists_exactly_the_four_channels(
     assert _rows(rolled_back_session) == before
     channels = json.loads(example.read_text(encoding="utf-8"))["channels"]
     assert [channel["name"] for channel in channels] == ["Directo", "Deal", "DOOH", "CTV"]
+
+
+def test_the_example_file_gives_dooh_the_ots_metric_and_the_other_channels_impressions(
+    rolled_back_session: Session,
+) -> None:
+    import pytest
+
+    from tests.conftest import BACKEND_ROOT
+
+    example = BACKEND_ROOT.parent / "deploy" / "masters.example.json"
+    if not example.exists():
+        pytest.skip("deploy/masters.example.json is outside this image: run it from a checkout")
+
+    code, _ = _run(rolled_back_session, str(example))
+
+    assert code == EXIT_OK
+    metrics = dict(rolled_back_session.execute(select(ChannelRecord.name, ChannelRecord.delivery_metric)).tuples().all())
+    assert metrics == {"Directo": "impressions", "Deal": "impressions", "DOOH": "ots", "CTV": "impressions"}
+
+
+def test_a_new_channel_is_created_with_the_metric_the_file_gives_it(rolled_back_session: Session, tmp_path: Path) -> None:
+    content = {**FILE_CONTENT, "channels": [{"name": "Canal Quimera", "delivery_metric": "ots"}, {"name": "Canal Zanzibar"}]}
+    before = dict(rolled_back_session.execute(select(ChannelRecord.name, ChannelRecord.delivery_metric)).tuples().all())
+
+    code, _ = _run(rolled_back_session, _write(tmp_path, content))
+
+    assert code == EXIT_OK
+    metrics = dict(rolled_back_session.execute(select(ChannelRecord.name, ChannelRecord.delivery_metric)).tuples().all())
+    assert {n: m for n, m in metrics.items() if n not in before} == {"Canal Quimera": "ots", "Canal Zanzibar": "impressions"}
+
+
+def test_an_existing_channel_keeps_its_metric_when_the_file_omits_or_repeats_it(
+    rolled_back_session: Session, tmp_path: Path,
+) -> None:
+    rolled_back_session.add(ChannelRecord(name="Canal Quimera", delivery_metric="ots"))
+    rolled_back_session.flush()
+
+    for channel in ({"name": "Canal Quimera"}, {"name": "Canal Quimera", "delivery_metric": "ots"}):
+        code, lines = _run(rolled_back_session, _write(tmp_path, {**FILE_CONTENT, "channels": [channel]}))
+
+        assert code == EXIT_OK
+        assert "channels: created 0, existing 1" in lines
+    assert rolled_back_session.scalar(
+        select(ChannelRecord.delivery_metric).where(ChannelRecord.name == "Canal Quimera")) == "ots"

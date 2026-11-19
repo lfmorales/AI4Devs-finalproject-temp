@@ -14,10 +14,10 @@
     { "name": "Displayce", "is_active": false }
   ],
   "channels": [
-    { "name": "Directo" },
-    { "name": "Deal" },
-    { "name": "DOOH" },
-    { "name": "CTV" }
+    { "name": "Directo", "delivery_metric": "impressions" },
+    { "name": "Deal", "delivery_metric": "impressions" },
+    { "name": "DOOH", "delivery_metric": "ots" },
+    { "name": "CTV", "delivery_metric": "impressions" }
   ],
   "formats": [
     { "name": "Example Format" }

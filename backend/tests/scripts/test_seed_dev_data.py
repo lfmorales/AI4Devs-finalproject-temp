@@ -218,3 +218,11 @@ def test_the_seed_creates_the_trading_role_row_once(rolled_back_session):
     assert rolled_back_session.scalar(
         select(func.count()).select_from(RoleRecord).where(RoleRecord.name == "trading")
     ) == 1
+
+
+def test_the_seed_gives_dooh_the_ots_metric_and_the_other_channels_impressions(rolled_back_session: Session) -> None:
+    seed(rolled_back_session, EMAIL)
+
+    metrics = dict(rolled_back_session.execute(select(ChannelRecord.name, ChannelRecord.delivery_metric)).tuples().all())
+
+    assert metrics == {"Directo": "impressions", "Deal": "impressions", "DOOH": "ots", "CTV": "impressions"}
