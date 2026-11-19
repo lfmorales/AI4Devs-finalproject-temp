@@ -12,6 +12,7 @@ from app.domain.exceptions import (
     FlightVolumesMismatchError,
     LineDatesInvalidError,
     LineDatesOutsideCampaignError,
+    MixedDeliveryMetricsError,
     VolumeTooSmallForFlightsError,
 )
 from tests.fixtures.in_memory_campaign_registration import (
@@ -31,10 +32,16 @@ def _line(**overrides: object) -> dict:
     return fields
 
 
-def _register(lines: list[dict], start: date = date(2026, 8, 1), end: date = date(2026, 10, 31), channels=frozenset()):
+def _register(
+    lines: list[dict],
+    start: date = date(2026, 8, 1),
+    end: date = date(2026, 10, 31),
+    channels=frozenset(),
+    ots_channels: frozenset[int] = frozenset(),
+):
     campaign_repo = InMemoryCampaignRepository()
     purchase_orders = InMemoryPurchaseOrderRepository()
-    service = CampaignRegistrationService(campaign_repo, purchase_orders, InMemoryMasterRepository(channels))
+    service = CampaignRegistrationService(campaign_repo, purchase_orders, InMemoryMasterRepository(channels, ots_channels))
     try:
         campaign = asyncio.run(service.register_campaign(
             name="Fixture", display_name="Fixture", agency_id=1, advertiser_id=1, campaign_type_id=1,
@@ -165,3 +172,47 @@ def test_the_saved_campaign_is_the_one_returned():
     campaign, campaign_repo, _ = _register([_line()])
 
     assert campaign_repo.saved == [campaign]
+
+
+# Channel ids in these tests: 1 and 2 count impressions (Directo, Deal), 3 counts OTS (DOOH), 4 impressions (CTV).
+_OTS = frozenset({3})
+
+
+def test_a_dooh_line_with_a_directo_line_is_refused_and_nothing_is_saved() -> None:
+    with pytest.raises(MixedDeliveryMetricsError):
+        _register([_line(channel_id=3), _line(channel_id=1, format_id=2)], ots_channels=_OTS)
+
+
+def test_the_order_of_the_lines_does_not_matter_for_the_mix() -> None:
+    with pytest.raises(MixedDeliveryMetricsError):
+        _register([_line(channel_id=1), _line(channel_id=3, format_id=2)], ots_channels=_OTS)
+
+
+def test_directo_deal_and_ctv_lines_register_together() -> None:
+    campaign, _, _ = _register(
+        [_line(channel_id=1), _line(channel_id=2, format_id=2), _line(channel_id=4, format_id=3)], ots_channels=_OTS
+    )
+
+    assert [line.channel_id for line in campaign.lines] == [1, 2, 4]
+
+
+def test_two_dooh_lines_register_together() -> None:
+    campaign, _, _ = _register([_line(channel_id=3), _line(channel_id=3, format_id=2)], ots_channels=_OTS)
+
+    assert [line.channel_id for line in campaign.lines] == [3, 3]
+
+
+def test_a_dooh_line_alone_registers() -> None:
+    campaign, _, _ = _register([_line(channel_id=3)], ots_channels=_OTS)
+
+    assert [line.channel_id for line in campaign.lines] == [3]
+
+
+def test_an_unknown_channel_is_reported_before_the_mix() -> None:
+    # The mix would also be wrong (DOOH with Directo), but the unknown channel comes first, whatever its position.
+    lines = [_line(channel_id=3), _line(channel_id=1, format_id=2), _line(channel_id=99, format_id=3)]
+    with pytest.raises(ValueError) as raised:
+        _register(lines, channels=frozenset({99}), ots_channels=_OTS)
+
+    assert not isinstance(raised.value, MixedDeliveryMetricsError)
+    assert "channel_id" in str(raised.value)

@@ -4,6 +4,16 @@ from collections.abc import Callable
 from datetime import date
 
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.infrastructure.persistence.models import (
+    CampaignLinePeriodRecord,
+    CampaignLineRecord,
+    CampaignPeriodRecord,
+    CampaignRecord,
+    PurchaseOrderRecord,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -442,3 +452,62 @@ def test_list_campaigns_is_open_to_finance(authenticated_client_no_operations_ro
     response = authenticated_client_no_operations_role.get("/campaigns")
 
     assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+
+
+def _mixed_payload(channel_ids: list[int], name: str) -> dict[str, object]:
+    return {
+        "name": name, "display_name": name, "agency_id": 1, "advertiser_id": 1, "campaign_type_id": 1,
+        "sector_id": 1, "sales_rep_id": 1, "start_date": "2026-08-01", "end_date": "2026-10-31",
+        "order_reference": f"PO-{name}", "order_received_on": "2026-07-01",
+        "lines": [
+            {
+                "dsp_id": 1, "channel_id": channel_id, "format_id": 1, "scope": "national",
+                "market_description": "Spain", "contracted_impressions": 1000, "sale_cpm": "5.00",
+            }
+            for channel_id in channel_ids
+        ],
+    }
+
+
+def _stored_counts(session: Session) -> dict[str, int]:
+    return {
+        record.__tablename__: session.execute(select(func.count()).select_from(record)).scalar_one()
+        for record in (
+            PurchaseOrderRecord, CampaignRecord, CampaignPeriodRecord, CampaignLineRecord, CampaignLinePeriodRecord
+        )
+    }
+
+
+# Seeded channel ids: 1 Directo, 2 Deal, 3 DOOH, 4 CTV.
+def test_dooh_with_directo_answers_422_mixed_delivery_metrics_and_creates_nothing(
+    authenticated_client: TestClient, test_db_session: Session
+) -> None:
+    before = _stored_counts(test_db_session)
+
+    response = authenticated_client.post("/campaigns", json=_mixed_payload([3, 1], "CAMP-MIXED"))
+
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "mixed_delivery_metrics"
+    assert set(response.json()) == {"code", "message"} and response.json()["message"]
+    assert _stored_counts(test_db_session) == before
+
+
+def test_two_dooh_lines_register_through_the_api(authenticated_client: TestClient) -> None:
+    response = authenticated_client.post("/campaigns", json=_mixed_payload([3, 3], "CAMP-DOOH-ONLY"))
+
+    assert response.status_code == 201, response.text
+
+
+def test_directo_deal_and_ctv_lines_register_through_the_api(authenticated_client: TestClient) -> None:
+    response = authenticated_client.post("/campaigns", json=_mixed_payload([1, 2, 4], "CAMP-IMPRESSIONS"))
+
+    assert response.status_code == 201, response.text
+
+
+def test_an_unknown_channel_beats_the_mix_through_the_api(authenticated_client: TestClient, test_db_session: Session) -> None:
+    before = _stored_counts(test_db_session)
+
+    response = authenticated_client.post("/campaigns", json=_mixed_payload([3, 1, 9999], "CAMP-UNKNOWN-FIRST"))
+
+    assert response.status_code == 400, response.text
+    assert _stored_counts(test_db_session) == before

@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Optional
 
+from app.domain.exceptions import MixedDeliveryMetricsError
 from app.domain.entities.campaign import Campaign, CampaignLine, CampaignLineFlight, CampaignPeriod
 from app.domain.services.explicit_volumes import validate_explicit_volumes
 from app.domain.services.flight_planning import resolve_line_windows, split_volume_by_days
@@ -10,7 +11,7 @@ from app.domain.value_objects.contracted_volume import ContractedVolume
 from app.domain.services.period_expansion import PeriodExpansionService
 from app.domain.repositories.campaign_repository import CampaignRepository
 from app.domain.repositories.purchase_order_repository import PurchaseOrderRepository
-from app.domain.repositories.master_repository import MasterRepository
+from app.domain.repositories.master_repository import Channel, MasterRepository
 
 
 class CampaignRegistrationService:
@@ -111,9 +112,16 @@ class CampaignRegistrationService:
 
         # Every line is checked, dates and volumes included, before the first write, so a rejected
         # registration leaves nothing behind, not even the purchase order.
+        delivery_metrics: set[str] = set()
         for line_number, line_data in enumerate(lines_data, start=1):
-            await self._validate_line_references(line_data)
+            channel = await self._validate_line_references(line_data)
+            delivery_metrics.add(channel.delivery_metric)
             campaign.lines.append(self._build_line(line_number, line_data, campaign))
+
+        # After the reference loop, so an unknown channel is always reported before a mix. A campaign is
+        # counted in one metric: its lines are compared in the same unit by the status and margin figures.
+        if len(delivery_metrics) > 1:
+            raise MixedDeliveryMetricsError("The lines of a campaign must share one delivery metric")
 
         purchase_order_id = await self.purchase_order_repo.create_order(
             order_reference, order_received_on.isoformat()
@@ -134,17 +142,20 @@ class CampaignRegistrationService:
 
         return campaign
 
-    async def _validate_line_references(self, line_data: dict) -> None:
+    async def _validate_line_references(self, line_data: dict) -> Channel:
+        """Check the line's DSP, channel and format exist; the channel is returned for its delivery metric."""
         dsp_id = line_data["dsp_id"]
         dsp = await self.master_repo.get_dsp(dsp_id)
         if not dsp or not dsp.is_active:
             raise ValueError(f"DSP {dsp_id} not found or inactive")
 
-        if not await self.master_repo.get_channel(line_data["channel_id"]):
+        channel = await self.master_repo.get_channel(line_data["channel_id"])
+        if not channel:
             raise ValueError(f"Unknown channel_id: {line_data['channel_id']}")
 
         if not await self.master_repo.get_format(line_data["format_id"]):
             raise ValueError(f"Unknown format_id: {line_data['format_id']}")
+        return channel
 
     @staticmethod
     def _build_line(line_number: int, line_data: dict, campaign: Campaign) -> CampaignLine:

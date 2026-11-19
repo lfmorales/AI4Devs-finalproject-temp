@@ -37,6 +37,7 @@ from app.domain.exceptions import (
     IngestionExceptionNotFoundError,
     LineDatesInvalidError,
     LineDatesOutsideCampaignError,
+    MixedDeliveryMetricsError,
     VolumeTooSmallForFlightsError,
     UnsupportedCurrencyError,
     DuplicateCampaignNameError,
@@ -111,6 +112,9 @@ _ERROR_MAPPINGS: dict[type[DomainError], _ErrorMapping] = {
     ),
     LineDatesInvalidError: _ErrorMapping(
         422, "line_dates_invalid", "A line's start date cannot be after its end date"
+    ),
+    MixedDeliveryMetricsError: _ErrorMapping(
+        422, "mixed_delivery_metrics", "A campaign cannot mix channels that count delivery in different metrics"
     ),
     VolumeTooSmallForFlightsError: _ErrorMapping(
         422, "volume_too_small_for_flights", "The line's volume is too small to give every flight impressions"

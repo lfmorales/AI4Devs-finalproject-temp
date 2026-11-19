@@ -51,9 +51,9 @@
 
 ## 8. One Delivery Metric per Campaign
 
-- [ ] 8.1 Write failing service tests in `backend/tests/application/test_campaign_registration_service.py`: `DOOH` with `Directo` raises the mixed-metric error and saves nothing; `Directo`, `Deal` and `CTV` register; two `DOOH` lines register; `Directo` with an unknown channel still fails for the unknown channel
-- [ ] 8.2 Write a failing API test in `backend/tests/api/test_campaign_registration.py` that `DOOH` with `Directo` answers 422 `{"code": "mixed_delivery_metrics", "message": …}` and creates no campaign, period, line, flight or purchase order
-- [ ] 8.3 Add `MixedDeliveryMetricsError`, check it after the reference loop of `CampaignRegistrationService`, map it in `presentation/errors.py`, and verify 8.1 and 8.2 pass with the existing registration tests unchanged
+- [x] 8.1 Write failing service tests in `backend/tests/application/test_campaign_registration_service.py`: `DOOH` with `Directo` raises the mixed-metric error and saves nothing; `Directo`, `Deal` and `CTV` register; two `DOOH` lines register; `Directo` with an unknown channel still fails for the unknown channel
+- [x] 8.2 Write a failing API test in `backend/tests/api/test_campaign_registration.py` that `DOOH` with `Directo` answers 422 `{"code": "mixed_delivery_metrics", "message": …}` and creates no campaign, period, line, flight or purchase order
+- [x] 8.3 Add `MixedDeliveryMetricsError`, check it after the reference loop of `CampaignRegistrationService`, map it in `presentation/errors.py`, and verify 8.1 and 8.2 pass with the existing registration tests unchanged
 
 ## 9. Daily Status
 

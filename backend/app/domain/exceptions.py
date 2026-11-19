@@ -126,6 +126,10 @@ class LineDatesInvalidError(DomainError):
     """A campaign line starts after it ends."""
 
 
+class MixedDeliveryMetricsError(DomainError):
+    """The lines of a campaign are counted in different delivery metrics (for example OTS and impressions)."""
+
+
 class VolumeTooSmallForFlightsError(DomainError):
     """Splitting a line's volume by days would leave a flight with no impressions."""
 
