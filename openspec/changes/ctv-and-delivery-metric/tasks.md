@@ -104,10 +104,10 @@
 
 ## 17. Run Unit Tests and Verify Database State (MANDATORY)
 
-- [ ] 17.1 Capture the pre-test baseline of the development database: row counts of `channels`, `daily_deliveries`, `rebate_schedules`, `campaigns` and `ingestion_exceptions`
-- [ ] 17.2 Run the targeted tests of tasks 1 to 15, then the whole backend suite (`pytest`) and the frontend suite (`npm test`), recording totals, failures and runtime
-- [ ] 17.3 Re-check the baseline and restore any change the tests left
-- [ ] 17.4 Create `docs/reports/YYYY-MM-DD-step-17-unit-test-and-db-verification.md`; the step is complete only once it exists
+- [x] 17.1 Capture the pre-test baseline of the development database: row counts of `channels`, `daily_deliveries`, `rebate_schedules`, `campaigns` and `ingestion_exceptions`
+- [x] 17.2 Run the targeted tests of tasks 1 to 15, then the whole backend suite (`pytest`) and the frontend suite (`npm test`), recording totals, failures and runtime
+- [x] 17.3 Re-check the baseline and restore any change the tests left
+- [x] 17.4 Create `docs/reports/YYYY-MM-DD-step-17-unit-test-and-db-verification.md`; the step is complete only once it exists
 
 ## 18. Manual Endpoint Testing with curl (MANDATORY - AGENT MUST EXECUTE)
 
