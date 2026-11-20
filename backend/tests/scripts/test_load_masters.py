@@ -213,18 +213,18 @@ def test_the_example_file_gives_dooh_the_ots_metric_and_the_other_channels_impre
     code, _ = _run(rolled_back_session, str(example))
 
     assert code == EXIT_OK
-    metrics = dict(rolled_back_session.execute(select(ChannelRecord.name, ChannelRecord.delivery_metric)).tuples().all())
+    metrics = dict(rolled_back_session.execute(select(ChannelRecord.name, ChannelRecord.delivery_metric)).all())
     assert metrics == {"Directo": "impressions", "Deal": "impressions", "DOOH": "ots", "CTV": "impressions"}
 
 
 def test_a_new_channel_is_created_with_the_metric_the_file_gives_it(rolled_back_session: Session, tmp_path: Path) -> None:
     content = {**FILE_CONTENT, "channels": [{"name": "Canal Quimera", "delivery_metric": "ots"}, {"name": "Canal Zanzibar"}]}
-    before = dict(rolled_back_session.execute(select(ChannelRecord.name, ChannelRecord.delivery_metric)).tuples().all())
+    before = dict(rolled_back_session.execute(select(ChannelRecord.name, ChannelRecord.delivery_metric)).all())
 
     code, _ = _run(rolled_back_session, _write(tmp_path, content))
 
     assert code == EXIT_OK
-    metrics = dict(rolled_back_session.execute(select(ChannelRecord.name, ChannelRecord.delivery_metric)).tuples().all())
+    metrics = dict(rolled_back_session.execute(select(ChannelRecord.name, ChannelRecord.delivery_metric)).all())
     assert {n: m for n, m in metrics.items() if n not in before} == {"Canal Quimera": "ots", "Canal Zanzibar": "impressions"}
 
 

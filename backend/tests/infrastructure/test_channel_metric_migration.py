@@ -45,7 +45,7 @@ def scratch(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[Config, Engine]]:
 
 def _metrics(engine: Engine) -> dict[str, str]:
     with engine.connect() as connection:
-        return dict(connection.execute(text("SELECT name, delivery_metric FROM channels")).tuples().all())
+        return dict(connection.execute(text("SELECT name, delivery_metric FROM channels")).all())
 
 
 def _has_column(engine: Engine) -> bool:

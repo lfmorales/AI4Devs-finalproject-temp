@@ -223,6 +223,6 @@ def test_the_seed_creates_the_trading_role_row_once(rolled_back_session):
 def test_the_seed_gives_dooh_the_ots_metric_and_the_other_channels_impressions(rolled_back_session: Session) -> None:
     seed(rolled_back_session, EMAIL)
 
-    metrics = dict(rolled_back_session.execute(select(ChannelRecord.name, ChannelRecord.delivery_metric)).tuples().all())
+    metrics = dict(rolled_back_session.execute(select(ChannelRecord.name, ChannelRecord.delivery_metric)).all())
 
     assert metrics == {"Directo": "impressions", "Deal": "impressions", "DOOH": "ots", "CTV": "impressions"}

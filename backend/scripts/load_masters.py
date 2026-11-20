@@ -185,7 +185,9 @@ def _check_references(session: Session, content: dict[str, Any]) -> list[str]:
         if group is not None and group not in file_groups | stored_groups:
             problems.append(f"agencies[{position}]: the holding group is neither in the file nor stored")
 
-    stored_metrics: dict[str, str] = dict(session.execute(text("SELECT name, delivery_metric FROM channels")).tuples().all())
+    stored_metrics: dict[str, str] = {
+        name: metric for name, metric in session.execute(text("SELECT name, delivery_metric FROM channels"))
+    }
     for position, item in enumerate(content.get("channels", [])):
         name = _name_of(item)
         if name in stored_metrics and "delivery_metric" in item and item["delivery_metric"] != stored_metrics[name]:
