@@ -111,11 +111,11 @@
 
 ## 18. Manual Endpoint Testing with curl (MANDATORY - AGENT MUST EXECUTE)
 
-- [ ] 18.1 With the stack running and a test-issuer token, call `GET /api/campaign-status` and `GET /api/margin` as `operations` and check `delivered` and `delivery_metric` on a DOOH and an impressions row, and the totals' nulls when mixed
-- [ ] 18.2 Call `GET /api/campaign-status` as `trading` and check OTS are present and no money field is
-- [ ] 18.3 `POST /api/campaigns` with a `DOOH` and a `Directo` line, check 422 `mixed_delivery_metrics`; post a valid `DOOH` campaign, check 201, then delete it to restore the database
-- [ ] 18.4 Run `scripts.load_masters --check` on a file that changes an existing channel's metric and check the rejection names the position and writes nothing
-- [ ] 18.5 Document every command and response in `docs/reports/YYYY-MM-DD-step-18-curl.md` and verify the database matches the baseline of 17.1
+- [x] 18.1 With the stack running and a test-issuer token, call `GET /api/campaign-status` and `GET /api/margin` as `operations` and check `delivered` and `delivery_metric` on a DOOH and an impressions row, and the totals' nulls when mixed
+- [x] 18.2 Call `GET /api/campaign-status` as `trading` and check OTS are present and no money field is
+- [x] 18.3 `POST /api/campaigns` with a `DOOH` and a `Directo` line, check 422 `mixed_delivery_metrics`; post a valid `DOOH` campaign, check 201, then delete it to restore the database
+- [x] 18.4 Run `scripts.load_masters --check` on a file that changes an existing channel's metric and check the rejection names the position and writes nothing
+- [x] 18.5 Document every command and response in `docs/reports/YYYY-MM-DD-step-18-curl.md` and verify the database matches the baseline of 17.1
 
 ## 19. E2E Testing with Playwright (MANDATORY - AGENT MUST EXECUTE)
 
