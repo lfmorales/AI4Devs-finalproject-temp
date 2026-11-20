@@ -68,13 +68,13 @@ None of this is recoverable by inference, and guessing would put revenue against
 
 ### Three ingestion paths, not one
 
-The `Providers` sheet is not a historical curiosity: email is a live intake mechanism. Confirmed by the PO for CTV, whose reports Adform does not expose through the platform and sends by email instead. So the product has to support three routes into the same delivery model, and phase 1 cannot assume the API covers everything:
+The `Providers` sheet is not a historical curiosity: email is a live intake mechanism for some providers. CTV is not one of them: its reports are read in Adform like Display, and CTV enters through the Adform ingestion (§5.3). So the product still has to support three routes into the same delivery model, and phase 1 cannot assume the API covers everything:
 
 | Route | Covers | Status |
 |---|---|---|
 | DSP API | Adform (68% of configured rows) | Built in phase 1; credentials available |
 | Manual upload | Everything else, migration, and any API outage | Built in phase 1; today the only route that exists |
-| Email intake | CTV, and whatever else the `Providers` sheet still reflects | Phase 2, on top of the manual-upload model |
+| Email intake | Whatever the `Providers` sheet still reflects | Phase 2, on top of the manual-upload model |
 
 Email intake is deliberately not in phase 1. It is the same ingestion contract with a different transport, so building the upload path first and adding a mail drop later costs nothing and avoids putting inbox parsing on the critical path of the first release. What phase 1 must not do is model ingestion in a way that assumes an API on the other end.
 
@@ -95,7 +95,7 @@ Richer than the campaign file suggests: `Campaign`, `Line Item`, `Línea`, `Bann
 1. **DSP is stored in the wrong column.** `trading` holds the DSP (`Adform` 132, `Equative` 22, `Displayce` 10, `Equativ` 3, `adfomr` 2) while the column literally named `DSP` is empty in 162 of 170 rows. The history sheet adds `Pubmatic`, `RevenueMaker`, `DV360`, `Revenue`, `Pubmatic/RevenueMaker` — so the DSP list is longer than the three named, and needs to be a maintained catalogue, not an enum.
 2. **Free-text values that must be normalised.** `period` mixes `agosto`/`Agosto`/`agosto_1`; `location` has 12 variants (`Nacional`, `nacional`, `Nacional (Madrid)`, `Internacional `, `Internacional (Francia)`…) while the rebate table only recognises `Nacional` / `Internacional`. Location therefore has to be split into a **rebate-relevant scope** (national/international) and a **descriptive market**.
 3. **The agency-to-group join is incomplete.** Of 17 agencies in `Campaigns`, 13 match `Customer.Agencia` and only 6 match a `GRUPO` present in the rebate table. 12 groups in `Customer` (`ADSOCY`, `ALMA MEDIA`, `MANIFIESTO`, `DIRECTO`…) have no rebate row at all. Confirmed by the PO: **a group with no rebate row means 0%**, not an error. The rate is still recorded explicitly as `0%` on the line so the margin stays auditable, and the absence is surfaced in the masters view so Finance can tell "negotiated at zero" from "never loaded".
-4. **`CTV` is priced but never used.** The rebate table prices `CTV` for all 22 groups, yet `tipo_plataforma` in `Campaigns` only ever holds `Directo`, `Deal` or `DOOH`. Confirmed by the PO as a channel that starts clean: the taxonomy carries it from day one, and migration imports existing tags as they are — there is no historical CTV inventory hiding under `Directo` or `Deal` to reclassify.
+4. **`CTV` is priced but never used.** The rebate table prices `CTV` for all 22 groups, yet `tipo_plataforma` in `Campaigns` only ever holds `Directo`, `Deal` or `DOOH`. Confirmed by the PO as a channel that starts clean: the taxonomy carries it from day one, and migration imports existing tags as they are — there is no historical CTV inventory hiding under `Directo` or `Deal` to reclassify. CTV enters through the Adform ingestion, like Display, and is measured in impressions (§5.3).
 5. **Dead columns.** `KPI`, `frecuencia`, `device`, `temporality`, `activo|inactivo`, `Configurada`, `Check`, `GENERA`, `cpm_especial`, `conf_impressions_*` are empty in 100% of active rows. They are not requirements; they are abandoned intentions. The new model keeps only what is used. The same applies to `providers`, a mislabelled day counter the PO has confirmed is not carried forward.
 6. **Duplicated header.** `observaciones` appears twice in `History`.
 
@@ -243,10 +243,14 @@ Confirmed by the PO. There is no separate model for curation: `Deal` is calculat
 
 | Platform type | DSP | Notes |
 |---|---|---|
-| `Directo` | Adform | |
-| `Deal` | Equativ | GeoQ curates; billed to Equativ via `CuratorMargin` |
-| `DOOH` | Displayce, or Adform | |
-| `CTV` | *(planned)* | priced in the rebate tables, not yet used on campaigns |
+| `Directo` | Adform | Measured in impressions |
+| `Deal` | Equativ | GeoQ curates; billed to Equativ via `CuratorMargin`. Measured in impressions |
+| `DOOH` | Displayce, or Adform | Measured in OTS |
+| `CTV` | Adform | Measured in impressions, like Display; priced in the rebate tables |
+
+**Each channel counts delivery in one unit.** `DOOH` is sold and measured in OTS (opportunity to see); `Directo`, `Deal` and `CTV` in impressions. The contracted volume of a line and its delivered volume are counted in the unit of its channel, its `delivery_metric`, and every screen that shows them names the unit. Revenue is still the contracted volume / 1,000 × the sale CPM, so it never reads the delivered volume: 300,000 OTS at 5.00 € earn 1,500.00 €. The platform cost stays on the **real delivered impressions** of every channel: 12,000 impressions at 1.00 € per thousand cost 12.00 €, not 280.00 € on 280,000.50 OTS. OTS carry decimals, so the delivered volume is stored and compared as a decimal.
+
+**A campaign does not mix units.** Its lines share one delivery metric, because the status, the pacing and the margin of a campaign add the volumes of its lines. A registration that mixes `DOOH` with another channel is refused, and a total over campaigns of different units carries no volume of its own.
 
 **`CuratorMargin` is a billing field, not an economic one.** It is what GeoQ invoices Equativ — the mechanism by which the money arrives in a curated deal, where the buyer pays the platform rather than GeoQ — and it is gross of the agency rebate, because the rebate is settled separately with the agency in arrears (§5.4). It never enters the margin calculation. The data agrees: it is populated only on `Deal` rows, only on 34–39% of them, and its ratio to OC revenue swings between 28% and 55% year on year. No revenue basis behaves like that.
 
@@ -485,6 +489,15 @@ This matters more under the tiered rebate than it did before. The channel is the
 
    One consequence the team should expect regardless: historical rows carry only contracted volumes, never actual delivery (§1). Historical margin is therefore a *planned* margin and must be labelled as such in every report, or Finance will unknowingly compare it against the actual margins the system starts producing from phase 1 onwards.
 
+### Known limitation: the delivery of `Deal` lines
+
+`Deal` inventory is bought through Equativ, and the only connector of phase 1 is Adform, so the ingestion never brings delivery for a `Deal` line. Until the Equativ connector exists:
+
+- The check for lines without delivery never evaluates a `Deal` line. It runs for the DSP of the ingestion (Adform) and looks only at lines that run on that DSP and have a validated mapping to it, so a `Deal` line on Equativ, or without an Adform mapping, is not a candidate and no `missing_delivery` exception is raised for it. This is how the check already behaved before the delivery metric was introduced; that change did not alter it.
+- The daily status still lists the running flights of a `Deal` campaign, with 0 delivered and both flags («no data received» and pacing deviation), and the margin shows its revenue and rebate with no media cost and no platform cost, because there is no delivery to read. **Until the delivery through Equativ exists, the margin of a `Deal` is therefore overstated**, and its status rows carry both flags for the same reason.
+
+The delivery of `Deal` lines through Equativ (the connector, the mapping and the check for lines without delivery for that DSP) is left to a change of its own; it is not part of the change that introduced the delivery metric.
+
 ### Phase 2
 
 Equativ and Displayce connectors (the Adform connector defines the contract); immutable month-end snapshot; email/Teams alerting; rebate-rate versioning UI for Finance.
@@ -607,6 +620,7 @@ Ordered by how much they move the numbers.
 - Authentication is Microsoft Entra ID, with Cognito kept for development and the end-to-end tests. Roles stay in the application database. *(PO, 2026-11-12; supersedes the 2026-09-21 decision that chose Cognito)*
 - Cognito is removed: Microsoft Entra ID is the only identity provider in every environment. Development and the end-to-end tests use a test issuer shaped like Entra, active only when `APP_ENV` is `development` or `test`. *(PO, 2026-11-17; supersedes the 2026-11-12 decision that kept Cognito for development and the end-to-end tests)*
 - Operations has global control and sees the margin; Finance is the reviewer and no longer writes rebate schedules or platform rates. Trading is a new role that reads the delivery status only. *(PO, 2026-11-12)*
+- CTV enters through the Adform ingestion, like Display, and is measured in impressions; DOOH is measured in OTS. `Directo` and `Deal` stay separate channels, each with its own rebate counter, and both are measured in impressions. The `delivery_metric` of the channel (`impressions` or `ots`) names the unit of the contracted and the delivered volume of its lines, revenue stays on the contracted volume and the platform cost on the delivered impressions, and a campaign does not mix delivery metrics. *(Confirmed by the business on 2026-11-19 (CTV through Adform) and on 2026-11-20 (`Directo` and `Deal` as separate channels))*
 
 - The 136 finished campaign-months with no delivery did not execute and are discarded on migration; their 111,572 € of accrued rebate is reversed. *(PO, 2026-09-15)*
 - A rate change restates the whole current year; a volume-driven bracket crossing is marginal and forward-only. *(PO, 2026-09-17)*
@@ -626,6 +640,6 @@ Ordered by how much they move the numbers.
 - Adform's reported cost is all-in and already includes its platform fee — no separate fee line. *(PO, 2026-09-14)*
 - An agency group with no rebate row is 0%, not a blocking error. *(PO, 2026-09-14)*
 - The `providers` column is dropped, not migrated. *(PO, 2026-09-14)*
-- CTV is a channel in its own right, starts clean from now on with no retroactive re-tagging, and its reports arrive by email rather than through the Adform platform. *(PO, 2026-09-14, extended 2026-09-17)*
+- CTV is a channel in its own right and starts clean from now on, with no retroactive re-tagging. Its reports are read in Adform like Display and it enters through the Adform ingestion, not by email. *(PO, 2026-09-14, extended 2026-09-17; how it arrives corrected, confirmed by the business on 2026-11-19)*
 - History is migrated from 2023-01-01. 2022 is discarded: no rebate table exists for it and the live system already excludes it. *(PO, 2026-09-14, amended 2026-09-17)*
 - There is no upstream ETL and no DSP API in use: delivery is 1,999 manually downloaded spreadsheets concatenated by the Qlik load script. *(Evidence: `origen` and `file` fields in `Campaigns_all_1.qvd`.)*

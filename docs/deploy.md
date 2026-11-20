@@ -108,6 +108,15 @@ docker compose -f docker-compose.prod.yml run --rm backend alembic upgrade head
 
 Back up the `postgres_data` volume before a release that includes migrations.
 
+### The release that adds the OTS columns and the channel's delivery metric (`ctv-and-delivery-metric`)
+
+This release adds two migrations: one gives `daily_deliveries` the columns `ots` and `video_completions`, and the next gives `channels` its `delivery_metric` and sets `ots` on the channel named `DOOH`. Deploying it over a database that already has data needs one more step, **before the first detection of lines without delivery after the deploy** (the nightly run does that detection, so before the first nightly run that follows the deploy, or with the schedule stopped until this is done):
+
+1. Re-ingest the range of the DOOH flights that have already ended, so that `ots` is filled in (§12, *Loading a history range*, in blocks of at most 31 days). Rows stored before the column existed read 0 OTS, and a range run does not run the check for lines without delivery.
+2. Then let the nightly ingestion run as usual.
+
+If it is not done, a finished DOOH flight whose delivery all predates the column reads 0 OTS and is reported as a line without delivery. **Those exceptions are false, and they do not close by themselves:** the exception queue never closes or reopens an exception when delivery appears later, so operations have to resolve each one by hand. The same rows also show 0 delivered OTS in the status and the margin until they are re-ingested, though the revenue and the platform cost do not change.
+
 ## 10. Master data
 
 A fresh database has no agencies, advertisers, DSPs, channels, formats, campaign types, sectors or sales reps, and the "new campaign" form needs them. Load them from a JSON file with `scripts/load_masters.py`. Start from the template, which holds fictitious data:
@@ -117,7 +126,7 @@ cp deploy/masters.example.json deploy/masters.json
 chmod 644 deploy/masters.json
 ```
 
-`deploy/masters.json` is ignored by git; the backend container runs as another user, which is why the file must be readable by others (it holds business names, not secrets). Edit it. Each section is a list of objects with a mandatory `name`; an agency also has a mandatory `holding_group` (the name of its group); a DSP may have `is_active` (true unless you say otherwise). Nothing else is accepted, and a misspelled section or key is an error.
+`deploy/masters.json` is ignored by git; the backend container runs as another user, which is why the file must be readable by others (it holds business names, not secrets). Edit it. Each section is a list of objects with a mandatory `name`; an agency also has a mandatory `holding_group` (the name of its group); a DSP may have `is_active` (true unless you say otherwise); a channel may have `delivery_metric`, `impressions` (the default) or `ots`, the unit in which the contracted and the delivered volume of its lines are counted (the template gives `DOOH` `ots` and the other three channels `impressions`). Nothing else is accepted, and a misspelled section or key is an error.
 
 The file must keep a DSP named `Adform`, because the ingestion looks it up (it may already be stored from an earlier load). Every agency must name a group defined in the same file or already stored.
 
@@ -136,6 +145,12 @@ docker compose -f docker-compose.prod.yml run --rm \
 The output is counts per table (`created`, or `would create` with `--check`, and `existing`) and never a name. A problem in the file is reported by section and position, for example `agencies[2]: the holding group is neither in the file nor stored`. Exit code 0 means done, 1 the database failed, 2 the file or the arguments are invalid, 3 `DATABASE_URL` is missing.
 
 It is safe to run again, for example after adding an agency to the file: items are identified by name, new ones are created and existing ones are left exactly as they are. It never modifies or deletes: renaming a master, moving an agency to another group or changing a DSP's `is_active` is not done by this command. The load is a single transaction, so a failure stores nothing.
+
+### A channel's delivery metric
+
+The load never changes the metric of a channel that exists. A file that names an existing channel with a different `delivery_metric` is rejected as a whole and nothing is written, with `--check` too; the output names the position and never the value, for example `channels[1]: the delivery metric differs from the stored one`. Leaving the key out, or repeating the stored value, is fine, and a channel the file creates takes the metric the file gives it.
+
+**Changing the metric of an existing channel is not supported.** `load_masters` refuses it and the application has no route for it. If it is ever needed, it goes in a reviewed migration, never in a manual change to the database: it changes the meaning of the contracted volume of every campaign of that channel, and of everything computed from it (the delivered volume, the pacing, the margin and the check for lines without delivery), while the stored delivery is not converted. The database itself accepts only `impressions` and `ots`. A campaign's lines must share one metric, so a campaign that mixes `DOOH` with another channel is refused at registration.
 
 ## 11. The first user
 

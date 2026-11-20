@@ -250,6 +250,8 @@ docker compose build
 
 Luego vuelve a ejecutar `docker compose up -d` para reiniciar con el nuevo bundle.
 
+> **El compose no aplica las migraciones al arrancar.** Reconstruir el stack (`docker compose build` y `up -d`) con un change que trae migraciones deja la base en la revisión anterior, y el backend con el código nuevo falla contra el esquema viejo. Después de reconstruir, lanza `bash e2e/scripts/reset-data.sh` (recrea la base, migra y siembra los datos de desarrollo y de demostración; **borra el volumen**) o, si quieres conservar los datos, `docker compose exec backend alembic upgrade head`. La revisión que tiene la base se ve con `docker compose exec backend alembic current`.
+
 #### 4. Requisitos en .env
 
 Estos campos son obligatorios en `.env` (ver `.env.example` para la lista completa; no incluyas valores reales en el repositorio):
@@ -511,17 +513,27 @@ El modelo de autorización completo está en [Base Standards § Authorization Mo
 
 El desarrollo sigue TDD: toda funcionalidad nueva empieza por un test que falla.
 
-**Estado actual (Entrega 2):** Las suites de backend y frontend pasan sobre el código implementado: 65 tests de backend y 61 de frontend (16 ficheros), ambos ejecutados dos veces. Ver el informe detallado en [docs/reports/2026-10-18-entrega-2-test-report.md](./docs/reports/2026-10-18-entrega-2-test-report.md).
+**Estado actual (change `ctv-and-delivery-metric`, 20 de noviembre de 2026):** todas las suites pasan, cada una ejecutada dos veces con los mismos resultados:
+
+- **2.418** tests recogidos en el backend (más 1 deseleccionado, el marcado `slow`; 0 saltados), con las **38** pruebas de aceptación de margen incluidas, que leen las dos hojas privadas de `backend/tests/private/` (ignoradas por Git).
+- **622** en Vitest (61 ficheros), con `tsc --noEmit` sin errores.
+- **46** en `node --test` de `e2e/` y **15** en los scripts de la raíz (`scripts/*.test.mjs`).
+- **42** en Playwright, sobre la pila Docker con los datos recién sembrados por `e2e/scripts/reset-data.sh`.
+
+Informes de este change: [paso 16, revisión de los tests](./docs/reports/2026-11-19-step-16-test-review.md) · [paso 17, suites y estado de la base](./docs/reports/2026-11-20-step-17-unit-test-and-db-verification.md) · [paso 18, comprobaciones con curl](./docs/reports/2026-11-20-step-18-curl.md) · [paso 19, E2E y revisión en navegador](./docs/reports/2026-11-20-step-19-e2e.md).
+
+Informes del change anterior, `entra-auth-and-roles` (18 de noviembre de 2026): [paso 13, tests que nombran un rol](./docs/reports/2026-11-18-step-13-role-test-review.md) · [paso 14, tests y base de datos](./docs/reports/2026-11-18-step-14-unit-test-and-db-verification.md) · [paso 15, endpoints con curl](./docs/reports/2026-11-18-step-15-curl-endpoint-checks.md) · [paso 16, E2E](./docs/reports/2026-11-18-step-16-e2e.md) · [paso 17, acceso real con Entra](./docs/reports/2026-11-18-step-17-real-entra-sign-in.md). El informe de la Entrega 2 sigue en [docs/reports/2026-10-18-entrega-2-test-report.md](./docs/reports/2026-10-18-entrega-2-test-report.md).
 
 | Nivel | Herramientas | Resultados |
 |---|---|---|
-| **Tests de dominio** | `pytest` (backend) | Reglas de negocio puras sin base de datos: expansión de períodos, versionado de órdenes de compra. |
+| **Tests de dominio** | `pytest` (backend) | Reglas de negocio puras sin base de datos: expansión de períodos, versionado de órdenes de compra, modelo económico (ingreso, extraprima escalonada, coste de plataforma y margen), ritmo de entrega en `Decimal` y totales de margen. |
 | **Tests de API** | `pytest` + `httpx` contra FastAPI + PostgreSQL real | Endpoints reales: códigos de estado, esquemas, autenticación con tokens de Entra y del emisor de pruebas, y **aplicación de roles en los endpoints protegidos por rol**. Base de pruebas (`adops360_test`) recreada al inicio de cada ejecución. |
-| **Tests de infraestructura y migraciones** | `pytest` contra PostgreSQL real | Modelos de identidad y coherencia entre la migración Alembic y los modelos. Incluidos en los 65 tests de backend. |
-| **Tests unitarios frontend** | `Vitest` + Testing Library | 61 tests en 16 ficheros, entorno jsdom. Comportamiento de componentes, layout de autenticación, interacción con sesión. Aprobados 2 veces consecutivas. |
+| **Tests de infraestructura y migraciones** | `pytest` contra PostgreSQL real | Modelos, repositorios y coherencia entre cada migración Alembic y los modelos, con prueba de subida y bajada. Incluidos en los 2.418 tests de backend. |
+| **Tests unitarios frontend** | `Vitest` + Testing Library | 622 tests en 61 ficheros, entorno jsdom. Comportamiento de componentes, formato de cifras, pantallas de estado y margen, formulario de alta, layout de autenticación. Aprobados dos veces consecutivas. |
 | **Verificación de tipos** | TypeScript `tsc --noEmit` | ✓ Paso: sin errores de tipo en frontend. |
-| **End-to-end** | `Playwright` | Planeado para Entrega 3: los tres flujos de rol completos sobre la aplicación desplegada. |
-| **Integración frontend-backend** | Tests E2E + backend real | Planeado para Entrega 3: verificación del frontend contra el backend real en Docker. |
+| **Scripts** | `node --test` | 46 tests de `e2e/` (emisor de pruebas y sesiones, comprobación del proyecto Compose, `reset-data.sh`, elección de maestros) y 15 de los scripts de la raíz (nombre del proyecto Compose, claves del emisor de pruebas). |
+| **End-to-end** | `Playwright` | 42 casos en 7 ficheros contra la aplicación desplegada en Docker, con el emisor de pruebas: registro de campañas, estado, margen y cierre de mes, excepciones, navegación y matriz de roles, incluida la campaña DOOH de demostración. |
+| **Integración frontend-backend** | Tests E2E + backend real | Cubierta por los E2E anteriores: el frontend corre contra el backend real y la base real del compose. |
 
 Tres criterios concretos que la estrategia impone:
 
@@ -531,9 +543,10 @@ Tres criterios concretos que la estrategia impone:
 
 | Flujo E2E | Cubre | Estado |
 |---|---|---|
-| Operaciones | Registrar una campaña desde la orden de compra, mapearla al DSP y revisar una excepción de ingesta | Previsto E3 |
-| Negocio | Crear una oferta comercial y seguirla hasta convertirse en campaña | Previsto E3 |
-| Financiero | Consultar el margen de campaña y los acumulados por periodo | Previsto E3 |
+| Operaciones | Registrar una campaña desde la orden de compra, mapearla al DSP y revisar una excepción de ingesta | **Cubierto en parte.** Registro de campañas y sus rechazos (`campaign.spec.ts`); lectura de la cola, filtros, resolución y vínculo de una fila sin casar a una línea, que crea el mapeo (`exceptions.spec.ts`). El mapeo desde el Catálogo Adform no tiene E2E propio |
+| Negocio | Crear una oferta comercial y seguirla hasta convertirse en campaña | **No aplica en la fase 1**: la oferta comercial es de la fase 3. El perfil `business` se cubre en la matriz de roles (`roles-matrix.spec.ts`) y con la lectura del estado diario |
+| Financiero | Consultar el margen de campaña y los acumulados por periodo | **Cubierto.** Margen por campaña, línea y flight con sus estados, totales del periodo, avisos, unidad de entrega y cierre de mes real e idempotente (`margin.spec.ts`). Sin E2E de la exportación a Excel o CSV |
+| Varios roles | Un usuario que acumula roles | **Cubierto.** `finance` + `trading` y `business` + `trading` en `roles-matrix.spec.ts` |
 
 El detalle está en [Backend Standards § Testing Standards](./docs/backend-standards.md#testing-standards) y [Frontend Standards § Testing Standards](./docs/frontend-standards.md#testing-standards).
 
@@ -687,6 +700,8 @@ erDiagram
         numeric media_cost "Cost"
         bigint measurable_impressions
         bigint viewable_impressions
+        numeric ots "OTS de DOOH, 4 decimales"
+        bigint video_completions "round(tasa x impresiones) por fila"
         string banner_size
         string screen "pantalla DOOH"
         string line_format "solo contraste"
@@ -746,6 +761,7 @@ erDiagram
     channels {
         int id PK
         string name UK
+        string delivery_metric "impressions|ots"
     }
     campaign_types {
         int id PK
@@ -818,6 +834,7 @@ erDiagram
     channels {
         int id PK
         string name UK "Directo|Deal|DOOH|CTV"
+        string delivery_metric "impressions|ots"
     }
     campaign_types {
         int id PK
@@ -908,7 +925,7 @@ Procedencia: [Base Standards §6](./docs/base-standards.md#6-authorization-model
 | `agencies` | Entidad a la que se factura la campaña. Pertenece a un grupo, y puede tener una extraprima propia que se aparte de la de su grupo — en cuyo caso también acumula volumen por separado. | `id` PK · `holding_group_id` FK **NOT NULL** · `name` UNIQUE | `Customer.Agencia`; `customer` en `Campaigns`. `RECLAM` no se ha incorporado: era metadato descriptivo y no gobierna nada (§8 del PO) |
 | `advertisers` | Anunciante o marca. | `id` PK · `name` UNIQUE | Columna `brand` |
 | `dsps` | Catálogo mantenido de plataformas, **no un enum**: el histórico contiene Adform, Equativ, Displayce, Pubmatic, DV360, RevenueMaker e Ikreate. | `id` PK · `name` UNIQUE · `is_active` | Columna `trading` (no `DSP`, ver §3.4) |
-| `channels` | Tipo de plataforma. Es la clave de acumulación de los tramos de extraprima, así que una mala clasificación desplaza los tramos de todo el año. | `id` PK · `name` UNIQUE | `tipo_plataforma` (`Directo`, `Deal`, `DOOH`) y la columna de canal de `extraprimas 2024/2026` (que además incluye `CTV`) |
+| `channels` | Tipo de plataforma. Es la clave de acumulación de los tramos de extraprima, así que una mala clasificación desplaza los tramos de todo el año. Lleva además la **unidad** en que se cuenta la entrega de sus líneas: `DOOH` en `ots`, el resto en `impressions`. Una campaña no mezcla unidades. | `id` PK · `name` UNIQUE · `delivery_metric` (`impressions` por defecto, o `ots`; `NOT NULL`, con restricción `CHECK`) | `tipo_plataforma` (`Directo`, `Deal`, `DOOH`) y la columna de canal de `extraprimas 2024/2026` (que además incluye `CTV`) |
 | `campaign_types` | Tipo de campaña. | `id` PK · `name` UNIQUE | `tipo_campaign`: `Branding`, `D2S` |
 | `formats` | Formato creativo. | `id` PK · `name` UNIQUE | `tipo_formato`: `Display`, `Vídeo` |
 | `sectors` | Sector del anunciante, dimensión de los acumulados. | `id` PK · `name` UNIQUE | Columna `sector`, 21 valores distintos |
@@ -953,7 +970,7 @@ El desgaje es **por canal**, no global, porque la excepción se negocia por cana
 
 | Entidad | Propósito | Campos clave | Procedencia |
 |---|---|---|---|
-| `daily_deliveries` | Entrega real por línea y día. Es el grano que hoy no existe en ninguna hoja de cálculo: **ninguno de los dos Excel contiene una sola fila de entrega real**. Volumen esperado: ~4.600 filas/día. | `id` PK · `campaign_line_id` FK · `ingestion_batch_id` FK · `delivery_date` · `impressions` · `clicks` · `media_cost` · `measurable_impressions` · `viewable_impressions` · `banner_size` · `screen` · `line_format` | Grano del QVD de entrega de Adform. `line_format` se guarda **solo como contraste**: el canal manda desde la configuración, nunca desde el DSP |
+| `daily_deliveries` | Entrega real por línea y día. Es el grano que hoy no existe en ninguna hoja de cálculo: **ninguno de los dos Excel contiene una sola fila de entrega real**. Volumen esperado: ~4.600 filas/día. | `id` PK · `campaign_line_id` FK · `ingestion_batch_id` FK · `delivery_date` · `impressions` · `clicks` · `media_cost` · `measurable_impressions` · `viewable_impressions` · `ots` (`Numeric(18,4)`, `NOT NULL`, por defecto 0) · `video_completions` (`BigInteger`, `NOT NULL`, por defecto 0) · `banner_size` · `screen` · `line_format` | Grano del QVD de entrega de Adform; `ots` y los completados de vídeo vienen de las métricas `ots` y `videoCompletionRate` de su API. Las filas guardadas antes de esas columnas leen 0. `line_format` se guarda **solo como contraste**: el canal manda desde la configuración, nunca desde el DSP |
 | `ingestion_batches` | Cada ejecución de ingesta, con su ruta, fichero y resultado. Sustituye las 49 etiquetas escritas a mano (`carga 1`, `carga octopus`, `carga equativ 8/11`) por trazabilidad real. Guarda además la **ventana de fechas pedida** y cuántas filas se ignoraron o llegaron sin casar y sin impresiones. | `id` PK · `dsp_id` FK · `route` (`api`\|`upload`\|`email`) · `source_file` *nullable* · `started_at` · `finished_at` *nullable* · `status` · `row_count` · `ignored_row_count` · `zero_unmatched_row_count` · `window_start`/`window_end` *nullable* | Campos `origen` y `file` del QVD, y la hoja `Providers` para la ruta de correo (fase 2). La ventana y los recuentos nacen de la ingesta real contra Adform |
 | `ingestion_exceptions` | Claves sin casar, **en ambos sentidos**: `unmatched_delivery` (entrega sin línea) y `missing_delivery` (línea mapeada sin entrega en un periodo terminado). Hoy las dos son invisibles, y una es un problema comercial mientras que la otra es una errata. Hay **una excepción abierta por pareja externa y DSP**, y una ausencia por línea y mes; se cierra resolviéndola con una nota o vinculándola a una línea. | `id` PK · `ingestion_batch_id` FK · `exception_type` · `status` (`open`\|`resolved`) · `dsp_id`/`external_campaign_id`/`external_line_item_id` (obligatorios en `unmatched_delivery`) · `campaign_line_id`/`campaign_period_id` (obligatorios en `missing_delivery`) · `first_date`/`last_date` · `resolved_at`/`resolved_by`/`note` | Requisito de [§7](./docs/product-description.md): 87 claves de entrega sin configuración y 178 configuraciones sin entrega. Restricciones `CHECK` por tipo y por estado, e índices únicos parciales |
 | `ingestion_exception_deliveries` | **La entrega retenida de una excepción sin casar**, día a día: no se pierde nada mientras no haya una línea a la que asignarla. | `id` PK · `exception_id` FK · `delivery_date` · `impressions` · `clicks` · `media_cost` · `measurable_impressions` · `viewable_impressions` | `(exception_id, delivery_date)` único |
@@ -1122,13 +1139,14 @@ Cada línea admite además `start_date` y `end_date` (por defecto, las de la cam
 }
 ```
 
-**Reglas del precio y del volumen:** `contracted_impressions` debe ser **mayor que 0**; `sale_cpm` puede ser **0,00** (excepción de precio: el margen la marca «Sin venta») pero **nunca negativo**.
+**Reglas del precio y del volumen:** `contracted_impressions` debe ser **mayor que 0** y está en la unidad del canal de la línea (OTS en una línea DOOH, impresiones en el resto); `sale_cpm` puede ser **0,00** (excepción de precio: el margen la marca «Sin venta») pero **nunca negativo**. Las líneas de una campaña comparten una sola métrica de entrega.
 
 **Errores:**
 
 - **401 Unauthenticated:** Token ausente, inválido o expirado.
 - **403 Forbidden:** Usuario sin rol `operations`. `{"code": "missing_role", "message": "User lacks the required role"}`.
 - **409 Conflict:** Orden de compra duplicada (`duplicate_order_reference`) o nombre de campaña duplicado (`duplicate_campaign_name`).
+- **422 `mixed_delivery_metrics`:** las líneas nombran canales con métricas de entrega distintas, por ejemplo `DOOH` con `Directo`, en cualquier orden. `{"code": "mixed_delivery_metrics", "message": "A campaign cannot mix channels that count delivery in different metrics"}`. No se crea nada. Un canal inexistente se informa antes (400), porque la mezcla se comprueba después de validar las referencias de todas las líneas.
 - **422 Validation Error:** Campo ausente o malformado, CPM negativo, volumen 0, fechas de línea fuera de las de la campaña o un reparto manual que no suma el total. Ejemplo con `lines: []`: `{"detail": [{"type": "too_short", "loc": ["body", "lines"], "msg": "List should have at least 1 item after validation, not 0", "input": [], "ctx": {"field_type": "List", "min_length": 1, "actual_length": 0}}]}`.
 
 ---
@@ -1265,14 +1283,32 @@ curl -X POST http://localhost/api/flights/preview \
     "line_number": 1,
     "flight": { "campaign_period_id": 9, "year": 2026, "month": 11, "start": "2026-11-01", "end": "2026-11-20" },
     "contracted_impressions": 487805,
+    "delivery_metric": "impressions",
+    "delivered": "0.0000",
     "delivered_impressions": 0,
     "delivery_ratio": 0.0,
     "pacing": { "expected_impressions": 48780.5, "deviation": -1.0, "days_remaining": 18, "status": "under_delivering" },
     "pacing_flag": true,
     "missing_data_flag": true
+  },
+  {
+    "campaign": { "id": 5, "name": "DEMO-MARGEN-DOOH" },
+    "agency": { "id": 2, "name": "DEMO Agency" },
+    "line_number": 1,
+    "flight": { "campaign_period_id": 8, "year": 2026, "month": 11, "start": "2026-11-10", "end": "2026-11-30" },
+    "contracted_impressions": 484615,
+    "delivery_metric": "ots",
+    "delivered": "250764.2500",
+    "delivered_impressions": 12530,
+    "delivery_ratio": 0.5174504503575003,
+    "pacing": { "expected_impressions": 230769.04761904763, "deviation": 0.0866459457507506, "days_remaining": 11, "status": "on_pace" },
+    "pacing_flag": false,
+    "missing_data_flag": false
   }
 ]
 ```
+
+**La unidad de cada fila.** `delivery_metric` es `impressions` u `ots` y dice en qué unidad van `contracted_impressions` (un entero), `delivered` (un texto decimal con cuatro decimales, tal como llega; el navegador lo muestra sin ceros de relleno), `delivery_ratio` (un número) y `pacing.expected_impressions` (un número), aunque sus nombres sigan diciendo «impresiones». `delivered_impressions` son siempre las impresiones reales, sea cual sea la métrica: en la fila DOOH hay 250.764,25 OTS sobre 12.530 impresiones. El ritmo se calcula sobre `delivered`. Un usuario con solo el rol `trading` recibe estos mismos campos, y ningún campo de dinero.
 
 ---
 
@@ -1392,6 +1428,8 @@ curl -X POST http://localhost/api/flights/preview \
               "window_days": 20,
               "delivered_impressions": 0,
               "contracted_impressions": 487805,
+              "delivery_metric": "impressions",
+              "delivered": "0.0000",
               "media_cost": "0.00",
               "rebate": "24.39",
               "platform_cost": "0.00",
@@ -1407,7 +1445,7 @@ curl -X POST http://localhost/api/flights/preview \
               }
             }
           ],
-          "totals": { "revenue": "243.90", "contracted_revenue": "2439.03", "delivered_impressions": 0, "contracted_impressions": 487805, "media_cost": "0.00", "rebate": "24.39", "platform_cost": "0.00", "margin": "219.51", "provisional": true, "flights_counted": 1, "below_cost_count": 0, "zero_sale_count": 0, "margin_pct": "90.00" }
+          "totals": { "revenue": "243.90", "contracted_revenue": "2439.03", "delivered_impressions": 0, "contracted_impressions": 487805, "delivery_metric": "impressions", "delivered": "0.0000", "media_cost": "0.00", "rebate": "24.39", "platform_cost": "0.00", "margin": "219.51", "provisional": true, "flights_counted": 1, "below_cost_count": 0, "zero_sale_count": 0, "margin_pct": "90.00" }
         }
       ],
       "totals": { … }
@@ -1416,6 +1454,8 @@ curl -X POST http://localhost/api/flights/preview \
   "totals": { … }
 }
 ```
+
+**Volúmenes y unidad.** Cada flight, línea y campaña lleva `delivery_metric` (`impressions` u `ots`, la del canal de sus líneas), `contracted_impressions` (un entero en esa unidad), `delivered` (un texto decimal con cuatro decimales, en la misma unidad) y `delivered_impressions` (las impresiones reales, siempre). Un flight DOOH de 300.000 OTS que sirvió 280.000,50 OTS y 12.000 impresiones lleva `delivery_metric` `ots`, `contracted_impressions` 300000, `delivered` `"280000.5000"` y `delivered_impressions` 12000. El ingreso sigue saliendo del volumen contratado (1.500,00 € a 5,00 €) y el coste de plataforma de las impresiones reales (12,00 € a 1,00 € por mil). Los niveles superiores suman sus flights de forma exacta. Los **totales generales** mezclan campañas: si todas comparten métrica, la llevan y suman `contracted_impressions` y `delivered`; si hay más de una, **`delivery_metric`, `contracted_impressions` y `delivered` son `null`**, `delivered_impressions` se suma igualmente y los importes también.
 
 **`POST /api/margin/closings`** con `{"year": 2026, "month": 10}` cierra un mes: congela, para cada flight terminado, la tasa de extraprima y la de plataforma, con su procedencia (`applied_rates`). Es **idempotente**: repetirlo no cambia nada. Responde `{"year": 2026, "month": 10, "closed": 3, "already_closed": 0}` (ejemplo). Si un mes **anterior del mismo año** tiene flights terminados sin cerrar, responde **409** con `{"code": "previous_month_open", "message": "…"}` y el mes que bloquea.
 
@@ -1540,12 +1580,12 @@ La tabla completa de códigos y estados vive en `backend/app/presentation/errors
 
 | # | Criterio |
 |---|---|
-| **1** `[F1]` | **Dadas** campañas activas con mapeo de Adform, **cuando** se ejecuta la ingesta nocturna, **entonces** se registra un `ingestion_batches` con `route = api`, fechas de inicio y fin, estado y número de filas, **y** se crean las `daily_deliveries` por línea y día con impresiones, clics, coste de medios e impresiones medibles y visibles. |
+| **1** `[F1]` | **Dadas** campañas activas con mapeo de Adform, **cuando** se ejecuta la ingesta nocturna, **entonces** se registra un `ingestion_batches` con `route = api`, fechas de inicio y fin, estado y número de filas, **y** se crean las `daily_deliveries` por línea y día con impresiones, clics, coste de medios, impresiones medibles y visibles, **OTS** (con cuatro decimales) y **completados de vídeo**. |
 | **2** `[F1]` | **Dada** una ingesta ya ejecutada para el rango D-7 a D-1, **cuando** se vuelve a ejecutar, **entonces** las entregas de ese rango se **reemplazan**, no se acumulan. Los DSP corrigen cifras a posteriori, así que la ingesta debe ser idempotente sobre una ventana móvil de 7 días. |
 | **3** `[F1]` | **Dada** una campaña activa cuya última entrega es anterior a **D-1**, **cuando** se consulta el status tras la ingesta nocturna, **entonces** aparece marcada como `sin datos recibidos`. |
-| **4** `[F1]` | **Dada** una línea con volumen contratado y días de periodo, **cuando** lo servido acumulado se desvía más de un **±10%** de lo esperado a fecha, **entonces** se marca `desviación de ritmo`, indicando días restantes. |
-| **5** `[F1]` | **Cuando** se muestra una campaña, **entonces** el volumen **contratado** y el **servido** aparecen como columnas distintas junto a su ratio. Nunca se presentan como una sola cifra de "impresiones": el ingreso sale del primero y el coste del segundo. |
-| **6** `[F1]` | **Dada** una entrega que no casa con ninguna línea, **entonces** se registra en `ingestion_exceptions` como `delivery_without_line`; **dada** una línea activa sin ninguna entrega en un periodo ya terminado, como `line_without_delivery`. Las dos se trabajan; ninguna se descarta en silencio. Hoy una es un problema comercial y la otra una errata, y son indistinguibles. |
+| **4** `[F1]` | **Dada** una línea con volumen contratado y días de periodo, **cuando** lo servido acumulado se desvía más de un **±10%** de lo esperado a fecha, **entonces** se marca `desviación de ritmo`, indicando días restantes. El volumen contratado y el servido están en la unidad del canal (OTS en DOOH) y la comparación con el umbral se hace en `Decimal`, sin coma flotante: 300.000 OTS a 10 de septiembre con 90.000 entregados dan exactamente −10 % y no se marca; con 89.999,5 dan −10,0005 % y sí, con 20 días restantes. |
+| **5** `[F1]` | **Cuando** se muestra una campaña, **entonces** el volumen **contratado** y el **servido** aparecen como columnas distintas junto a su ratio, **en la unidad del canal** —impresiones, u OTS en DOOH— y con esa unidad indicada. Nunca se presentan como una sola cifra de "impresiones": el ingreso sale del contratado y el coste de plataforma de las impresiones realmente servidas, que no son los OTS. |
+| **6** `[F1]` | **Dada** una entrega que no casa con ninguna línea, **entonces** se registra en `ingestion_exceptions` como `unmatched_delivery`; **dada** una línea activa sin ninguna entrega en un periodo ya terminado, como `missing_delivery`. Las dos se trabajan; ninguna se descarta en silencio. Hoy una es un problema comercial y la otra una errata, y son indistinguibles. «Sin ninguna entrega» se mide en la unidad del canal: una línea DOOH con 12.000 impresiones y 0 OTS cuenta como sin entrega, y con 0,5 OTS no; una línea CTV con OTS y sin impresiones sí cuenta. Una fila sin línea que solo trae OTS también se trabaja como entrega sin línea. La comprobación solo evalúa las líneas del DSP de la ingesta (Adform): las de Deal, que se compran con Equativ, no se evalúan. |
 | **7** `[F1]` | **Dado** que el `line_format` que envía el DSP dice `Deal` y el canal configurado en la línea dice `Directo`, **cuando** se ingesta, **entonces** el canal de la línea **no cambia**, el `line_format` se guarda solo como contraste y la fila se marca `channel_mismatch` para revisión. El canal es la clave de acumulación de la extraprima: reclasificar en silencio desplazaría los tramos de todo el año. |
 | **8** `[F1]` | **Dado** un DSP sin conector, o una caída de la API, **cuando** operaciones sube el Excel de exportación, **entonces** se ingesta por el mismo contrato, con `route = upload` y el fichero de origen registrado en el lote. Es la única ruta que existe hoy y no es solo una red de seguridad: es también la vía de migración del histórico. |
 | **9** `[F2]` | **Dadas** campañas con mapeo de Equativ o Displayce, **cuando** se ejecuta la ingesta nocturna, **entonces** se comportan igual que Adform. El conector de Adform define el contrato; los otros dos lo implementan. |
@@ -1572,8 +1612,8 @@ La tabla completa de códigos y estados vive en `backend/app/presentation/errors
 
 | # | Criterio |
 |---|---|
-| **1** `[F1]` | **Dado** un periodo cerrado con entrega ingestada y tasas resueltas, **cuando** se calcula el margen, **entonces** `Ingreso = contracted_impressions / 1000 × sale_cpm`, `Extraprima = Ingreso × rebate_rate`, `Coste de plataforma = impresiones servidas / 1000 × platform_cpm_rate` y `Margen = Ingreso − Coste de medios − Extraprima − Coste de plataforma`. **El coste de plataforma forma parte del margen.** |
-| **2** `[F1]` | **Dada** una campaña que sirvió 700.000 impresiones sobre 726.202 contratadas, **cuando** se calcula el ingreso, **entonces** usa **726.202**, no 700.000. El ingreso se reconoce sobre lo contratado; lo servido solo mueve el coste. |
+| **1** `[F1]` | **Dado** un periodo cerrado con entrega ingestada y tasas resueltas, **cuando** se calcula el margen, **entonces** `Ingreso = contracted_impressions / 1000 × sale_cpm`, `Extraprima = Ingreso × rebate_rate`, `Coste de plataforma = impresiones servidas / 1000 × platform_cpm_rate` y `Margen = Ingreso − Coste de medios − Extraprima − Coste de plataforma`. **El coste de plataforma forma parte del margen.** El volumen contratado está en la unidad del canal (en DOOH, OTS), mientras que el coste de plataforma se calcula siempre sobre impresiones, nunca sobre OTS. |
+| **2** `[F1]` | **Dada** una campaña que sirvió 700.000 impresiones sobre 726.202 contratadas, **cuando** se calcula el ingreso, **entonces** usa **726.202**, no 700.000. El ingreso se reconoce sobre lo contratado; lo servido solo mueve el coste. **Dada** una línea DOOH de 300.000 OTS contratados a 5,00 € que sirvió 280.000,50 OTS y 12.000 impresiones, **entonces** el ingreso es 1.500,00 € y, a 1,00 € por mil, el coste de plataforma es 12,00 €, no 280,00 €. |
 | **3** `[F1]` | **Dado** un periodo aún abierto, **cuando** se consulta su margen, **entonces** el ingreso se prorratea por días transcurridos —`(días transcurridos / días del periodo)`—, la extraprima se prorratea igual, **y** la cifra se presenta **etiquetada como devengo provisional**, nunca como resultado cerrado. |
 | **4** `[F1]` | **Cuando** se calcula el margen de una línea, **entonces** se escribe `applied_rates` con la tasa de extraprima, el escalón que la resolvió, si vino de excepción de agencia, el año de la tabla de origen, la tarifa de plataforma y la fecha de cálculo. **Y** editar después un maestro **no altera** un margen ya calculado. |
 | **5** `[F1]` | **Dada** una agencia con excepción en `Directo`, **cuando** se resuelve su tasa, **entonces** sale de la escala de la agencia (escalones 1–3) y no de la de su grupo. **Dado** un grupo sin fila de extraprima en ningún año, **entonces** la tasa es **0% registrado explícitamente con su motivo**, distinguible en la vista de maestros de un 0% negociado. |
