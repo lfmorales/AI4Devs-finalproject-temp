@@ -6,6 +6,7 @@ from decimal import Decimal
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.margin_totals import total_flights, total_lines
 from app.domain.value_objects.margin import FlightMargin
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 from tests.fixtures.flight_inputs import flight_economics
 
 AS_OF = date(2026, 9, 10)
@@ -219,3 +220,127 @@ def test_no_lines_total_zero_without_a_metric() -> None:
     total = total_lines([])
 
     assert total.delivery_metric is None and total.delivered == 0 and total.contracted_impressions == 0
+
+
+# --- The gross, the commitment and the two flags at every level (finance/margin-reporting) -------------------------
+
+def _target(
+    delivered_impressions: int = 1_100_000,
+    sale_cpm: str = "5.00",
+    reported_revenue: str = "4400.00",
+    buyer_spend: str = "5500.00",
+    data_cost: str = "0",
+    flight_start: date = date(2026, 8, 1),
+    flight_end: date = date(2026, 8, 31),
+) -> FlightMargin:
+    return calculate_flight_margin(
+        flight_economics(
+            flight_start=flight_start, flight_end=flight_end, contracted_impressions=1_000_000,
+            sale_cpm=Decimal(sale_cpm), delivered_impressions=delivered_impressions, media_cost=Decimal(0),
+            rebate_amount=Decimal(0), platform_rate=Decimal("1.00"), volume_commitment=VolumeCommitment.TARGET,
+            reported_revenue=Decimal(reported_revenue), buyer_spend=Decimal(buyer_spend), data_cost=Decimal(data_cost),
+        ),
+        as_of=AS_OF,
+    )
+
+
+def test_a_line_sums_the_gross_of_its_target_flights_exactly() -> None:
+    # 1,100,000 at 5.00 € and 333,333 at 3.333 € (1,110.998889 rounds to 1,111.00): the sum of the rounded grosses.
+    closed = _target()
+    running = _target(
+        delivered_impressions=333_333, sale_cpm="3.333", flight_start=date(2026, 9, 1), flight_end=date(2026, 9, 30)
+    )
+
+    total = total_flights([closed, running])
+
+    assert (closed.gross_revenue, running.gross_revenue) == (Decimal("5500.00"), Decimal("1111.00"))
+    assert total.gross_revenue == Decimal("6611.00")
+    assert total.volume_commitment is VolumeCommitment.TARGET
+
+
+def test_a_line_of_committed_flights_has_no_gross_and_is_committed() -> None:
+    total = total_flights([_closed(), _closed()])
+
+    assert total.gross_revenue is None
+    assert total.volume_commitment is VolumeCommitment.COMMITTED
+    assert (total.gross_differs_count, total.data_cost_count) == (0, 0)
+
+
+def test_a_target_line_whose_flights_have_not_started_has_its_commitment_and_no_gross() -> None:
+    total = total_flights([_target(flight_start=date(2026, 10, 1), flight_end=date(2026, 10, 31))])
+
+    assert total.volume_commitment is VolumeCommitment.TARGET
+    assert total.gross_revenue is None
+    assert total.not_started_count == 1
+
+
+def test_a_line_counts_the_flights_carrying_each_flag() -> None:
+    differs = _target(buyer_spend="6050.00")
+    data_cost = _target(data_cost="1.25")
+    plain = _target()
+
+    total = total_flights([differs, data_cost, plain])
+
+    assert (differs.gross_differs_from_buyer_spend, data_cost.data_cost_reported) == (True, True)
+    assert (total.gross_differs_count, total.data_cost_count) == (1, 1)
+    # No amount changes because of the flags.
+    assert total.revenue == Decimal("13200.00")
+    assert plain.margin is not None and total.margin == plain.margin * 3
+
+
+def test_a_campaign_of_both_commitments_has_no_commitment_and_the_gross_of_its_target_line() -> None:
+    target_line = total_flights([_target(data_cost="1.25")])
+    committed_line = total_flights([_closed()])
+
+    campaign = total_lines([target_line, committed_line])
+
+    assert campaign.volume_commitment is None
+    assert campaign.gross_revenue == Decimal("5500.00")
+    assert campaign.data_cost_count == 1
+
+
+def test_a_campaign_of_target_lines_only_is_target_and_sums_their_gross() -> None:
+    campaign = total_lines([total_flights([_target()]), total_flights([_target(delivered_impressions=1_000)])])
+
+    assert campaign.volume_commitment is VolumeCommitment.TARGET
+    assert campaign.gross_revenue == Decimal("5505.00")
+
+
+def test_a_campaign_of_committed_lines_only_is_committed_and_has_no_gross() -> None:
+    campaign = total_lines([total_flights([_closed()]), total_flights([_closed()])])
+
+    assert campaign.volume_commitment is VolumeCommitment.COMMITTED
+    assert campaign.gross_revenue is None
+
+
+def test_the_flags_are_counted_at_the_line_the_campaign_and_the_totals() -> None:
+    line = total_flights([_target(buyer_spend="6050.00"), _target(data_cost="1.25")])
+    campaign = total_lines([line])
+    totals = total_lines([campaign, total_lines([total_flights([_closed()])])])
+
+    for level in (line, campaign, totals):
+        assert (level.gross_differs_count, level.data_cost_count) == (1, 1)
+
+
+def test_the_totals_over_a_campaign_of_both_commitments_and_a_target_campaign_have_no_commitment() -> None:
+    # The campaign of both commitments carries null; above it, null is a disagreement, not the absence of flights.
+    both = total_lines([total_flights([_target()]), total_flights([_closed()])])
+    target_only = total_lines([total_flights([_target()])])
+
+    totals = total_lines([both, target_only])
+
+    assert both.volume_commitment is None
+    assert totals.volume_commitment is None
+    assert totals.gross_revenue == Decimal("11000.00")
+
+
+def test_a_line_or_campaign_with_no_flights_does_not_change_the_commitment_above_it() -> None:
+    campaign = total_lines([total_flights([_target()]), total_flights([])])
+
+    assert campaign.volume_commitment is VolumeCommitment.TARGET
+
+
+def test_no_flights_and_no_lines_have_no_commitment_no_gross_and_no_flag() -> None:
+    for total in (total_flights([]), total_lines([])):
+        assert (total.volume_commitment, total.gross_revenue) == (None, None)
+        assert (total.gross_differs_count, total.data_cost_count) == (0, 0)

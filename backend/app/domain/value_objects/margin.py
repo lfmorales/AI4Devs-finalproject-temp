@@ -138,6 +138,13 @@ class MarginTotals:
     contracted_impressions: int | None = 0
     delivered: Decimal | None = Decimal(0)
     delivery_metric: str | None = None
+    # The exact sum of the gross of the target flights below; None when there is none.
+    gross_revenue: Decimal | None = None
+    # How many flights below carry each flag.
+    gross_differs_count: int = 0
+    data_cost_count: int = 0
+    # The one commitment of the flights or lines below; None when they disagree, or when there are none.
+    volume_commitment: VolumeCommitment | None = None
 
     @property
     def zero_sale(self) -> bool:

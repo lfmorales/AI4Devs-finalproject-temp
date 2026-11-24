@@ -73,8 +73,8 @@
 
 ## 9. Totals
 
-- [ ] 9.1 Write failing tests in `backend/tests/domain/test_margin_totals.py`: a line and a campaign sum the gross of their target flights exactly and carry null when they have none; they count `gross_differs_count` and `data_cost_count`; a campaign with a target and a committed line carries a null commitment, one with only target lines carries `target`
-- [ ] 9.2 Implement in `margin_totals.py` and verify 9.1 and the float-free guards of `test_margin_model_integrity.py`
+- [x] 9.1 Write failing tests in `backend/tests/domain/test_margin_totals.py`: a line and a campaign sum the gross of their target flights exactly and carry null when they have none; they count `gross_differs_count` and `data_cost_count`; a campaign with a target and a committed line carries a null commitment, one with only target lines carries `target`
+- [x] 9.2 Implement in `margin_totals.py` and verify 9.1 and the float-free guards of `test_margin_model_integrity.py`
 
 ## 10. Margin Repositories
 
