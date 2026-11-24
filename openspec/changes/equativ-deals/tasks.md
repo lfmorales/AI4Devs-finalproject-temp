@@ -75,6 +75,8 @@
 
 - [x] 9.1 Write failing tests in `backend/tests/domain/test_margin_totals.py`: a line and a campaign sum the gross of their target flights exactly and carry null when they have none; they count `gross_differs_count` and `data_cost_count`; a campaign with a target and a committed line carries a null commitment, one with only target lines carries `target`
 - [x] 9.2 Implement in `margin_totals.py` and verify 9.1 and the float-free guards of `test_margin_model_integrity.py`
+- [x] 9.3 Write a failing test in `backend/tests/domain/test_margin_totals.py` that the totals over a campaign whose metric is null, because its lines mix OTS and impressions, and a campaign counted in OTS carry `delivery_metric`, `contracted_impressions` and `delivered` null, not `ots` with the OTS campaign's sums (corrects `2026-11-20-ctv-and-delivery-metric` to meet its own requirement)
+- [x] 9.4 In `total_lines`, count a level below with flights and a null metric as a mix, as the commitment already does, and a level below with no flights as nothing; verify 9.3 and that a random comparison against `HEAD` changes only totals that include a level below with a null metric, every one of them to null
 
 ## 10. Margin Repositories
 

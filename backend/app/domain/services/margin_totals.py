@@ -22,10 +22,13 @@ def _add_gross(total: Decimal | None, gross: Decimal | None) -> Decimal | None:
 
 
 def _volumes_in_one_metric(
-    metrics: set[str], contracted: int, delivered: Decimal
+    metrics: set[str], contracted: int, delivered: Decimal, mixed: bool = False
 ) -> tuple[str | None, int | None, Decimal | None]:
-    """The metric and the volumes of a total. Two metrics cannot be added, so then all three are None."""
-    if len(metrics) > 1:
+    """The metric and the volumes of a total. Two metrics cannot be added, so then all three are None.
+
+    `mixed` is a level below that already holds two metrics: whatever the others share, the total holds two as well.
+    """
+    if mixed or len(metrics) > 1:
         return None, None, None
     return (next(iter(metrics)) if metrics else None), contracted, delivered
 
@@ -89,16 +92,19 @@ def total_lines(lines: Iterable[MarginTotals]) -> MarginTotals:
     gross: Decimal | None = None
     gross_differs = data_cost = 0
     commitments: set[VolumeCommitment] = set()
-    disagree = False
+    disagree = mixed = False
     for line in lines:
         if line.delivery_metric is not None:
             metrics.add(line.delivery_metric)
-        # A total with flights below and no commitment is one whose flights disagree; with no flights it says nothing.
+        # A total with flights below and no commitment, or no metric, is one whose flights disagree; with no flights
+        # it says nothing.
         if line.flights_counted + line.not_started_count > 0:
             if line.volume_commitment is None:
                 disagree = True
             else:
                 commitments.add(line.volume_commitment)
+            if line.delivery_metric is None:
+                mixed = True
         gross = _add_gross(gross, line.gross_revenue)
         gross_differs += line.gross_differs_count
         data_cost += line.data_cost_count
@@ -117,7 +123,7 @@ def total_lines(lines: Iterable[MarginTotals]) -> MarginTotals:
         below_cost += line.below_cost_count
         zero_sale += line.zero_sale_count
         not_started += line.not_started_count
-    metric, contracted_total, delivered_total = _volumes_in_one_metric(metrics, contracted, delivered)
+    metric, contracted_total, delivered_total = _volumes_in_one_metric(metrics, contracted, delivered, mixed)
     return MarginTotals(
         revenue, media_cost, rebate, platform_cost, margin, provisional, counted, below_cost, not_started, zero_sale,
         contracted_revenue, delivered_impressions, contracted_total, delivered_total, metric,

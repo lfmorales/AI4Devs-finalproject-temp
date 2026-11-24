@@ -344,3 +344,26 @@ def test_no_flights_and_no_lines_have_no_commitment_no_gross_and_no_flag() -> No
     for total in (total_flights([]), total_lines([])):
         assert (total.volume_commitment, total.gross_revenue) == (None, None)
         assert (total.gross_differs_count, total.data_cost_count) == (0, 0)
+
+
+def test_totals_over_a_campaign_that_already_mixes_metrics_are_null() -> None:
+    # Registration refuses such a campaign (mixed_delivery_metrics), but the totals do not assume it: its null metric
+    # is a mix, not the absence of flights, so the totals cannot carry the OTS campaign's metric and partial sums.
+    mixed = total_lines([
+        total_flights([_economics("ots", "280000.5", 12_000, contracted=300_000)]),
+        total_flights([_economics("impressions", "198800", 198_800, contracted=200_000)]),
+    ])
+    ots = total_lines([total_flights([_economics("ots", "1000", 10, contracted=5_000)])])
+
+    totals = total_lines([mixed, ots])
+
+    assert (mixed.delivery_metric, mixed.contracted_impressions, mixed.delivered) == (None, None, None)
+    assert (totals.delivery_metric, totals.contracted_impressions, totals.delivered) == (None, None, None)
+    assert totals.delivered_impressions == 12_000 + 198_800 + 10
+    assert totals.revenue == mixed.revenue + ots.revenue
+
+
+def test_a_level_with_no_flights_does_not_null_the_metric_above_it() -> None:
+    totals = total_lines([total_lines([]), total_lines([total_flights([_economics("ots", "1000", 10, contracted=5_000)])])])
+
+    assert (totals.delivery_metric, totals.contracted_impressions, totals.delivered) == ("ots", 5_000, Decimal("1000"))
