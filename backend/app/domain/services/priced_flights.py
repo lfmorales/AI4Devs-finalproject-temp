@@ -57,6 +57,8 @@ def price_flights(
                 delivered_impressions=facts.delivered_impressions, media_cost=facts.media_cost,
                 rebate_amount=rebate.rebate, platform_rate=platform.rate,
                 delivery_metric=facts.delivery_metric, delivered=facts.delivered,
+                volume_commitment=facts.volume_commitment, reported_revenue=facts.reported_revenue,
+                buyer_spend=facts.buyer_spend, data_cost=facts.data_cost,
             ),
             as_of,
         )

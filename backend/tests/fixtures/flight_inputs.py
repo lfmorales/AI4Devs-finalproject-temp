@@ -1,7 +1,8 @@
 """Builders for the flight inputs of the margin: the delivery metric and the delivered volume have defaults here, not in the domain.
 
-Left out, a flight counts in impressions and `delivered` is its `delivered_impressions`. Production code never relies on
-that: it always reads both from the stored delivery.
+Left out, a flight counts in impressions and `delivered` is its `delivered_impressions`; it is `committed`, and its
+reported revenue, buyer's spend and data cost are zero. Production code never relies on that: it always reads them
+from the stored line and delivery.
 """
 
 from datetime import date
@@ -9,6 +10,7 @@ from decimal import Decimal
 
 from app.domain.value_objects.margin import FlightEconomics
 from app.domain.value_objects.priced_flight import FlightFacts
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 
 
 def flight_economics(
@@ -23,12 +25,18 @@ def flight_economics(
     platform_rate: Decimal,
     delivery_metric: str = "impressions",
     delivered: Decimal | None = None,
+    volume_commitment: VolumeCommitment = VolumeCommitment.COMMITTED,
+    reported_revenue: Decimal = Decimal(0),
+    buyer_spend: Decimal = Decimal(0),
+    data_cost: Decimal = Decimal(0),
 ) -> FlightEconomics:
     return FlightEconomics(
         flight_start=flight_start, flight_end=flight_end, contracted_impressions=contracted_impressions,
         sale_cpm=sale_cpm, delivered_impressions=delivered_impressions, media_cost=media_cost,
         rebate_amount=rebate_amount, platform_rate=platform_rate, delivery_metric=delivery_metric,
         delivered=Decimal(delivered_impressions) if delivered is None else delivered,
+        volume_commitment=volume_commitment, reported_revenue=reported_revenue, buyer_spend=buyer_spend,
+        data_cost=data_cost,
     )
 
 
@@ -51,6 +59,10 @@ def flight_facts(
     media_cost: Decimal,
     delivery_metric: str = "impressions",
     delivered: Decimal | None = None,
+    volume_commitment: VolumeCommitment = VolumeCommitment.COMMITTED,
+    reported_revenue: Decimal = Decimal(0),
+    buyer_spend: Decimal = Decimal(0),
+    data_cost: Decimal = Decimal(0),
 ) -> FlightFacts:
     return FlightFacts(
         flight_id=flight_id, campaign_line_id=campaign_line_id, campaign_id=campaign_id, flight_start=flight_start,
@@ -59,4 +71,6 @@ def flight_facts(
         sale_cpm=sale_cpm, delivered_impressions=delivered_impressions, media_cost=media_cost,
         delivery_metric=delivery_metric,
         delivered=Decimal(delivered_impressions) if delivered is None else delivered,
+        volume_commitment=volume_commitment, reported_revenue=reported_revenue, buyer_spend=buyer_spend,
+        data_cost=data_cost,
     )

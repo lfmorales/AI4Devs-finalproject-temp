@@ -7,6 +7,7 @@ from app.domain.value_objects.margin import FlightMargin
 from app.domain.value_objects.margin_report import FrozenRates
 from app.domain.value_objects.platform_rate import ResolvedPlatformRate
 from app.domain.value_objects.rebate import FlightRebate
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,8 @@ class FlightFacts:
     `channel` is the channel's name, the value the rebate rules key on; `channel_id` is kept to persist it.
     `delivered_impressions` and `media_cost` are the line's delivery inside the flight's window. `delivered` is that
     delivery in the unit of the channel (`delivery_metric`: impressions or OTS), with decimals.
+    `volume_commitment` is declared on the line; `reported_revenue`, `buyer_spend` and `data_cost` (third-party and
+    audience summed) are what the DSP reported inside the window.
     """
 
     flight_id: int
@@ -35,6 +38,10 @@ class FlightFacts:
     media_cost: Decimal
     delivery_metric: str
     delivered: Decimal
+    volume_commitment: VolumeCommitment
+    reported_revenue: Decimal
+    buyer_spend: Decimal
+    data_cost: Decimal
 
 
 @dataclass(frozen=True)

@@ -17,14 +17,24 @@ def deliveries_in_window(
 
     A delivery stored outside every flight of its line, or belonging to another line, counts toward nothing.
     The media cost is summed as stored, without rounding: rounding is the margin's job, once per amount. `delivered` is
-    the volume in the delivery metric (OTS or impressions); `impressions` is always the real impressions.
+    the volume in the delivery metric (OTS or impressions); `impressions` is always the real impressions. The reported
+    revenue, the buyer's spend and the two data costs, as one amount, are summed the same way.
     """
     impressions = 0
     media_cost = Decimal(0)
     delivered = Decimal(0)
+    reported_revenue = Decimal(0)
+    buyer_spend = Decimal(0)
+    data_cost = Decimal(0)
     for delivery in deliveries:
         if delivery.campaign_line_id == campaign_line_id and flight_start <= delivery.delivery_date <= flight_end:
             impressions += delivery.impressions
             media_cost += delivery.media_cost
             delivered += delivery.ots if delivery_metric == "ots" else Decimal(delivery.impressions)
-    return WindowDelivery(impressions=impressions, media_cost=media_cost, delivered=delivered)
+            reported_revenue += delivery.reported_revenue
+            buyer_spend += delivery.buyer_spend
+            data_cost += delivery.third_party_data_cost + delivery.audience_data_cost
+    return WindowDelivery(
+        impressions=impressions, media_cost=media_cost, delivered=delivered, reported_revenue=reported_revenue,
+        buyer_spend=buyer_spend, data_cost=data_cost,
+    )

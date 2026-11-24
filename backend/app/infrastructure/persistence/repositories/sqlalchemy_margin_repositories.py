@@ -21,6 +21,7 @@ from app.domain.value_objects.margin_report import FrozenRates
 from app.domain.value_objects.platform_rate import NewPlatformRateSetting, PlatformRateLevel, PlatformRateSetting
 from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight, ReadFlight
 from app.domain.value_objects.rebate import Bracket, CounterKey, NewRebateSchedule, RebateSchedule
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 from app.infrastructure.persistence.models.campaign import (
     CampaignLinePeriodRecord,
     CampaignLineRecord,
@@ -195,6 +196,11 @@ class SqlAlchemyMarginFlightRepository(MarginFlightRepository):
                 scope=row[10], contracted_impressions=int(row[11]), sale_cpm=row[12],
                 delivered_impressions=int(row[13]), media_cost=Decimal(row[14]),
                 delivery_metric=row[15], delivered=Decimal(row[16]),
+                # pendiente-10.3: the commitment and the reported amounts are not read yet, so every flight is
+                # priced as committed, as before target lines existed. Task 10.3 reads them from the line and
+                # its deliveries and removes this.
+                volume_commitment=VolumeCommitment.COMMITTED, reported_revenue=Decimal(0), buyer_spend=Decimal(0),
+                data_cost=Decimal(0),
             )
             for row in rows
         ]
@@ -282,6 +288,11 @@ class SqlAlchemyMarginReadRepository(MarginReadRepository):
                 scope=row[10], contracted_impressions=int(row[11]), sale_cpm=row[12],
                 delivered_impressions=int(row[13]), media_cost=Decimal(row[14]),
                 delivery_metric=row[30], delivered=Decimal(row[31]),
+                # pendiente-10.3: the commitment and the reported amounts are not read yet, so every flight is
+                # priced as committed, as before target lines existed. Task 10.3 reads them from the line and
+                # its deliveries and removes this.
+                volume_commitment=VolumeCommitment.COMMITTED, reported_revenue=Decimal(0), buyer_spend=Decimal(0),
+                data_cost=Decimal(0),
             )
             frozen = None if row[20] is None else FrozenRates(
                 rebate_amount=row[21], platform_rate=row[22], effective_rate=row[23], ladder_step=int(row[24]),

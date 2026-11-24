@@ -3,6 +3,8 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 
+from app.domain.value_objects.volume_commitment import VolumeCommitment
+
 
 _ONE_HUNDRED = Decimal(100)
 _HUNDREDTH = Decimal("0.01")
@@ -34,7 +36,11 @@ class FlightEconomics:
     `media_cost` and `delivered_impressions` are the line's delivery inside the flight's window.
     `platform_rate` is euros per thousand delivered impressions: the platform cost is on the real impressions
     whichever the delivery metric. `delivered` is the delivery in the unit of the metric (`delivery_metric`: impressions or
-    OTS, with decimals). Revenue reads neither: it is the contracted volume's.
+    OTS, with decimals). The revenue of a committed flight reads neither: it is the contracted volume's.
+
+    `volume_commitment` is declared on the line. A target flight earns `reported_revenue`, what its DSP reports inside the
+    window, and its `buyer_spend` is only compared with its gross. `data_cost` is the third-party and audience data costs
+    inside the window, summed: only its presence is flagged, it is never subtracted.
     """
 
     flight_start: date
@@ -47,11 +53,18 @@ class FlightEconomics:
     platform_rate: Decimal
     delivery_metric: str
     delivered: Decimal
+    volume_commitment: VolumeCommitment
+    reported_revenue: Decimal
+    buyer_spend: Decimal
+    data_cost: Decimal
 
     def __post_init__(self) -> None:
         if self.flight_start > self.flight_end:
             raise ValueError("flight_start must be <= flight_end")
-        for name in ("sale_cpm", "media_cost", "rebate_amount", "platform_rate", "delivered"):
+        for name in (
+            "sale_cpm", "media_cost", "rebate_amount", "platform_rate", "delivered", "reported_revenue", "buyer_spend",
+            "data_cost",
+        ):
             _require_decimal(name, getattr(self, name))
 
     @property
@@ -85,6 +98,14 @@ class FlightMargin:
     # `delivered` is None until then.
     delivered: Decimal | None = None
     delivery_metric: str | None = None
+    # Known before the flight starts, like the metric. Only a target flight has a gross: its served impressions times
+    # the sale CPM, the base of its rebate. None for a committed flight and before the flight starts.
+    volume_commitment: VolumeCommitment | None = None
+    gross_revenue: Decimal | None = None
+    # A target flight whose gross is more than GROSS_TOLERANCE away from the buyer's spend, or has no spend.
+    gross_differs_from_buyer_spend: bool = False
+    # Any flight with a third-party or audience data cost inside its window; no amount changes.
+    data_cost_reported: bool = False
 
     @property
     def margin_pct(self) -> Decimal | None:
@@ -130,9 +151,16 @@ class MarginTotals:
 
 @dataclass(frozen=True)
 class WindowDelivery:
-    """What a line delivered inside one flight's window: the inputs of its media cost and platform cost."""
+    """What a line delivered inside one flight's window: the inputs of its media cost and platform cost.
+
+    And what its DSP reported besides: the revenue a target flight earns, the buyer's spend its gross is compared with
+    and the data costs, summed, whose presence is flagged.
+    """
 
     impressions: int
     media_cost: Decimal
     # The delivery in the unit of the metric: its OTS when the line counts in OTS, its impressions otherwise.
     delivered: Decimal
+    reported_revenue: Decimal
+    buyer_spend: Decimal
+    data_cost: Decimal

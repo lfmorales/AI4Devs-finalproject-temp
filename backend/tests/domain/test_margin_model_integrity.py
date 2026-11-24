@@ -13,6 +13,7 @@ from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.margin_totals import total_flights, total_lines
 from app.domain.value_objects import margin
 from app.domain.value_objects.margin import FlightEconomics
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 from tests.fixtures.flight_inputs import flight_economics
 
 MARGIN_MODULES = (margin, flight_margin, margin_totals, flight_delivery, platform_rate)
@@ -66,13 +67,22 @@ def test_no_margin_module_branches_on_a_channel(module: object):
     assert not any(word in name for name in identifiers | literals for word in ("deal", "directo", "channel"))
 
 
-def test_a_deal_flight_and_a_directo_flight_with_the_same_numbers_have_the_same_margin():
-    # The model takes no channel, so a Deal and a Directo flight are indistinguishable to it by construction.
-    deal = calculate_flight_margin(_flight(), as_of=date(2026, 9, 1))
-    directo = calculate_flight_margin(_flight(), as_of=date(2026, 9, 1))
+@pytest.mark.parametrize(
+    ("commitment", "revenue"), [(VolumeCommitment.COMMITTED, "3631.01"), (VolumeCommitment.TARGET, "3400.00")]
+)
+def test_a_deal_flight_and_a_directo_flight_with_the_same_commitment_and_numbers_have_the_same_margin(
+    commitment: VolumeCommitment, revenue: str
+) -> None:
+    # The model takes no channel, so a Deal and a Directo flight with the same commitment are indistinguishable to it
+    # by construction. The commitment is declared on the line, never derived from its channel.
+    numbers = dataclasses.replace(
+        _flight(), volume_commitment=commitment, reported_revenue=Decimal("3400.00"), buyer_spend=Decimal("3631.01")
+    )
+    deal = calculate_flight_margin(numbers, as_of=date(2026, 9, 1))
+    directo = calculate_flight_margin(numbers, as_of=date(2026, 9, 1))
 
     assert deal == directo
-    assert deal.revenue == Decimal("3631.01")
+    assert deal.revenue == Decimal(revenue)
 
 
 @pytest.mark.parametrize("module", FLOAT_FREE_MODULES)

@@ -111,3 +111,41 @@ def test_the_window_delivery_is_summed_in_the_metric_of_the_channel() -> None:
 
     assert (in_ots.delivered, in_ots.impressions) == (Decimal("280000.5000"), 12_000)
     assert (in_impressions.delivered, in_impressions.impressions) == (Decimal(12_000), 12_000)
+
+
+# --- The amounts a DSP reports besides its cost: summed exactly inside the window, never rounded here -----------------
+
+def _reported(
+    day: date, reported_revenue: str, buyer_spend: str, third_party: str, audience: str, line_id: int = LINE_ID
+) -> DailyDelivery:
+    return replace(
+        _delivery(day, line_id=line_id),
+        reported_revenue=Decimal(reported_revenue),
+        buyer_spend=Decimal(buyer_spend),
+        third_party_data_cost=Decimal(third_party),
+        audience_data_cost=Decimal(audience),
+    )
+
+
+def test_the_four_reported_amounts_are_summed_exactly_inside_the_window() -> None:
+    deliveries = [
+        _reported(date(2026, 9, 1), "1000.123456", "1250.000001", "0.25", "0"),
+        _reported(date(2026, 9, 30), "3399.876544", "4249.999999", "0", "1.00"),
+        _reported(date(2026, 8, 31), "999", "999", "999", "999"),  # the day before the window
+        _reported(date(2026, 10, 1), "999", "999", "999", "999"),  # the day after
+        _reported(date(2026, 9, 15), "999", "999", "999", "999", line_id=8),  # another line
+    ]
+
+    september = deliveries_in_window(deliveries, LINE_ID, *SEPTEMBER)
+
+    assert september.reported_revenue == Decimal("4400.000000")
+    assert september.buyer_spend == Decimal("5500.000000")
+    # The two data costs are one amount: only their presence is flagged, never subtracted.
+    assert september.data_cost == Decimal("1.25")
+
+
+def test_no_delivery_reports_zero_decimal_amounts() -> None:
+    result = deliveries_in_window([], LINE_ID, *SEPTEMBER)
+
+    assert (result.reported_revenue, result.buyer_spend, result.data_cost) == (Decimal(0), Decimal(0), Decimal(0))
+    assert all(isinstance(value, Decimal) for value in (result.reported_revenue, result.buyer_spend, result.data_cost))
