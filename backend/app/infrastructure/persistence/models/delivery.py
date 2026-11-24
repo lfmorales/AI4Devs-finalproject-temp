@@ -80,6 +80,18 @@ class DailyDeliveryRecord(Base):
     # OTS (the delivery of DOOH lines) and video completions: absolute counts. Rows stored before they existed read zero.
     ots: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=4), nullable=False, server_default=text("0"))
     video_completions: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
+    # What a DSP such as Equativ bills next to the delivery: the buyer's spend, GeoQ's revenue as reported (the curator
+    # margin) and the package's data costs. Adform reports none of them, and rows stored before they existed, read zero.
+    buyer_spend: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=6), nullable=False, server_default=text("0"))
+    reported_revenue: Mapped[Decimal] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=False, server_default=text("0")
+    )
+    third_party_data_cost: Mapped[Decimal] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=False, server_default=text("0")
+    )
+    audience_data_cost: Mapped[Decimal] = mapped_column(
+        Numeric(precision=18, scale=6), nullable=False, server_default=text("0")
+    )
 
 
 class IngestionExceptionRecord(Base):

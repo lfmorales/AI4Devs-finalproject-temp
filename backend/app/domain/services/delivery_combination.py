@@ -36,6 +36,10 @@ def _from_row(campaign_line_id: int, ingestion_batch_id: int, row: DspDeliveryRo
         line_format=row.line_format,
         ots=row.ots,
         video_completions=row.video_completions,
+        buyer_spend=row.buyer_spend,
+        reported_revenue=row.reported_revenue,
+        third_party_data_cost=row.third_party_data_cost,
+        audience_data_cost=row.audience_data_cost,
     )
 
 
@@ -55,6 +59,10 @@ def _add(total: DailyDelivery, row: DspDeliveryRow) -> DailyDelivery:
         line_format=_shared(total.line_format, row.line_format),
         ots=total.ots + row.ots,
         video_completions=total.video_completions + row.video_completions,
+        buyer_spend=total.buyer_spend + row.buyer_spend,
+        reported_revenue=total.reported_revenue + row.reported_revenue,
+        third_party_data_cost=total.third_party_data_cost + row.third_party_data_cost,
+        audience_data_cost=total.audience_data_cost + row.audience_data_cost,
     )
 
 

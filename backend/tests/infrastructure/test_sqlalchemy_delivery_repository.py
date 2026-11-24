@@ -131,3 +131,27 @@ def test_a_dooh_day_of_ots_and_a_ctv_day_of_completions_read_back_exactly(rolled
         500, Decimal("8999.7500"), 0)
     assert (stored[ctv_line].impressions, stored[ctv_line].ots, stored[ctv_line].video_completions) == (
         50000, Decimal("0.0000"), 40615)
+
+
+def test_an_equativ_day_keeps_its_four_amounts_and_an_adform_day_reads_zeros(rolled_back_session: Session) -> None:
+    deal_line = insert_campaign_line(rolled_back_session, "Deal campaign")
+    directo_line = insert_campaign_line(rolled_back_session, "Directo campaign")
+    batch_id = insert_ingestion_batch(rolled_back_session)
+
+    SqlAlchemyDeliveryRepository(rolled_back_session).add_all([
+        daily_delivery(
+            deal_line, date(2026, 11, 19), batch_id, impressions=61628, media_cost=Decimal(0),
+            buyer_spend=Decimal("338.954"), reported_revenue=Decimal("271.1632"),
+            third_party_data_cost=Decimal(0), audience_data_cost=Decimal("1.25"),
+        ),
+        daily_delivery(directo_line, date(2026, 11, 19), batch_id, impressions=50000, media_cost=Decimal("120.50")),
+    ])
+    rolled_back_session.expire_all()
+
+    stored = {row.campaign_line_id: row for row in rolled_back_session.scalars(select(DailyDeliveryRecord))}
+    deal, directo = stored[deal_line], stored[directo_line]
+    assert (deal.buyer_spend, deal.reported_revenue, deal.third_party_data_cost, deal.audience_data_cost) == (
+        Decimal("338.954000"), Decimal("271.163200"), Decimal("0.000000"), Decimal("1.250000"))
+    assert deal.media_cost == Decimal(0)
+    assert (directo.buyer_spend, directo.reported_revenue, directo.third_party_data_cost, directo.audience_data_cost) == (
+        Decimal(0), Decimal(0), Decimal(0), Decimal(0))

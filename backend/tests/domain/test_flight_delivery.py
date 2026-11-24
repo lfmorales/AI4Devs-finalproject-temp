@@ -27,6 +27,10 @@ def _delivery(day: date, impressions: int = 1000, media_cost: str = "1.50", line
         line_format=None,
         ots=Decimal(0),
         video_completions=0,
+        buyer_spend=Decimal(0),
+        reported_revenue=Decimal(0),
+        third_party_data_cost=Decimal(0),
+        audience_data_cost=Decimal(0),
     )
 
 

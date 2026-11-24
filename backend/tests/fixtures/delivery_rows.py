@@ -25,6 +25,10 @@ def dsp_row(
     video_completions: int = 0,
     unattributed: bool = False,
     catalog: LineCatalogInfo | None = None,
+    buyer_spend: Decimal = Decimal(0),
+    reported_revenue: Decimal = Decimal(0),
+    third_party_data_cost: Decimal = Decimal(0),
+    audience_data_cost: Decimal = Decimal(0),
 ) -> DspDeliveryRow:
     return DspDeliveryRow(
         key=None if unattributed else key or external_key(),
@@ -39,6 +43,10 @@ def dsp_row(
         line_format=line_format,
         ots=ots,
         video_completions=video_completions,
+        buyer_spend=buyer_spend,
+        reported_revenue=reported_revenue,
+        third_party_data_cost=third_party_data_cost,
+        audience_data_cost=audience_data_cost,
         catalog=catalog,
     )
 
@@ -52,6 +60,10 @@ def daily_delivery(
     line_format: str | None = None,
     ots: Decimal = Decimal(0),
     video_completions: int = 0,
+    buyer_spend: Decimal = Decimal(0),
+    reported_revenue: Decimal = Decimal(0),
+    third_party_data_cost: Decimal = Decimal(0),
+    audience_data_cost: Decimal = Decimal(0),
 ) -> DailyDelivery:
     return DailyDelivery(
         campaign_line_id=campaign_line_id,
@@ -67,6 +79,10 @@ def daily_delivery(
         line_format=line_format,
         ots=ots,
         video_completions=video_completions,
+        buyer_spend=buyer_spend,
+        reported_revenue=reported_revenue,
+        third_party_data_cost=third_party_data_cost,
+        audience_data_cost=audience_data_cost,
     )
 
 

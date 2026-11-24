@@ -247,12 +247,17 @@ def insert_delivery(
     batch_id: int,
     media_cost: Decimal = Decimal("0"),
     ots: Decimal = Decimal(0),
+    buyer_spend: Decimal = Decimal(0),
+    reported_revenue: Decimal = Decimal(0),
+    third_party_data_cost: Decimal = Decimal(0),
+    audience_data_cost: Decimal = Decimal(0),
 ) -> None:
     from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord
 
     session.add(DailyDeliveryRecord(
         campaign_line_id=campaign_line_id, ingestion_batch_id=batch_id, delivery_date=delivery_day,
         impressions=impressions, clicks=0, media_cost=media_cost, measurable_impressions=0, viewable_impressions=0,
-        ots=ots,
+        ots=ots, buyer_spend=buyer_spend, reported_revenue=reported_revenue,
+        third_party_data_cost=third_party_data_cost, audience_data_cost=audience_data_cost,
     ))
     session.flush()

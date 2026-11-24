@@ -149,3 +149,40 @@ def test_a_delivery_stored_without_them_reads_zero_ots_and_zero_completions(roll
     stored = rolled_back_session.scalars(select(DailyDeliveryRecord)).one()
 
     assert (stored.ots, stored.video_completions) == (Decimal("0.0000"), 0)
+
+
+AMOUNTS = ("buyer_spend", "reported_revenue", "third_party_data_cost", "audience_data_cost")
+
+
+def test_the_four_amounts_are_not_null_six_decimal_columns_with_a_zero_default_in_the_model() -> None:
+    columns = DailyDeliveryRecord.__table__.c
+
+    for name in AMOUNTS:
+        column = columns[name]
+        column_type = column.type
+        assert isinstance(column_type, Numeric), name
+        assert (column_type.precision, column_type.scale) == (18, 6), name
+        assert column.nullable is False, name
+        assert str(column.server_default.arg) == "0", name
+
+
+def test_the_four_amounts_are_not_null_six_decimal_columns_with_a_zero_default_in_the_schema(test_engine: Engine) -> None:
+    columns = {c["name"]: c for c in inspect(test_engine).get_columns("daily_deliveries")}
+
+    for name in AMOUNTS:
+        column_type = columns[name]["type"]
+        assert isinstance(column_type, Numeric), name
+        assert (column_type.precision, column_type.scale) == (18, 6), name
+        assert (columns[name]["nullable"], columns[name]["default"]) == (False, "0"), name
+
+
+def test_a_delivery_stored_without_them_reads_zero_in_the_four_amounts(rolled_back_session: Session) -> None:
+    line_id = insert_campaign_line(rolled_back_session)
+    batch_id = insert_ingestion_batch(rolled_back_session)
+    rolled_back_session.add(_delivery(line_id, batch_id))
+    rolled_back_session.flush()
+    rolled_back_session.expire_all()
+
+    stored = rolled_back_session.scalars(select(DailyDeliveryRecord)).one()
+
+    assert [getattr(stored, name) for name in AMOUNTS] == [Decimal("0.000000")] * 4

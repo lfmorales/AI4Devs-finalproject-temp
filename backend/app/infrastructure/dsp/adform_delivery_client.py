@@ -229,6 +229,11 @@ class AdformDeliveryClient(DspDeliveryClient):
                 line_format=None,
                 ots=_ots(cells["ots"]),
                 video_completions=_completions(cells["videoCompletionRate"], impressions),
+                # Adform reports no buyer's spend, revenue or data cost: its cost is all-in media cost.
+                buyer_spend=Decimal(0),
+                reported_revenue=Decimal(0),
+                third_party_data_cost=Decimal(0),
+                audience_data_cost=Decimal(0),
                 catalog=catalog,
             )
         except (ValueError, TypeError, InvalidOperation):

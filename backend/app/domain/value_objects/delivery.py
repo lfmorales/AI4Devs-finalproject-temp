@@ -46,8 +46,21 @@ class LineCatalogInfo:
 
 def _require_decimal_media_cost(media_cost: object) -> None:
     # Float cost drifts when summed over millions of rows.
-    if not isinstance(media_cost, Decimal):
-        raise TypeError(f"media_cost must be Decimal, not {type(media_cost)}")
+    _require_decimal("media_cost", media_cost)
+
+
+def _require_decimal(name: str, amount: object) -> None:
+    if not isinstance(amount, Decimal):
+        raise TypeError(f"{name} must be Decimal, not {type(amount)}")
+
+
+# What a DSP such as Equativ bills next to the delivery; Adform reports none of them, so its rows carry zeros.
+_REPORTED_AMOUNTS = ("buyer_spend", "reported_revenue", "third_party_data_cost", "audience_data_cost")
+
+
+def _require_decimal_amounts(holder: object) -> None:
+    for name in _REPORTED_AMOUNTS:
+        _require_decimal(name, getattr(holder, name))
 
 
 @dataclass(frozen=True)
@@ -68,11 +81,18 @@ class DspDeliveryRow:
     # OTS (the delivery of DOOH lines, four places) and video completions: absolute counts, never a rate.
     ots: Decimal
     video_completions: int
+    # The buyer's spend, GeoQ's revenue as the DSP reports it (Equativ's curator margin) and the package's data costs.
+    # Never a media cost: the buyer's spend is not what GeoQ pays.
+    buyer_spend: Decimal
+    reported_revenue: Decimal
+    third_party_data_cost: Decimal
+    audience_data_cost: Decimal
     # Only for attributed rows from a DSP that names its line items.
     catalog: LineCatalogInfo | None = None
 
     def __post_init__(self) -> None:
         _require_decimal_media_cost(self.media_cost)
+        _require_decimal_amounts(self)
 
 
 @dataclass(frozen=True)
@@ -94,9 +114,15 @@ class DailyDelivery:
     # Absolute counts, summed over the combined rows; a rate is never stored.
     ots: Decimal
     video_completions: int
+    # Exact sums over the combined rows; zero for a DSP that reports none of them.
+    buyer_spend: Decimal
+    reported_revenue: Decimal
+    third_party_data_cost: Decimal
+    audience_data_cost: Decimal
 
     def __post_init__(self) -> None:
         _require_decimal_media_cost(self.media_cost)
+        _require_decimal_amounts(self)
 
 
 @dataclass(frozen=True)

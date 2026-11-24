@@ -108,3 +108,37 @@ def test_no_rate_is_held_on_a_stored_delivery() -> None:
 
     assert {"ots", "video_completions"} <= names
     assert not [name for name in names if "rate" in name]
+
+
+def test_two_equativ_packages_of_one_line_sum_their_four_amounts_exactly() -> None:
+    first = dsp_row(DAY, external_key("900000001", "900000001"), buyer_spend=Decimal("338.954"),
+                    reported_revenue=Decimal("271.1632"), third_party_data_cost=Decimal("0.10"),
+                    audience_data_cost=Decimal("1.25"))
+    second = dsp_row(DAY, external_key("900000002", "900000002"), buyer_spend=Decimal("62.876"),
+                     reported_revenue=Decimal("50.30080"), third_party_data_cost=Decimal("0.05"),
+                     audience_data_cost=Decimal("0"))
+
+    (record,) = combine_daily_deliveries([(1, first), (1, second)], ingestion_batch_id=BATCH)
+
+    assert record.reported_revenue == Decimal("321.464000")
+    assert record.buyer_spend == Decimal("401.830")
+    assert (record.third_party_data_cost, record.audience_data_cost) == (Decimal("0.15"), Decimal("1.25"))
+
+
+def test_a_single_row_keeps_its_own_four_amounts() -> None:
+    row = dsp_row(DAY, buyer_spend=Decimal("338.954"), reported_revenue=Decimal("271.1632"),
+                  third_party_data_cost=Decimal("0"), audience_data_cost=Decimal("1.25"))
+
+    (record,) = combine_daily_deliveries([(1, row)], ingestion_batch_id=BATCH)
+
+    assert (record.buyer_spend, record.reported_revenue, record.third_party_data_cost, record.audience_data_cost) == (
+        Decimal("338.954"), Decimal("271.1632"), Decimal(0), Decimal("1.25"),
+    )
+
+
+def test_an_adform_row_without_amounts_combines_into_zeros() -> None:
+    (record,) = combine_daily_deliveries([(1, dsp_row(DAY)), (1, dsp_row(DAY, external_key("c", "2")))], BATCH)
+
+    assert (record.buyer_spend, record.reported_revenue, record.third_party_data_cost, record.audience_data_cost) == (
+        Decimal(0), Decimal(0), Decimal(0), Decimal(0),
+    )

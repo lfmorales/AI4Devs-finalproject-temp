@@ -319,6 +319,8 @@ def _invented_day(campaign: DemoCampaign, day: date) -> DailyDelivery:
         clicks=impressions // 500, media_cost=cost, measurable_impressions=impressions * 9 // 10,
         viewable_impressions=impressions * 7 // 10, banner_size=None, screen=None, line_format=None,
         ots=ots.quantize(Decimal("0.0001")), video_completions=0,
+        buyer_spend=Decimal(0), reported_revenue=Decimal(0), third_party_data_cost=Decimal(0),
+        audience_data_cost=Decimal(0),
     )
 
 

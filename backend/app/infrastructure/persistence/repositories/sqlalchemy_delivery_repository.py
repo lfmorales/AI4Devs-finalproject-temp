@@ -51,6 +51,10 @@ def _as_row(delivery: DailyDelivery) -> dict[str, Any]:
         "line_format": delivery.line_format,
         "ots": delivery.ots,
         "video_completions": delivery.video_completions,
+        "buyer_spend": delivery.buyer_spend,
+        "reported_revenue": delivery.reported_revenue,
+        "third_party_data_cost": delivery.third_party_data_cost,
+        "audience_data_cost": delivery.audience_data_cost,
     }
 
 

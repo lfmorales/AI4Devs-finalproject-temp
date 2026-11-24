@@ -20,10 +20,10 @@
 
 ## 2. Delivery Amounts (migration)
 
-- [ ] 2.1 Write failing value-object tests in `backend/tests/domain/test_delivery_value_objects.py` that `DspDeliveryRow` and `DailyDelivery` carry `buyer_spend`, `reported_revenue`, `third_party_data_cost` and `audience_data_cost` as `Decimal` and refuse a `float`; give `tests/fixtures/delivery_rows.py` and `delivery_data.py` zero defaults
-- [ ] 2.2 Write failing tests in `backend/tests/domain/test_delivery_combination.py` that two rows of one line and day with reported revenues of 271.1632 and 50.30080 combine into 321.464000, and the other three amounts likewise; implement in `_from_row` and `_add` and verify
-- [ ] 2.3 Write failing model tests in `backend/tests/infrastructure/test_delivery_models.py` that the four columns are `Numeric(18,6) NOT NULL DEFAULT 0`, and a repository test in `test_sqlalchemy_delivery_repository.py` that an Equativ day of 338.954 spend and 271.1632 revenue reads back exactly and an Adform day reads zeros
-- [ ] 2.4 Add the columns and generate the Alembic migration; review it; verify `upgrade head`, `downgrade -1`, `upgrade head` on a database holding delivery rows, that old rows read zero in the four, and the schema-sync test; write the four fields in `sqlalchemy_delivery_repository.py` and verify 2.3
+- [x] 2.1 Write failing value-object tests in `backend/tests/domain/test_delivery_value_objects.py` that `DspDeliveryRow` and `DailyDelivery` carry `buyer_spend`, `reported_revenue`, `third_party_data_cost` and `audience_data_cost` as `Decimal` and refuse a `float`; give `tests/fixtures/delivery_rows.py` and `delivery_data.py` zero defaults
+- [x] 2.2 Write failing tests in `backend/tests/domain/test_delivery_combination.py` that two rows of one line and day with reported revenues of 271.1632 and 50.30080 combine into 321.464000, and the other three amounts likewise; implement in `_from_row` and `_add` and verify
+- [x] 2.3 Write failing model tests in `backend/tests/infrastructure/test_delivery_models.py` that the four columns are `Numeric(18,6) NOT NULL DEFAULT 0`, and a repository test in `test_sqlalchemy_delivery_repository.py` that an Equativ day of 338.954 spend and 271.1632 revenue reads back exactly and an Adform day reads zeros
+- [x] 2.4 Add the columns and generate the Alembic migration; review it; verify `upgrade head`, `downgrade -1`, `upgrade head` on a database holding delivery rows, that old rows read zero in the four, and the schema-sync test; write the four fields in `sqlalchemy_delivery_repository.py` and verify 2.3
 
 ## 3. Equativ Client
 
