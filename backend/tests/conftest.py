@@ -44,6 +44,45 @@ from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
+class RealEquativRequestBlocked(Exception):
+    """A test tried a real HTTP request to Equativ. Tests reach Equativ only through `httpx.MockTransport`."""
+
+
+# The hosts of the Equativ demand API and of its token service, and any subdomain of them.
+_EQUATIV_HOSTS = ("eqtv.io", "smartadserverapis.com")
+
+
+def _is_equativ(host: str) -> bool:
+    return any(host == suffix or host.endswith(f".{suffix}") for suffix in _EQUATIV_HOSTS)
+
+
+@pytest.fixture(autouse=True)
+def no_real_equativ_requests(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fails at once any real request to Equativ, before a connection is opened, naming the host.
+
+    The real transports are wrapped; `httpx.MockTransport` is not, so the fake Equativ of the tests is still served.
+    """
+    import httpx
+
+    real_sync = httpx.HTTPTransport.handle_request
+    real_async = httpx.AsyncHTTPTransport.handle_async_request
+
+    def _guard(request: httpx.Request) -> None:
+        if _is_equativ(request.url.host):
+            raise RealEquativRequestBlocked(f"a test tried a real request to {request.url.host}")
+
+    def _sync(self: httpx.HTTPTransport, request: httpx.Request) -> httpx.Response:
+        _guard(request)
+        return real_sync(self, request)
+
+    async def _async(self: httpx.AsyncHTTPTransport, request: httpx.Request) -> httpx.Response:
+        _guard(request)
+        return await real_async(self, request)
+
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", _sync)
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", _async)
+
+
 def _recreate_test_database() -> None:
     """Drop and create the test database from the maintenance database."""
     admin_engine = create_engine(_test_url.set(database="postgres"), isolation_level="AUTOCOMMIT")

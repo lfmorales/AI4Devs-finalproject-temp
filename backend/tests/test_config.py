@@ -117,3 +117,44 @@ def test_without_the_key_app_env_leaves_the_issuer_list_as_before(
         entra_environment.setenv("APP_ENV", app_env)
 
     assert Settings().token_issuers == ONLY_ENTRA
+
+
+def test_the_settings_load_without_the_equativ_credentials(entra_environment: pytest.MonkeyPatch) -> None:
+    entra_environment.delenv("EQUATIV_CLIENT_ID", raising=False)
+    entra_environment.delenv("EQUATIV_CLIENT_SECRET", raising=False)
+
+    settings = Settings()
+
+    assert (settings.equativ_client_id, settings.equativ_client_secret) == (None, None)
+
+
+def test_the_equativ_secret_is_read_as_a_secret_that_no_repr_reveals(entra_environment: pytest.MonkeyPatch) -> None:
+    entra_environment.setenv("EQUATIV_CLIENT_ID", "synthetic-equativ-client-id")
+    entra_environment.setenv("EQUATIV_CLIENT_SECRET", "synthetic-equativ-client-secret")
+
+    settings = Settings()
+
+    assert settings.equativ_client_id == "synthetic-equativ-client-id"
+    assert settings.equativ_client_secret is not None
+    assert settings.equativ_client_secret.get_secret_value() == "synthetic-equativ-client-secret"
+    assert "synthetic-equativ-client-secret" not in repr(settings)
+
+
+def test_the_api_starts_and_answers_without_the_equativ_credentials(entra_environment: pytest.MonkeyPatch) -> None:
+    import asyncio
+
+    import httpx
+
+    from app.config import get_settings
+    from app.main import create_app
+
+    entra_environment.delenv("EQUATIV_CLIENT_ID", raising=False)
+    entra_environment.delenv("EQUATIV_CLIENT_SECRET", raising=False)
+    get_settings.cache_clear()
+
+    async def _health() -> int:
+        transport = httpx.ASGITransport(app=create_app())
+        async with httpx.AsyncClient(transport=transport, base_url="http://backend") as client:
+            return (await client.get("/health")).status_code
+
+    assert asyncio.run(_health()) == 200

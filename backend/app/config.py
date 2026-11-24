@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     # Optional so the application starts without a DSP; a connector that needs them reports it is not configured.
     adform_client_id: str | None = None
     adform_client_secret: SecretStr | None = None
+    # Only in .env, never in the repository. Optional: only `run_ingestion --dsp Equativ` needs them.
+    equativ_client_id: str | None = None
+    equativ_client_secret: SecretStr | None = None
     # The zone "today" and the D-7 to D-1 window are calendar days of; the UTC date is wrong around midnight in Madrid.
     app_timezone: str = "Europe/Madrid"
     # Where the backend runs; only "development" and "test" allow the test issuer.
