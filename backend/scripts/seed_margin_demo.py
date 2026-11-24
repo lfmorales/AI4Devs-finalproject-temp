@@ -264,6 +264,8 @@ def _register_missing(session: Session, campaigns: list[DemoCampaign]) -> int:
                 "market_description": "DEMO",
                 "contracted_impressions": campaign.volume,
                 "sale_cpm": campaign.sale_cpm,
+                # The demo campaigns are committed volume; the Deal demo of a target line is added on its own.
+                "volume_commitment": "committed",
             }],
             **ids,
         ))

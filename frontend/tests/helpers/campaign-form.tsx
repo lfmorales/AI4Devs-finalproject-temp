@@ -36,7 +36,7 @@ const MASTERS: Record<string, unknown[]> = {
   "/masters/sectors": [{ id: 1, name: "Sector A" }],
   "/masters/sales-reps": [{ id: 1, name: "Rep A" }],
   "/masters/dsps": [{ id: 1, name: "DSP A", is_active: true }],
-  "/masters/channels": [{ id: 1, name: "Canal A" }],
+  "/masters/channels": [{ id: 1, name: "Canal A" }, { id: 2, name: "Deal" }],
   "/masters/formats": [{ id: 1, name: "Formato A" }],
 };
 

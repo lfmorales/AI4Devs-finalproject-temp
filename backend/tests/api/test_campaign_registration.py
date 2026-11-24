@@ -1,4 +1,5 @@
 import pytest
+from typing import cast
 import logging
 from collections.abc import Callable
 from datetime import date
@@ -40,7 +41,8 @@ def test_register_campaign_success(authenticated_client):
                 "scope": "national",
                 "market_description": "Spain",
                 "contracted_impressions": 1000000,
-                "sale_cpm": "25.50"
+                "sale_cpm": "25.50",
+                "volume_commitment": "committed"
             }
         ]
     }
@@ -77,7 +79,8 @@ def test_register_campaign_no_token(client):
                 "scope": "national",
                 "market_description": "Spain",
                 "contracted_impressions": 1000000,
-                "sale_cpm": "25.50"
+                "sale_cpm": "25.50",
+                "volume_commitment": "committed"
             }
         ]
     }
@@ -109,7 +112,8 @@ def test_register_campaign_invalid_agency(authenticated_client):
                 "scope": "national",
                 "market_description": "Spain",
                 "contracted_impressions": 1000000,
-                "sale_cpm": "25.50"
+                "sale_cpm": "25.50",
+                "volume_commitment": "committed"
             }
         ]
     }
@@ -149,7 +153,8 @@ def test_register_campaign_duplicate_order_reference(authenticated_client):
                 "scope": "national",
                 "market_description": "Spain",
                 "contracted_impressions": 1000000,
-                "sale_cpm": "25.50"
+                "sale_cpm": "25.50",
+                "volume_commitment": "committed"
             }
         ]
     }
@@ -205,7 +210,8 @@ def test_list_campaigns_returns_created_campaign(authenticated_client):
                 "scope": "national",
                 "market_description": "Spain",
                 "contracted_impressions": 1000000,
-                "sale_cpm": "25.50"
+                "sale_cpm": "25.50",
+                "volume_commitment": "committed"
             }
         ]
     }
@@ -291,7 +297,8 @@ def test_register_campaign_duplicate_name(authenticated_client):
                 "scope": "national",
                 "market_description": "Spain",
                 "contracted_impressions": 1000000,
-                "sale_cpm": "25.50"
+                "sale_cpm": "25.50",
+                "volume_commitment": "committed"
             }
         ]
     }
@@ -337,7 +344,8 @@ def test_register_campaign_duplicate_name_no_purchase_order_created(authenticate
                 "scope": "national",
                 "market_description": "Spain",
                 "contracted_impressions": 1000000,
-                "sale_cpm": "25.50"
+                "sale_cpm": "25.50",
+                "volume_commitment": "committed"
             }
         ]
     }
@@ -385,7 +393,8 @@ def test_register_campaign_flights_point_at_the_campaign_periods(authenticated_c
                 "scope": "national",
                 "market_description": "Spain",
                 "contracted_impressions": 1000000,
-                "sale_cpm": "25.50"
+                "sale_cpm": "25.50",
+                "volume_commitment": "committed"
             }
         ]
     }
@@ -428,7 +437,8 @@ def test_register_campaign_without_operations_role(authenticated_client_no_opera
                 "scope": "national",
                 "market_description": "Spain",
                 "contracted_impressions": 1000000,
-                "sale_cpm": "25.50"
+                "sale_cpm": "25.50",
+                "volume_commitment": "committed"
             }
         ]
     }
@@ -463,6 +473,7 @@ def _mixed_payload(channel_ids: list[int], name: str) -> dict[str, object]:
             {
                 "dsp_id": 1, "channel_id": channel_id, "format_id": 1, "scope": "national",
                 "market_description": "Spain", "contracted_impressions": 1000, "sale_cpm": "5.00",
+                "volume_commitment": "committed",
             }
             for channel_id in channel_ids
         ],
@@ -510,4 +521,35 @@ def test_an_unknown_channel_beats_the_mix_through_the_api(authenticated_client: 
     response = authenticated_client.post("/campaigns", json=_mixed_payload([3, 1, 9999], "CAMP-UNKNOWN-FIRST"))
 
     assert response.status_code == 400, response.text
+    assert _stored_counts(test_db_session) == before
+
+
+def _committed_payload(name: str, commitments: list[object]) -> dict[str, object]:
+    """A Deal line per commitment given; `...` leaves the field out of that line."""
+    payload = _mixed_payload([2] * len(commitments), name)
+    lines = cast(list[dict[str, object]], payload["lines"])
+    for line, commitment in zip(lines, commitments):
+        line.pop("volume_commitment", None)
+        if commitment is not ...:
+            line["volume_commitment"] = commitment
+    return payload
+
+
+def test_each_line_of_the_response_carries_its_commitment(authenticated_client: TestClient) -> None:
+    response = authenticated_client.post("/campaigns", json=_committed_payload("CAMP-COMMITMENTS", ["target", "committed"]))
+
+    assert response.status_code == 201, response.text
+    assert [line["volume_commitment"] for line in response.json()["lines"]] == ["target", "committed"]
+
+
+@pytest.mark.parametrize("commitment", [..., "maybe", None])
+def test_a_line_without_a_valid_commitment_answers_422_and_creates_nothing(
+    authenticated_client: TestClient, test_db_session: Session, commitment: object
+) -> None:
+    before = _stored_counts(test_db_session)
+
+    response = authenticated_client.post("/campaigns", json=_committed_payload("CAMP-NO-COMMITMENT", ["target", commitment]))
+
+    assert response.status_code == 422, response.text
+    assert "volume_commitment" in response.text
     assert _stored_counts(test_db_session) == before

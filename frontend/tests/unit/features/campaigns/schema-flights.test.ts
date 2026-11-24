@@ -14,6 +14,7 @@ const baseLine = {
   market_description: "Nacional",
   contracted_impressions: 1000,
   sale_cpm: "5.00",
+  volume_commitment: "committed",
 };
 
 function campaignWith(line: Record<string, unknown>, dates = { start_date: "2026-08-01", end_date: "2026-09-30" }) {

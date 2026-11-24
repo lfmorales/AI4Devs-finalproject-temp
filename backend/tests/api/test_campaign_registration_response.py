@@ -2,7 +2,7 @@
 
 LINE_FIELDS = {
     "id", "dsp_id", "channel_id", "format_id", "scope", "market_description", "contracted_impressions",
-    "sale_cpm", "currency", "line_number", "start_date", "end_date", "flights",
+    "sale_cpm", "currency", "volume_commitment", "line_number", "start_date", "end_date", "flights",
 }
 FLIGHT_FIELDS = {
     "campaign_period_id", "period_year", "period_month", "flight_start", "flight_end", "contracted_impressions",
@@ -17,7 +17,7 @@ def _payload(**overrides):
         "order_reference": "PO-RESPONSE", "order_received_on": "2026-07-01",
         "lines": [{
             "dsp_id": 1, "channel_id": 1, "format_id": 1, "scope": "national", "market_description": "Spain",
-            "contracted_impressions": 100, "sale_cpm": "5.00",
+            "contracted_impressions": 100, "sale_cpm": "5.00", "volume_commitment": "committed",
         }],
     }
     payload.update(overrides)

@@ -122,6 +122,7 @@ async def register_campaign(
                 "contracted_impressions": l.volume.contracted_impressions,
                 "sale_cpm": l.volume.sale_cpm,
                 "currency": l.currency,
+                "volume_commitment": l.volume_commitment.value,
                 "flights": [
                     {
                         "campaign_period_id": f.campaign_period_id,

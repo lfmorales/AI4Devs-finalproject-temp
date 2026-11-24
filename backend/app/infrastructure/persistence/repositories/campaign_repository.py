@@ -91,6 +91,7 @@ class CampaignRepositoryImpl(CampaignRepositoryInterface):
                     contracted_impressions=line.volume.contracted_impressions,
                     sale_cpm=line.volume.sale_cpm,
                     currency=line.currency,
+                    volume_commitment=line.volume_commitment.value,
                 )
                 self.session.add(line_model)
                 line_models.append((line, line_model))

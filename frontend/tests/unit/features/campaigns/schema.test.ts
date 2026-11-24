@@ -24,6 +24,7 @@ describe("Campaign Schema Validation", () => {
           market_description: "Market",
           contracted_impressions: 1000,
           sale_cpm: "25.50",
+          volume_commitment: "committed",
         },
       ],
     };

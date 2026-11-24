@@ -15,6 +15,7 @@ from app.domain.exceptions import (
     MixedDeliveryMetricsError,
     VolumeTooSmallForFlightsError,
 )
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 from tests.fixtures.in_memory_campaign_registration import (
     InMemoryCampaignRepository,
     InMemoryMasterRepository,
@@ -26,7 +27,7 @@ def _line(**overrides: object) -> dict:
     fields: dict = {
         "dsp_id": 1, "channel_id": 1, "format_id": 1, "scope": "national", "market_description": "Spain",
         "contracted_impressions": 100, "sale_cpm": "5.00", "start_date": None, "end_date": None,
-        "monthly_volumes": None,
+        "monthly_volumes": None, "volume_commitment": "committed",
     }
     fields.update(overrides)
     return fields
@@ -216,3 +217,31 @@ def test_an_unknown_channel_is_reported_before_the_mix() -> None:
 
     assert not isinstance(raised.value, MixedDeliveryMetricsError)
     assert "channel_id" in str(raised.value)
+
+
+# Channel 2 stands for Deal and channel 1 for Directo; the service never reads the channel for the commitment.
+def test_a_deal_line_registered_as_a_target_is_a_target() -> None:
+    campaign, _, _ = _register([_line(channel_id=2, volume_commitment="target")])
+
+    assert campaign.lines[0].volume_commitment is VolumeCommitment.TARGET
+
+
+def test_each_line_keeps_the_commitment_it_declares_whatever_its_channel() -> None:
+    campaign, _, _ = _register(
+        [_line(channel_id=2, volume_commitment="committed"), _line(channel_id=1, volume_commitment="target")],
+    )
+
+    assert [line.volume_commitment for line in campaign.lines] == [VolumeCommitment.COMMITTED, VolumeCommitment.TARGET]
+
+
+def test_a_line_with_another_commitment_is_refused_and_nothing_is_stored() -> None:
+    with pytest.raises(ValueError):
+        _register([_line(volume_commitment="maybe")])
+
+
+def test_a_line_without_a_commitment_is_refused_and_nothing_is_stored() -> None:
+    line = _line()
+    del line["volume_commitment"]
+
+    with pytest.raises(KeyError):
+        _register([line])

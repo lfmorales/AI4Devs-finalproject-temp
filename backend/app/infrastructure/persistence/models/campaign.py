@@ -46,6 +46,9 @@ class CampaignLineRecord(Base):
             "uq_campaign_lines_campaign_line_number", "campaign_id", "line_number", unique=True,
             postgresql_where=text("campaign_id IS NOT NULL AND line_number IS NOT NULL"),
         ),
+        CheckConstraint(
+            "volume_commitment IN ('committed', 'target')", name="ck_campaign_lines_volume_commitment"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -63,6 +66,8 @@ class CampaignLineRecord(Base):
     contracted_impressions: Mapped[int] = mapped_column(BigInteger, nullable=False)
     sale_cpm: Mapped[Decimal] = mapped_column(Numeric(precision=10, scale=2), nullable=False)
     currency: Mapped[str] = mapped_column(String, nullable=False, default="EUR")
+    # committed: the buyer committed to the volume; target: the volume is an objective. Never derived from the channel.
+    volume_commitment: Mapped[str] = mapped_column(String, nullable=False, server_default=text("'committed'"))
 
 
 class CampaignLinePeriodRecord(Base):

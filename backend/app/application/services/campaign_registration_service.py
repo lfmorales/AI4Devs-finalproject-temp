@@ -8,6 +8,7 @@ from app.domain.services.explicit_volumes import validate_explicit_volumes
 from app.domain.services.flight_planning import resolve_line_windows, split_volume_by_days
 from app.domain.value_objects.flight import MonthlyVolume
 from app.domain.value_objects.contracted_volume import ContractedVolume
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 from app.domain.services.period_expansion import PeriodExpansionService
 from app.domain.repositories.campaign_repository import CampaignRepository
 from app.domain.repositories.purchase_order_repository import PurchaseOrderRepository
@@ -188,6 +189,8 @@ class CampaignRegistrationService:
                 contracted_impressions=total,
                 sale_cpm=Decimal(str(line_data["sale_cpm"])),
             ),
+            # Declared by the line; never derived from its channel.
+            volume_commitment=VolumeCommitment(line_data["volume_commitment"]),
             currency="EUR",
             campaign_id=None,
             line_number=line_number,

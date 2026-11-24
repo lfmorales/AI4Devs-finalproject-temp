@@ -35,6 +35,31 @@ async function demoOrFirstOf(api: APIRequestContext, path: string): Promise<numb
   return chooseMasterId((await (await api.get(path)).json()) as MasterItem[], path);
 }
 
+export interface LineMasters {
+  dsp: number;
+  channel: number;
+  format: number;
+}
+
+/**
+ * The only line of an E2E campaign: national, 1,000,000 impressions at 1.00 €, over the campaign's window. Its volume
+ * is committed: the API requires the commitment on every line and has no default.
+ */
+export function campaignLine(masters: LineMasters, window: CampaignWindow) {
+  return {
+    start_date: window.start,
+    end_date: window.end,
+    dsp_id: masters.dsp,
+    channel_id: masters.channel,
+    format_id: masters.format,
+    scope: "national",
+    market_description: "E2E",
+    contracted_impressions: 1_000_000,
+    sale_cpm: "1.00",
+    volume_commitment: "committed",
+  };
+}
+
 /**
  * Registers an active campaign with one national line and no delivery, over the given window. The body follows
  * CampaignCreateRequest and CampaignLineCreateRequest of the backend's OpenAPI schema; the masters are the first
@@ -55,17 +80,14 @@ export async function registerCampaign(api: APIRequestContext, window: CampaignW
       order_reference: window.name,
       order_received_on: window.orderReceivedOn,
       lines: [
-        {
-          start_date: window.start,
-          end_date: window.end,
-          dsp_id: await firstOf(api, "masters/dsps"),
-          channel_id: await demoOrFirstOf(api, "masters/channels"),
-          format_id: await firstOf(api, "masters/formats"),
-          scope: "national",
-          market_description: "E2E",
-          contracted_impressions: 1_000_000,
-          sale_cpm: "1.00",
-        },
+        campaignLine(
+          {
+            dsp: await firstOf(api, "masters/dsps"),
+            channel: await demoOrFirstOf(api, "masters/channels"),
+            format: await firstOf(api, "masters/formats"),
+          },
+          window,
+        ),
       ],
     },
   });

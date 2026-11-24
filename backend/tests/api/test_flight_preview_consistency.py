@@ -30,7 +30,7 @@ def test_the_preview_flights_are_identical_to_the_registered_ones(
         "order_reference": "PO-CONSISTENCY", "order_received_on": "2026-07-01",
         "lines": [{
             "dsp_id": 1, "channel_id": 1, "format_id": 1, "scope": "national", "market_description": "Spain",
-            "contracted_impressions": total, "sale_cpm": "5.00", **line_dates,
+            "contracted_impressions": total, "sale_cpm": "5.00", "volume_commitment": "committed", **line_dates,
         }],
     })
 
@@ -56,7 +56,7 @@ def test_the_preview_and_the_registration_reject_the_same_input_with_the_same_co
         "order_reference": "PO-CONSISTENCY-ERR", "order_received_on": "2026-07-01",
         "lines": [{
             "dsp_id": 1, "channel_id": 1, "format_id": 1, "scope": "national", "market_description": "Spain",
-            "contracted_impressions": 100, "sale_cpm": "5.00", **line_dates,
+            "contracted_impressions": 100, "sale_cpm": "5.00", "volume_commitment": "committed", **line_dates,
         }],
     })
 

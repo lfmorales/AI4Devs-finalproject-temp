@@ -129,6 +129,7 @@ describe("CreateCampaignPage - Duplicate Order Reference", () => {
           market_description: "Spain",
           contracted_impressions: 1000,
           sale_cpm: "25.50",
+          volume_commitment: "committed",
         },
       ],
     };

@@ -4,15 +4,19 @@
 
 ## 0. Setup: Create Feature Branch (MANDATORY - FIRST STEP)
 
-- [ ] 0.1 Verify `git branch --show-current` reports `feature/equativ-deals` and `git status --short` is empty before the first code change
+- [x] 0.1 Verify `git branch --show-current` reports `feature/equativ-deals` and `git status --short` is empty before the first code change
 
 ## 1. Volume Commitment on the Line (migration)
 
-- [ ] 1.1 Write failing model tests in `backend/tests/infrastructure/test_line_model_migration.py` (or a new `test_volume_commitment_column.py`) that `campaign_lines.volume_commitment` is `NOT NULL`, defaults to `committed` and refuses any value other than `committed` and `target`
-- [ ] 1.2 Add the column with its check and generate the Alembic migration with `--autogenerate`; review it by hand; verify `upgrade head`, `downgrade -1`, `upgrade head` on a database holding lines, that the old lines read `committed`, and the schema-sync test
-- [ ] 1.3 Write failing domain tests in `backend/tests/domain/test_campaign_entities.py` that `CampaignLine` carries a `VolumeCommitment` and refuses any other value; add the enum and the field, and verify
-- [ ] 1.4 Write failing service tests in `backend/tests/application/test_campaign_registration_service.py`: a `Deal` line registered `target` is stored `target`; a `Deal` line `committed` and a `Directo` line `target` keep what they declare; then store it through the campaign repository and verify, with `test_campaign_repository_flights.py` reading it back
-- [ ] 1.5 Write failing API tests in `backend/tests/api/test_campaign_registration.py`: a line without `volume_commitment`, or with `maybe`, answers 422 and creates nothing; the response carries each line's `volume_commitment`; add the field to `CampaignLineCreateRequest` and the line response, update every API test and fixture that posts a campaign, and verify the registration suites
+- [x] 1.1 Write failing model tests in `backend/tests/infrastructure/test_line_model_migration.py` (or a new `test_volume_commitment_column.py`) that `campaign_lines.volume_commitment` is `NOT NULL`, defaults to `committed` and refuses any value other than `committed` and `target`
+- [x] 1.2 Add the column with its check and generate the Alembic migration with `--autogenerate`; review it by hand; verify `upgrade head`, `downgrade -1`, `upgrade head` on a database holding lines, that the old lines read `committed`, and the schema-sync test
+- [x] 1.3 Write failing domain tests in `backend/tests/domain/test_campaign_entities.py` that `CampaignLine` carries a `VolumeCommitment` and refuses any other value; add the enum and the field, and verify
+- [x] 1.4 Write failing service tests in `backend/tests/application/test_campaign_registration_service.py`: a `Deal` line registered `target` is stored `target`; a `Deal` line `committed` and a `Directo` line `target` keep what they declare; then store it through the campaign repository and verify, with `test_campaign_repository_flights.py` reading it back
+- [x] 1.5 Write failing API tests in `backend/tests/api/test_campaign_registration.py`: a line without `volume_commitment`, or with `maybe`, answers 422 and creates nothing; the response carries each line's `volume_commitment`; add the field to `CampaignLineCreateRequest` and the line response, update every API test and fixture that posts a campaign, and verify the registration suites
+- [x] 1.6 Make `_register_missing` in `backend/scripts/seed_margin_demo.py` (also used by `seed_exceptions_demo.py`) send `volume_commitment` `committed` explicitly, and verify `test_seed_margin_demo.py`, `test_seed_margin_demo_states.py`, `test_seed_exceptions_demo.py` and `test_seed_exceptions_demo_endpoints.py` (brought forward so that no seed breaks between commits; the Deal demo stays in 15.2)
+- [x] 1.7 Task 14.1, brought forward from group 14 so that the form never posts a campaign the API refuses: write failing Vitest tests in `frontend/tests/unit/app/campaigns/` that the form shows a commitment selector per line, proposes «Objetivo» when the channel is `Deal` and «Compromiso» otherwise, keeps the user's choice when the channel changes afterwards, and sends the value shown, including when the user changes the proposal; update the Vitest tests and helpers that assert the body sent; implement it in `CreateCampaignForm.tsx` and the campaign request types; verify the frontend suite with typecheck
+- [x] 1.8 Task 15.1, brought forward from group 15 so that no E2E breaks between commits: write a failing check beside `e2e/support/campaigns.test.mjs` that the body built by `registerCampaign` in `e2e/support/campaigns.ts` carries `volume_commitment` `committed`; implement it and verify the `node --test` checks of `e2e/`; `campaign-form.ts` needs no change because the form proposes «Compromiso» for the DEMO channel
+- [x] 1.9 Verify the group end to end: the whole backend suite with the 38 acceptance tests, Vitest with typecheck, `node --test` of `e2e/` and of the root scripts, and the Playwright suite on clean data (42 tests) on the stack of this worktree at the new Alembic head
 
 ## 2. Delivery Amounts (migration)
 
@@ -101,16 +105,16 @@
 
 ## 14. Screens
 
-- [ ] 14.1 Write failing Vitest tests in `frontend/tests/unit/app/campaigns/` that the form shows a commitment selector per line, proposes «Objetivo» when the channel is `Deal` and «Compromiso» otherwise, keeps the user's choice when the channel changes afterwards, and sends the value shown
+- [ ] 14.1 (Brought forward to group 1 as task 1.7: nothing left to do here.) Write failing Vitest tests in `frontend/tests/unit/app/campaigns/` that the form shows a commitment selector per line, proposes «Objetivo» when the channel is `Deal` and «Compromiso» otherwise, keeps the user's choice when the channel changes afterwards, and sends the value shown
 - [ ] 14.2 Write failing Vitest tests in `frontend/tests/unit/app/status/status-page.test.tsx` that a target row labels its volume «Objetivo» and shows no pacing tag above its target
 - [ ] 14.3 Write failing Vitest tests in `frontend/tests/unit/features/margin/` that a target flight shows «Venta objetivo», a «Bruto» column with the API's gross, and the tags «Bruto distinto del gasto» and «Coste de datos» where raised; a committed flight shows «Venta contratada» and an empty gross
 - [ ] 14.4 Write failing Vitest tests in `frontend/tests/unit/app/catalogue/` that, for a line on Equativ without a mapping, operations can write a package id, the request sends it as both identifiers, the screen shows the mapping as validated by the user, the Equativ packages of the catalogue are suggested by name and id, a package not suggested is still accepted, and `invalid_equativ_package` shows its Spanish message beside the field
 - [ ] 14.5 Write a failing test that the closing maps `month_delivery_not_loaded` to a Spanish message naming the month and the DSP
-- [ ] 14.6 Update `frontend/lib/api/campaigns.ts`, `status.ts`, `margin.ts` and `dsp-catalog.ts`, `CreateCampaignForm.tsx`, the catalogue screen, `StatusTable.tsx`, `MarginTree.tsx`, `Figures.tsx` and the closing messages; verify 14.1 to 14.5, the frontend suite and the no-arithmetic test
+- [ ] 14.6 Update (`campaigns.ts` and the form's commitment selector were done in task 1.7) `frontend/lib/api/campaigns.ts`, `status.ts`, `margin.ts` and `dsp-catalog.ts`, `CreateCampaignForm.tsx`, the catalogue screen, `StatusTable.tsx`, `MarginTree.tsx`, `Figures.tsx` and the closing messages; verify 14.1 to 14.5, the frontend suite and the no-arithmetic test
 
 ## 15. Demo Data and E2E
 
-- [ ] 15.1 Update `e2e/support/campaigns.ts` and `campaign-form.ts` to send `volume_commitment`, with a check beside `campaigns.test.mjs`; verify the existing E2E helpers' checks pass
+- [ ] 15.1 (Brought forward to group 1 as task 1.8: nothing left to do here.) Update `e2e/support/campaigns.ts` and `campaign-form.ts` to send `volume_commitment`, with a check beside `campaigns.test.mjs`; verify the existing E2E helpers' checks pass
 - [ ] 15.2 Write failing tests in `backend/tests/scripts/test_seed_margin_demo.py` that the demo adds, idempotently, a Deal campaign with one target line on Equativ, a validated Equativ mapping on an invented package and invented deliveries with the four amounts, whose closed month reproduces the worked example and whose running month delivers above its target; implement in `scripts/seed_margin_demo.py` and verify with `test_seed_margin_demo_states.py`
 - [ ] 15.3 Write the E2E in `e2e/tests/campaign.spec.ts`, `status.spec.ts` and `margin.spec.ts`: choosing `Deal` proposes «Objetivo» and the campaign registers with it; the Deal demo's running row says «Objetivo» with no pacing tag although above target; its closed flight shows «Venta objetivo», «Bruto» and the margin of `GET /api/margin`
 

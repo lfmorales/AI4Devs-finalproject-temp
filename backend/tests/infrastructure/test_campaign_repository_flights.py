@@ -6,6 +6,7 @@ from datetime import date
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.application.services.campaign_registration_service import CampaignRegistrationService
 from app.domain.entities.campaign import Campaign
@@ -24,7 +25,7 @@ def _line(**overrides: object) -> dict:
     fields: dict = {
         "dsp_id": 1, "channel_id": 1, "format_id": 1, "scope": "national", "market_description": "Spain",
         "contracted_impressions": 1000, "sale_cpm": "5.00", "start_date": None, "end_date": None,
-        "monthly_volumes": None,
+        "monthly_volumes": None, "volume_commitment": "committed",
     }
     fields.update(overrides)
     return fields
@@ -144,3 +145,17 @@ def test_a_line_without_flights_is_refused_and_nothing_is_stored(session):
         _save(session, campaign)
 
     assert _count(session, CampaignRecord) == 0 and _count(session, CampaignLineRecord) == 0
+
+
+def test_each_line_is_stored_with_its_commitment(session: Session) -> None:
+    campaign = _campaign([_line(volume_commitment="target"), _line(volume_commitment="committed")])
+
+    campaign_id = _save(session, campaign)
+    session.expire_all()
+
+    stored = session.execute(
+        select(CampaignLineRecord.line_number, CampaignLineRecord.volume_commitment)
+        .where(CampaignLineRecord.campaign_id == campaign_id)
+        .order_by(CampaignLineRecord.line_number)
+    ).all()
+    assert [tuple(row) for row in stored] == [(1, "target"), (2, "committed")]

@@ -15,7 +15,7 @@ from app.infrastructure.persistence.models import (
 def _line(**overrides):
     line = {
         "dsp_id": 1, "channel_id": 1, "format_id": 1, "scope": "national", "market_description": "Spain",
-        "contracted_impressions": 1000, "sale_cpm": "5.00",
+        "contracted_impressions": 1000, "sale_cpm": "5.00", "volume_commitment": "committed",
     }
     line.update(overrides)
     return line

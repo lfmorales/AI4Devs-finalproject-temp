@@ -3,6 +3,7 @@
 from datetime import date
 
 import pytest
+from pydantic import ValidationError
 
 from app.domain.exceptions import LineDatesInvalidError
 from app.presentation.schemas.campaign import CampaignLineCreateRequest
@@ -10,7 +11,9 @@ from app.presentation.schemas.campaign import CampaignLineCreateRequest
 LINE = {
     "dsp_id": 1, "channel_id": 1, "format_id": 1, "scope": "national",
     "market_description": "Spain", "contracted_impressions": 1000, "sale_cpm": "5.00",
+    "volume_commitment": "committed",
 }
+LINE_WITHOUT_COMMITMENT = {key: value for key, value in LINE.items() if key != "volume_commitment"}
 
 
 def test_a_line_without_dates_or_monthly_volumes_is_accepted():
@@ -66,3 +69,21 @@ def test_the_api_answers_inverted_line_dates_with_the_global_error_body(authenti
     assert response.status_code == 422
     assert response.json()["code"] == "line_dates_invalid"
     assert set(response.json()) == {"code", "message"}
+
+
+@pytest.mark.parametrize("commitment", ["committed", "target"])
+def test_a_line_keeps_the_commitment_it_declares(commitment: str) -> None:
+    line = CampaignLineCreateRequest(**LINE_WITHOUT_COMMITMENT, volume_commitment=commitment)
+
+    assert line.volume_commitment == commitment
+
+
+def test_a_line_without_a_commitment_is_refused_with_no_default() -> None:
+    with pytest.raises(ValidationError, match="volume_commitment"):
+        CampaignLineCreateRequest(**LINE_WITHOUT_COMMITMENT)
+
+
+@pytest.mark.parametrize("commitment", ["maybe", "Target", ""])
+def test_a_line_with_another_commitment_is_refused(commitment: str) -> None:
+    with pytest.raises(ValidationError, match="volume_commitment"):
+        CampaignLineCreateRequest(**LINE_WITHOUT_COMMITMENT, volume_commitment=commitment)

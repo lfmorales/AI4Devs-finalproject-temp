@@ -4,7 +4,7 @@ import { campaignLineSchema } from "@/features/campaigns/schema";
 
 const LINE = {
   dsp_id: 1, channel_id: 1, format_id: 1, scope: "national", market_description: "Nacional",
-  contracted_impressions: 1000, sale_cpm: "5.00",
+  contracted_impressions: 1000, sale_cpm: "5.00", volume_commitment: "committed",
 };
 
 function issueFor(overrides: Record<string, unknown>, field: string): string | undefined {

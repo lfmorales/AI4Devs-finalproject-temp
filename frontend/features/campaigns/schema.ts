@@ -110,6 +110,8 @@ export const campaignLineSchema = z.object({
       ctx.addIssue({ code: "custom", message: "CPM (venta) debe ser un número decimal válido" });
     }
   }),
+  // Required: the API has no default. The form proposes it from the channel; the value sent is the one shown.
+  volume_commitment: z.enum(["committed", "target"], { message: "Selecciona el tipo de volumen" }),
   // Sent only when the line does not inherit the campaign's dates.
   start_date: z.string().date("Fecha de inicio de la línea debe ser una fecha válida").optional(),
   end_date: z.string().date("Fecha de fin de la línea debe ser una fecha válida").optional(),

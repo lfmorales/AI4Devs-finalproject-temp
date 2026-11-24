@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from app.domain.entities.campaign import Campaign, CampaignLine, CampaignLineFlight, CampaignPeriod
 from app.domain.value_objects.contracted_volume import ContractedVolume
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 
 
 def test_campaign_with_periods():
@@ -66,6 +67,7 @@ def test_campaign_line_with_contracted_volume():
         scope="national",
         market_description="Spain digital",
         volume=volume,
+        volume_commitment=VolumeCommitment.COMMITTED,
         currency="EUR"
     )
 
@@ -90,6 +92,7 @@ def test_campaign_line_rejects_invalid_scope():
             scope="regional",  # Invalid scope
             market_description="Test",
             volume=volume,
+            volume_commitment=VolumeCommitment.COMMITTED,
             currency="EUR"
         )
 
@@ -112,6 +115,7 @@ def test_campaign_line_hangs_from_the_campaign_with_its_own_dates_and_flights():
         scope="national",
         market_description="Spain digital",
         volume=ContractedVolume(contracted_impressions=400_000, sale_cpm=Decimal("5.00")),
+        volume_commitment=VolumeCommitment.COMMITTED,
         campaign_id=7,
         line_number=2,
         start_date=date(2026, 8, 15),
@@ -130,7 +134,32 @@ def test_a_line_starts_without_flights_or_dates():
         id=None, purchase_order_version_id=None, dsp_id=1, channel_id=1, format_id=1,
         scope="national", market_description="Spain",
         volume=ContractedVolume(contracted_impressions=1, sale_cpm=Decimal("1.00")),
+        volume_commitment=VolumeCommitment.COMMITTED,
     )
 
     assert line.flights == []
     assert (line.campaign_id, line.line_number, line.start_date, line.end_date) == (None, None, None, None)
+
+
+def _line(volume_commitment: object) -> CampaignLine:
+    return CampaignLine(
+        id=None, purchase_order_version_id=None, dsp_id=1, channel_id=2, format_id=1,
+        scope="national", market_description="Spain",
+        volume=ContractedVolume(contracted_impressions=1_000_000, sale_cpm=Decimal("5.00")),
+        volume_commitment=volume_commitment,  # type: ignore[arg-type]
+    )
+
+
+@pytest.mark.parametrize("commitment", [VolumeCommitment.COMMITTED, VolumeCommitment.TARGET])
+def test_a_line_carries_the_commitment_it_declares(commitment: VolumeCommitment) -> None:
+    assert _line(commitment).volume_commitment is commitment
+
+
+@pytest.mark.parametrize("commitment", ["maybe", "target", None])
+def test_a_line_refuses_anything_but_a_volume_commitment(commitment: object) -> None:
+    with pytest.raises(ValueError, match="volume_commitment"):
+        _line(commitment)
+
+
+def test_the_two_commitments_are_committed_and_target() -> None:
+    assert [commitment.value for commitment in VolumeCommitment] == ["committed", "target"]

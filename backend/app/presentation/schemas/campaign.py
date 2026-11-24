@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, model_validator
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 
 from app.domain.exceptions import LineDatesInvalidError
 
@@ -41,6 +41,10 @@ class CampaignLineCreateRequest(LineDatesRequest):
     market_description: str
     contracted_impressions: int = Field(..., gt=0)
     sale_cpm: Decimal = Field(..., ge=0, decimal_places=2)
+    # Required, with no default: an implicit value would make a target line registered by an old client committed.
+    volume_commitment: Literal["committed", "target"] = Field(
+        ..., description="committed: the buyer committed to the volume | target: the volume is an objective"
+    )
     # Absent: the volume is split by days. Present: it must cover exactly the months the line runs in.
     monthly_volumes: Optional[list[MonthlyVolumeRequest]] = None
 
@@ -88,6 +92,7 @@ class CampaignLineResponse(BaseModel):
     contracted_impressions: int
     sale_cpm: Decimal
     currency: str = "EUR"
+    volume_commitment: Literal["committed", "target"]
     flights: list[CampaignLineFlightResponse] = Field(default_factory=list)
 
 

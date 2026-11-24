@@ -3,6 +3,7 @@ from datetime import date
 from typing import Optional
 
 from app.domain.value_objects.contracted_volume import ContractedVolume
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 
 
 @dataclass
@@ -46,6 +47,7 @@ class CampaignLine:
     scope: str  # 'national' | 'international'
     market_description: str
     volume: ContractedVolume
+    volume_commitment: VolumeCommitment
     currency: str = "EUR"
     campaign_id: Optional[int] = None
     line_number: Optional[int] = None
@@ -54,10 +56,12 @@ class CampaignLine:
     flights: list[CampaignLineFlight] = field(default_factory=list)
 
     def __post_init__(self):
-        """Validate scope enumeration."""
+        """Validate scope enumeration and the volume commitment."""
         valid_scopes = {"national", "international"}
         if self.scope not in valid_scopes:
             raise ValueError(f"scope must be one of {valid_scopes}, got '{self.scope}'")
+        if not isinstance(self.volume_commitment, VolumeCommitment):
+            raise ValueError(f"volume_commitment must be a VolumeCommitment, got {self.volume_commitment!r}")
 
 
 @dataclass

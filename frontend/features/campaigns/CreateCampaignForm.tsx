@@ -35,6 +35,13 @@ interface DSPItem extends MasterItem {
   is_active: boolean;
 }
 
+type VolumeCommitment = "committed" | "target";
+
+/** The commitment the form proposes for a channel: a target for Deal, a commitment for any other. */
+function proposedCommitment(channelName: string | undefined): VolumeCommitment {
+  return channelName === "Deal" ? "target" : "committed";
+}
+
 interface CampaignLine {
   id: string;
   dsp_id: number | "";
@@ -44,6 +51,10 @@ interface CampaignLine {
   market_description: string;
   contracted_impressions: string;
   sale_cpm: string;
+  /** Sent as shown. Proposed from the channel until the user picks it; never changed by the form afterwards. */
+  volume_commitment: VolumeCommitment;
+  /** True once the user has picked the commitment, so a later change of channel no longer proposes one. */
+  commitment_chosen: boolean;
   /** True: the line runs over the campaign's dates and sends none of its own. */
   inherit_dates: boolean;
   start_date: string;
@@ -124,6 +135,8 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
         market_description: "",
         contracted_impressions: "",
         sale_cpm: "",
+        volume_commitment: "committed",
+        commitment_chosen: false,
         inherit_dates: true,
         start_date: "",
         end_date: "",
@@ -199,9 +212,16 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
     const lineIndex = formData.lines.findIndex((l) => l.id === lineId);
     setFormData((prev) => ({
       ...prev,
-      lines: prev.lines.map((line) =>
-        line.id === lineId ? { ...line, [field]: value } : line
-      ),
+      lines: prev.lines.map((line) => {
+        if (line.id !== lineId) return line;
+        const changed = { ...line, [field]: value };
+        // Choosing a channel proposes the commitment, until the user has picked one: a convenience, not a rule.
+        if (field === "channel_id" && !line.commitment_chosen) {
+          const channel = masterData.channels.find((item) => item.id === value);
+          changed.volume_commitment = proposedCommitment(channel?.name);
+        }
+        return changed;
+      }),
     }));
     // Clear field error when user starts typing
     const fieldPath = `lines.${lineIndex}.${field}`;
@@ -212,6 +232,10 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
         return updated;
       });
     }
+  };
+
+  const handleCommitmentChange = (lineId: string, value: VolumeCommitment) => {
+    updateLine(lineId, (line) => ({ ...line, volume_commitment: value, commitment_chosen: true }));
   };
 
   const updateLine = (lineId: string, change: (line: CampaignLine) => CampaignLine) => {
@@ -272,6 +296,8 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
           market_description: "",
           contracted_impressions: "",
           sale_cpm: "",
+          volume_commitment: "committed",
+          commitment_chosen: false,
           inherit_dates: true,
           start_date: "",
           end_date: "",
@@ -329,6 +355,7 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
             market_description: line.market_description,
             contracted_impressions: Number(line.contracted_impressions),
             sale_cpm: line.sale_cpm,
+            volume_commitment: line.volume_commitment,
             // Own dates only when the line does not inherit the campaign's.
             ...(line.inherit_dates ? {} : { start_date: line.start_date, end_date: line.end_date }),
             ...(manual ? { monthly_volumes: monthlyVolumesOf(manual) } : {}),
@@ -759,6 +786,24 @@ export function CreateCampaignForm({ onAuthError }: CreateCampaignFormProps = {}
                 </select>
                 {fieldErrors[`lines.${lineIndex}.channel_id`] && (
                   <p id={`${line.id}-channel_id-error`} className="field-error">{fieldErrors[`lines.${lineIndex}.channel_id`]}</p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor={`${line.id}-volume_commitment`}>
+                  Tipo de volumen *
+                </label>
+                <select
+                  id={`${line.id}-volume_commitment`}
+                  aria-describedby={fieldErrors[`lines.${lineIndex}.volume_commitment`] ? `${line.id}-volume_commitment-error` : undefined}
+                  value={line.volume_commitment}
+                  onChange={(e) => handleCommitmentChange(line.id, e.target.value as VolumeCommitment)}
+                >
+                  <option value="committed">Compromiso</option>
+                  <option value="target">Objetivo</option>
+                </select>
+                {fieldErrors[`lines.${lineIndex}.volume_commitment`] && (
+                  <p id={`${line.id}-volume_commitment-error`} className="field-error">{fieldErrors[`lines.${lineIndex}.volume_commitment`]}</p>
                 )}
               </div>
 
