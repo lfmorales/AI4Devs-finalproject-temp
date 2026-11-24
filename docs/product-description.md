@@ -154,12 +154,17 @@ CommercialOffer (OF)                                            ← phase 3
             └─ Campaign
                  └─ CampaignPeriod    ← the monthly grain that exists today
                       └─ CampaignLine ← DSP + channel + format + buy model + rate + volume
+                           │            + volume commitment (committed | target, §5.3)
                            ├─ DspMapping    ← external campaign / line item id (§7)
                            ├─ AppliedRates  ← rebate rate and platform rate frozen at
-                           │                  calculation time, with their provenance
+                           │                  calculation time, with their provenance;
+                           │                  for a target line also its revenue and
+                           │                  rebate base
                            └─ DailyDelivery ← impressions, clicks, media cost, measurable
                                               and viewable impressions, banner size,
-                                              screen, line format — per line item and day
+                                              screen, line format, and the buyer's spend,
+                                              reported revenue and data costs a DSP like
+                                              Equativ reports — per line item and day
 DspCatalogue                  ← maintained list, not an enum (§1)
 IngestionBatch                ← source, route (API / upload / email), file, run log
 ```
@@ -167,22 +172,24 @@ IngestionBatch                ← source, route (API / upload / email), file, ru
 Key modelling decisions:
 
 - **The monthly period is a first-class entity.** It is how the business thinks (`period` = `agosto`), how budgets are committed, how Finance rolls up, and how the Qlik app is organised — two parallel measure sets for a closed month and a running one (§5.1). Flattening it to a date range would lose the way the team works.
-- **Contracted volume and delivered volume are separate quantities.** Revenue derives from the first, platform cost from the second, pacing from the ratio, and the credit-note trigger from the gap (§5.5). Conflating them breaks the financial model.
-- **The purchase order is versioned, not overwritten.** A campaign that stopped or under-delivered is billed at the lesser of contracted and served, via a revised order or a credit note. Revenue, rebate base and bracket accumulation all read the version in force.
+- **Contracted volume and delivered volume are separate quantities.** For a committed line, revenue derives from the first, platform cost from the second, pacing from the ratio, and the credit-note trigger from the gap (§5.5). Conflating them breaks the financial model. A target line (every `Deal`, §5.3) keeps the two apart as well, but its volume is an objective: its revenue is what its DSP reports, and over-delivery is not a deviation.
+- **The purchase order is versioned, not overwritten.** A committed campaign line that stopped or under-delivered is billed at the lesser of contracted and served, via a revised order or a credit note. Revenue, rebate base and bracket accumulation all read the version in force. A target line is billed on what its DSP reports, with no lesser-of rule and no manual adjustment (§5.3).
 - **The rebate is a bracket schedule, not a rate**, accumulating per holding group *and channel* over the year, attributed chronologically, and settled once in arrears. Accrual and settlement are distinct quantities the system must hold separately. The schedule is normally negotiated with the group, but **an individual agency may carry its own exception**, which overrides its group's schedule for that agency only (§5.9).
-- **Applied rates are frozen on the line.** Both the rebate rate and the platform rate are stored at calculation time with the step and source year that produced them (§5.9). A financial figure that silently changes when someone edits a master table is not auditable.
+- **Applied rates are frozen on the line.** Both the rebate rate and the platform rate are stored at calculation time with the step and source year that produced them (§5.9). A financial figure that silently changes when someone edits a master table is not auditable. For a target line, closing the month also freezes its revenue and its rebate base, so a later restatement by the DSP does not move a closed month.
 - **`DspMapping` is a real foreign key**, not a parsed string. See §7 — the single highest risk in the project.
 - **The channel comes from the configuration**, never from the DSP's `line_format` (§5.10), because it is the accumulation key for the rebate brackets.
 - **Rates and volumes live on the line, not the campaign**, because `cpm_estandar` already varies per row (4.375, 5, 25, 31.25 observed).
-- **`CuratorMargin` is not modelled as data.** It is `OC revenue − purchase cost` (§5.3), computed on demand for Equativ billing.
+- **The volume commitment lives on the line, not on the channel.** `committed` or `target`, declared at registration; the margin and the status read it and never the channel (§5.3).
+- **The curator margin is ingested, not computed.** For a target line it is GeoQ's revenue: the total curator margin Equativ reports per auction package and day, stored with the buyer's spend and the package's data costs (§5.3). *(Supersedes the 2026-09-17 entry that modelled it as `OC revenue − purchase cost`.)*
 
 ## 5. Economic model
 
 Reverse-engineered from the master measures inside `C.C.C. v2.qvf`, which is the authoritative statement of how Finance actually computes today. The Qlik expressions are quoted in §5.6.
 
-**Revenue is booked on contracted volume, not delivered volume.** This is the single most important correction the Qlik app forced on this document: `venta_oc` multiplies `target_impressions_estandar` — the volume on the purchase order — by the sale CPM. Delivered impressions never enter the revenue figure. They drive the platform cost and nothing else.
+**Revenue is booked on contracted volume on a committed line, and on the reported revenue on a target line.** Every line declares its volume commitment (§5.3). On a **committed** line — the purchase order's volume is a commitment — revenue is the contracted volume, not the delivered volume. This is the single most important correction the Qlik app forced on this document: `venta_oc` multiplies `target_impressions_estandar` — the volume on the purchase order — by the sale CPM. Delivered impressions never enter that revenue figure; they drive the platform cost and nothing else. On a **target** line — every `Deal`, whose volume is an objective — revenue is the revenue its DSP reports, the curator margin of Equativ, not the contracted volume; its served impressions drive the platform cost and the rebate base (the served gross).
 
 ```
+Committed line
 Revenue (closed month)  = contracted_impressions / 1000 × sale_cpm
 Media cost              = actual spend reported by the DSP   (Adform's figure is all-in:
                                                               it already includes its
@@ -193,6 +200,14 @@ Platform cost           = delivered_impressions / 1000 × platform_cpm_rate   (1
 
 Margin                  = Revenue − Media cost − Agency rebate − Platform cost
 Margin %                = Margin / Revenue
+
+Target line (§5.3)
+Revenue                 = reported revenue of the window (Equativ's curator margin), never pro-rated
+Media cost              = 0                         (Equativ reports none)
+Gross                   = served_impressions / 1000 × sale_cpm
+Agency rebate           = Gross × rebate_rate       (on the served gross, not on revenue)
+Platform cost           = served_impressions / 1000 × platform_cpm_rate
+Margin, Margin %        = as above
 ```
 
 The platform cost is part of the margin. Confirmed by the PO on 2026-09-14, and it is **the point on which this product's numbers will differ most visibly from the ones Finance reads today** — see §5.2.
@@ -209,6 +224,8 @@ Agency rebate = Revenue × rebate_rate          (same pro-rating applied)
 ```
 
 Revenue is therefore recognised on **elapsed contract time**, not on delivery. A campaign that delivers nothing still accrues revenue in the current month. That is a deliberate revenue-recognition choice and the product must reproduce it, not "improve" it — but it also means the current-month view is an accrual, not a result, and should be labelled as such.
+
+This pro-rating applies to **committed** lines, whose revenue comes from the contracted volume. A **target** line (§5.3) is not pro-rated: its revenue in a running month is the revenue its DSP has reported up to D-1, and its rebate is computed on its served gross up to D-1. A target line that delivers nothing earns nothing. Its figure is provisional all the same until the month is closed.
 
 ### 5.2 Confirmed defect: Qlik omits the platform cost from the margin
 
@@ -237,30 +254,39 @@ Three caveats on the numbers, none of which change the conclusion. Revenue and r
 
 This is the single strongest argument for the project. A margin figure this far from its own definition cannot be fixed by editing a chart expression, because nothing records what the rule was supposed to be.
 
-### 5.3 One economic model for every platform type
+### 5.3 One economic model, two volume commitments
 
-Confirmed by the PO. There is no separate model for curation: `Deal` is calculated exactly like `Directo` — revenue from the OC, media cost from the DSP, rebate on the OC sale price, platform cost on delivered impressions. Platform type determines which DSP the campaign runs on, not how it is priced:
+Decided by the business on 2026-11-20, superseding the PO decisions of 2026-09-15 that priced `Deal` like `Directo`. Every line declares a **volume commitment**, and the commitment, never the channel, decides how the line earns:
+
+- **Committed** (`Directo`, `DOOH`, `CTV` as a rule): the buyer committed to the volume. Revenue is the contracted volume / 1,000 × the sale CPM, pro-rated by elapsed days while the month runs (§5.1); media cost from the DSP; rebate on that revenue; platform cost on delivered impressions; the lesser-of-contracted-and-served rule of §5.5 applies.
+- **Target** (every `Deal`): the volume is an objective, not a commitment. The buyer may fall short or buy more, and there is no over-delivery. The buyer pays the purchase order's fixed sale CPM to the platform, and GeoQ's revenue is the **curator margin Equativ reports** — taken from the report, never from a constant; today it is 80 % of the buyer's spend. GeoQ invoices what Equativ reports, with no lesser-of rule and no manual adjustment, and the figure is not pro-rated. There is no media cost. The platform cost applies on served impressions. The package's data costs are stored, flagged when above zero and not subtracted (today they are zero). The rebate is paid on the **served gross**, served impressions / 1,000 × the sale CPM × the rate, not on the curator margin, and accrues on the `Deal` counter. The margin percentage is over revenue, and the margin view also shows the gross, flagging a gross that departs from the buyer's spend by more than 1 %.
+
+Worked example of a target line: a target of 1,000,000 impressions at a CPM of 5.00 € that served 1,100,000. The gross is 5,500.00 €; the curator margin, 4,400.00 €; a 10 % rebate, 550.00 €; the platform cost at 1.00 € per thousand, 1,100.00 €; the margin, 2,750.00 € (62.5 % of revenue).
+
+Over-delivery of a target line is never a deviation: the daily status flags it only when it falls more than 10 % below its target, and the check for lines without delivery applies to it like to any line. The form proposes `target` for a `Deal` line and `committed` otherwise, but the line declares it. Closing a month that holds a target line waits until its DSP's delivery of the month's last day is loaded, and then freezes its revenue and rebate base.
+
+Platform type still determines which DSP the campaign runs on:
 
 | Platform type | DSP | Notes |
 |---|---|---|
 | `Directo` | Adform | Measured in impressions |
-| `Deal` | Equativ | GeoQ curates; billed to Equativ via `CuratorMargin`. Measured in impressions |
+| `Deal` | Equativ | GeoQ curates; target volume; revenue is the curator margin Equativ reports. Measured in impressions |
 | `DOOH` | Displayce, or Adform | Measured in OTS |
 | `CTV` | Adform | Measured in impressions, like Display; priced in the rebate tables |
 
-**Each channel counts delivery in one unit.** `DOOH` is sold and measured in OTS (opportunity to see); `Directo`, `Deal` and `CTV` in impressions. The contracted volume of a line and its delivered volume are counted in the unit of its channel, its `delivery_metric`, and every screen that shows them names the unit. Revenue is still the contracted volume / 1,000 × the sale CPM, so it never reads the delivered volume: 300,000 OTS at 5.00 € earn 1,500.00 €. The platform cost stays on the **real delivered impressions** of every channel: 12,000 impressions at 1.00 € per thousand cost 12.00 €, not 280.00 € on 280,000.50 OTS. OTS carry decimals, so the delivered volume is stored and compared as a decimal.
+**Each channel counts delivery in one unit.** `DOOH` is sold and measured in OTS (opportunity to see); `Directo`, `Deal` and `CTV` in impressions. The contracted volume of a line and its delivered volume are counted in the unit of its channel, its `delivery_metric`, and every screen that shows them names the unit. The revenue of a committed line is still the contracted volume / 1,000 × the sale CPM, so it never reads the delivered volume: 300,000 OTS at 5.00 € earn 1,500.00 €. The platform cost stays on the **real delivered impressions** of every channel: 12,000 impressions at 1.00 € per thousand cost 12.00 €, not 280.00 € on 280,000.50 OTS. OTS carry decimals, so the delivered volume is stored and compared as a decimal.
 
 **A campaign does not mix units.** Its lines share one delivery metric, because the status, the pacing and the margin of a campaign add the volumes of its lines. A registration that mixes `DOOH` with another channel is refused, and a total over campaigns of different units carries no volume of its own.
 
-**`CuratorMargin` is a billing field, not an economic one.** It is what GeoQ invoices Equativ — the mechanism by which the money arrives in a curated deal, where the buyer pays the platform rather than GeoQ — and it is gross of the agency rebate, because the rebate is settled separately with the agency in arrears (§5.4). It never enters the margin calculation. The data agrees: it is populated only on `Deal` rows, only on 34–39% of them, and its ratio to OC revenue swings between 28% and 55% year on year. No revenue basis behaves like that.
+**The curator margin is the revenue of a target line.** It is what GeoQ invoices Equativ — the mechanism by which the money arrives in a curated deal, where the buyer pays the platform rather than GeoQ — and it is gross of the agency rebate, because the rebate is settled separately with the agency in arrears (§5.4). It is read from Equativ's asynchronous report (`POST /async-report`, `Etc/UTC`, one row per day and `auctionPackageDealId`), the only report whose figures Equativ declares valid; the field is `paidBuyerConnectCompanyVendorCostCompanyCurrency`, Equativ's «Total Curator Margin». Equativ's days are UTC days, the zone it bills in, while Adform's are days of Madrid. Two probes on 2026-11-24 matched Equativ's own reference for 19 November to 0.03 % in UTC and confirmed the 80 % on every row.
 
-It still belongs in the model — stored per delivery row, reported, and reconciled against what Equativ actually pays — but as an operational obligation, not an input to profit.
+*Until 2026-11-20 this section held that the curator margin was a billing field that never entered the margin. The analysis below, which led to that view, is kept as history; its conclusion on revenue is superseded.*
 
 This makes Qlik's `venta_oc_deal = sum(Cost)` and the `if tipo_plataforma = 'Deal'` short-circuit in `total_mes_actual` plainly wrong: they read the cost column as revenue, understating Deal revenue by 2.47 M€ over four years against an OC value of 3,149,770 €. Deal is 7.9 M of the 8.5 M delivery rows, so this is not a rounding error in a corner of the business.
 
 The resulting margin is unremarkable, which is itself the confirmation: 35.6% for Deal against 36.3% for the rest.
 
-#### `CuratorMargin` is derived, not source data
+#### History: the `CuratorMargin` reports of 2024–2026 (conclusion superseded on 2026-11-20)
 
 The three `CuratorMargin20XX.xlsx` reports settle this. Each is a per-campaign P&L for Deal inventory — 408 campaigns across 2024–2026 — with columns for served and contracted impressions, cost CPM and OC CPM, purchase cost, rebate rate and amount, and the curator margin itself. Checking the arithmetic row by row:
 
@@ -362,6 +388,8 @@ So roughly 30 combinations a year would sit above the first bracket, where the t
 **Migration note.** None of the rate tables provided carry bracket columns — 2023, 2024 and 2026 all hold exactly one percentage per key. Tiering is therefore a forward-looking requirement, and historical rates migrate as a single bracket covering all volume. The free-text comments in the 2026 file (`"se baja desde el 35% porque no llega a volumen"`) are the manual approximation of what the bracket schedule will do automatically.
 
 ### 5.5 Revenue follows the purchase order in force, and the order can be revised
+
+This section applies to committed lines. A target line (§5.3) is invoiced on what its DSP reports: it has no lesser-of rule, needs no credit note or revised order for under-delivery, and its gap between target and served is not a billing trigger. The analysis of the 408 Deal campaigns below predates that decision and is kept as history.
 
 The pro-rating in §5.1 and the full-OC billing in the curator margin reports are not two competing revenue rules. Confirmed by the PO: a campaign that stopped early is invoiced at **the lesser of contracted and served**, and that reduction is made real either by a credit note or by a revised OC stating what was actually delivered. Qlik's elapsed-day pro-rating is an accrual view of an open month; the closing figure is the order in force.
 
@@ -489,7 +517,9 @@ This matters more under the tiered rebate than it did before. The channel is the
 
    One consequence the team should expect regardless: historical rows carry only contracted volumes, never actual delivery (§1). Historical margin is therefore a *planned* margin and must be labelled as such in every report, or Finance will unknowingly compare it against the actual margins the system starts producing from phase 1 onwards.
 
-### Known limitation: the delivery of `Deal` lines
+### Resolved limitation: the delivery of `Deal` lines
+
+*Resolved by the change `equativ-deals` (phase 2), which ingests Equativ through its asynchronous report and prices `Deal` lines as target lines (§5.3). The text below describes the behaviour before that change.*
 
 `Deal` inventory is bought through Equativ, and the only connector of phase 1 is Adform, so the ingestion never brings delivery for a `Deal` line. Until the Equativ connector exists:
 
@@ -500,7 +530,7 @@ The delivery of `Deal` lines through Equativ (the connector, the mapping and the
 
 ### Phase 2
 
-Equativ and Displayce connectors (the Adform connector defines the contract); immutable month-end snapshot; email/Teams alerting; rebate-rate versioning UI for Finance.
+Equativ and Displayce connectors (the Adform connector defines the contract; Equativ is the change `equativ-deals`, through the asynchronous report, with no CSV, upload or S3); immutable month-end snapshot; email/Teams alerting; rebate-rate versioning UI for Finance.
 
 ### Phase 3
 
@@ -613,6 +643,7 @@ Ordered by how much they move the numbers.
 
 ### Resolved
 
+- **Deal lines are target lines, and their revenue is the curator margin Equativ reports.** The volume of a Deal line is an objective the buyer may miss or exceed; there is no over-delivery. The buyer pays the purchase order's fixed sale CPM. GeoQ's revenue is the curator margin Equativ reports, taken from the report and not from a constant (80 % of the buyer's spend today), invoiced as reported with no lesser-of rule and no manual adjustment. No media cost; the platform cost applies on served impressions; the package's data costs are stored (zero today). The rebate is paid on the served gross (served / 1,000 × sale CPM × rate), not on the curator margin, on the Deal counter. Under-delivery and no-delivery warnings apply against the target; over-delivery is not warned. The line declares the commitment (`committed` or `target`) at registration, never derived from the channel; the margin percentage is over revenue and the view shows the gross; data costs are flagged when above zero and not subtracted; a gross more than 1 % away from the buyer's spend is flagged; closing waits for the month's last day of Equativ and freezes the revenue of target flights. Equativ is read through its asynchronous report in `Etc/UTC`, keyed by `auctionPackageDealId`. **This supersedes the PO decisions of 2026-09-15 on the Deal** (same model as `Directo`, `CuratorMargin` outside the margin, rebate on the OC sale price) and, for Deal lines, the 2026-09-17 decisions that computed `CuratorMargin` and applied the lesser of contracted and served. *(Business, 2026-11-20; Equativ figures confirmed by two probes on 2026-11-24)*
 - **The purchase order prevails over the commercial offer.** Where the two disagree — volume, CPM — the campaign is created from the `OC` and the deviation against the offer is recorded as informational. It does not block registration; the offer remains the commercial antecedent. *(PO, 2026-09-21)*
 - **An active campaign is flagged `no data received` as soon as D-1 is missing**, checked after the nightly ingestion. The tighter threshold is deliberate: a DSP running late produces a flag that clears itself the next night, whereas a wider window hides a real outage for a day. *(PO, 2026-09-21)*
 - An agency carrying a rebate exception accrues volume on its own counter and is carved out of its group's, per channel. The accumulation key is `(group, agency | null, channel, year)`. *(PO, 2026-09-21)*
@@ -620,12 +651,12 @@ Ordered by how much they move the numbers.
 - Authentication is Microsoft Entra ID, with Cognito kept for development and the end-to-end tests. Roles stay in the application database. *(PO, 2026-11-12; supersedes the 2026-09-21 decision that chose Cognito)*
 - Cognito is removed: Microsoft Entra ID is the only identity provider in every environment. Development and the end-to-end tests use a test issuer shaped like Entra, active only when `APP_ENV` is `development` or `test`. *(PO, 2026-11-17; supersedes the 2026-11-12 decision that kept Cognito for development and the end-to-end tests)*
 - Operations has global control and sees the margin; Finance is the reviewer and no longer writes rebate schedules or platform rates. Trading is a new role that reads the delivery status only. *(PO, 2026-11-12)*
-- CTV enters through the Adform ingestion, like Display, and is measured in impressions; DOOH is measured in OTS. `Directo` and `Deal` stay separate channels, each with its own rebate counter, and both are measured in impressions. The `delivery_metric` of the channel (`impressions` or `ots`) names the unit of the contracted and the delivered volume of its lines, revenue stays on the contracted volume and the platform cost on the delivered impressions, and a campaign does not mix delivery metrics. *(Confirmed by the business on 2026-11-19 (CTV through Adform) and on 2026-11-20 (`Directo` and `Deal` as separate channels))*
+- CTV enters through the Adform ingestion, like Display, and is measured in impressions; DOOH is measured in OTS. `Directo` and `Deal` stay separate channels, each with its own rebate counter, and both are measured in impressions. The `delivery_metric` of the channel (`impressions` or `ots`) names the unit of the contracted and the delivered volume of its lines, revenue stays on the contracted volume and the platform cost on the delivered impressions, and a campaign does not mix delivery metrics. *(Confirmed by the business on 2026-11-19 (CTV through Adform) and on 2026-11-20 (`Directo` and `Deal` as separate channels). The revenue of a target line, every Deal, is the curator margin Equativ reports: see the first entry.)*
 
 - The 136 finished campaign-months with no delivery did not execute and are discarded on migration; their 111,572 € of accrued rebate is reversed. *(PO, 2026-09-15)*
 - A rate change restates the whole current year; a volume-driven bracket crossing is marginal and forward-only. *(PO, 2026-09-17)*
-- A campaign that stopped or under-delivered is invoiced at the lesser of contracted and served, via credit note or revised OC. The purchase order is therefore versioned. *(PO, 2026-09-17)*
-- `CuratorMargin` = OC revenue − purchase cost, verified on 404 of 408 campaigns in the 2024–2026 reports. It is computed, not ingested. *(Evidence: `CuratorMargin2024/2025/2026.xlsx`, 2026-09-17)*
+- A campaign that stopped or under-delivered is invoiced at the lesser of contracted and served, via credit note or revised OC. The purchase order is therefore versioned. *(PO, 2026-09-17. Superseded for Deal lines by the business decision of 2026-11-20: a target line is invoiced as Equativ reports.)*
+- ~~`CuratorMargin` = OC revenue − purchase cost, verified on 404 of 408 campaigns in the 2024–2026 reports. It is computed, not ingested.~~ *(Evidence: `CuratorMargin2024/2025/2026.xlsx`, 2026-09-17. Superseded by the business decision of 2026-11-20: the curator margin is ingested from Equativ and is the revenue of a Deal line.)*
 - Everything is EUR and billed from Spain **for now**. No currency conversion is built, but amounts carry an explicit currency so that adding one later is not a migration. *(PO, 2026-09-21)*
 - The campaign is invoiced to the agency, which belongs to a holding group. `RECLAM` is not the billing entity. *(PO, 2026-09-21)*
 - The channel comes from `tipo_plataforma` in the configuration. The DSP's `line_format` is contrast data only and never feeds a calculation. *(PO, 2026-09-17)*
@@ -633,9 +664,9 @@ Ordered by how much they move the numbers.
 - Tiered rebate is attributed chronologically, not blended across the year; sequential order within a month is sufficient, since the monthly total is order-invariant. *(PO, 2026-09-17)*
 - The rebate is tiered with marginal brackets per holding group and channel. *(PO, 2026-09-17)*
 - The platform cost is part of the margin: `margin = (revenue − media cost − rebate − platform cost) / revenue`. Qlik omits it today, overstating margin by 16.0 points over 2023–2026. *(PO, 2026-09-14)*
-- Every platform type uses the same economic model. `Deal` is priced like `Directo`; `CuratorMargin` only exists to bill Equativ and never enters the margin. *(PO, 2026-09-15)*
-- The rebate is always a percentage of the OC sale price, for Deal as for everything else. *(PO, 2026-09-15)*
-- Platform type maps to DSP: `Directo` → Adform, `Deal` → Equativ, `DOOH` → Displayce or Adform. `CuratorMargin` is the Deal revenue line, invoiced to Equativ, and exists only for Deal rows. *(PO, 2026-09-15; confirmed against all 8.5 M delivery rows.)*
+- ~~Every platform type uses the same economic model. `Deal` is priced like `Directo`; `CuratorMargin` only exists to bill Equativ and never enters the margin.~~ *(PO, 2026-09-15. Superseded by the business decision of 2026-11-20 on Deal lines.)*
+- ~~The rebate is always a percentage of the OC sale price, for Deal as for everything else.~~ *(PO, 2026-09-15. Superseded by the business decision of 2026-11-20: the rebate of a Deal line is a percentage of its served gross.)*
+- Platform type maps to DSP: `Directo` → Adform, `Deal` → Equativ, `DOOH` → Displayce or Adform. `CuratorMargin` is the Deal revenue line, invoiced to Equativ, and exists only for Deal rows. *(PO, 2026-09-15; confirmed against all 8.5 M delivery rows. The mapping stands; since 2026-11-20 the curator margin is also the Deal line's revenue in the margin.)*
 - Historical rebate tables provided for 2023, 2024 and 2026; a year with no table inherits the previous year's rates. *(PO, 2026-09-14)*
 - Adform's reported cost is all-in and already includes its platform fee — no separate fee line. *(PO, 2026-09-14)*
 - An agency group with no rebate row is 0%, not a blocking error. *(PO, 2026-09-14)*
