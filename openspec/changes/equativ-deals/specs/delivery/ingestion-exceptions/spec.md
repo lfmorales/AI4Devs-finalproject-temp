@@ -20,4 +20,4 @@ The system SHALL run the check for lines without delivery after every Equativ in
 #### Scenario: A Deal that never receives bids is a line without delivery
 - **WHEN** operations wrote the package `900000001` for a target `Deal` line on 2026-11-01, the package never appears in any Equativ report nor in the catalogue, and the line's flight from 2026-11-01 to 2026-11-15 ends inside the window of an Equativ run started at 06:15 UTC on 2026-11-18
 - **THEN** a `missing_delivery` exception is recorded against that line and period
-- **AND** the same happens when the package id was written wrong
+- **AND** the same happens when the id written is well formed but names no package of Equativ, such as `900000009`: it passes the check at creation and is surfaced here

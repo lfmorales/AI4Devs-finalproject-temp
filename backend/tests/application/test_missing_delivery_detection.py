@@ -1,10 +1,13 @@
 """The absence check as a service method: one exception per line and period, however often it runs."""
 
-from datetime import date
+from datetime import date, datetime
 
+from app.domain.entities.ingestion_batch import IngestionRoute
 from app.domain.entities.ingestion_exception import ExceptionStatus, ExceptionType
 from app.domain.value_objects.delivery import DeliveryDateRange
 from app.domain.value_objects.ingestion import IngestionTargets, MissingDeliveryCandidate
+from app.infrastructure.dsp.equativ_delivery_client import EquativDeliveryClient
+from tests.fixtures.fake_equativ import REPORT_ID, FakeEquativ
 from tests.fixtures.ingestion_harness import DSP_ID, IngestionHarness
 
 TODAY = date(2026, 8, 10)
@@ -69,3 +72,33 @@ def test_the_window_follows_the_configured_length():
     harness.service.detect_missing_delivery(DSP_ID, TODAY, BATCH)
 
     assert harness.targets.missing_requests == [(DSP_ID, DeliveryDateRange(date(2026, 8, 7), date(2026, 8, 9)))]
+
+
+EQUATIV_DSP_ID = 3
+EQUATIV_TODAY = date(2026, 11, 18)
+
+
+def test_an_equativ_absence_is_recorded_with_the_equativ_batch() -> None:
+    fake = FakeEquativ(rows=[])
+    harness = IngestionHarness(
+        client=EquativDeliveryClient(
+            "synthetic-equativ-client-id", "synthetic-equativ-client-secret", fake.client(),
+            sleep=lambda _: None, monotonic=lambda: 0.0,
+        )
+    )
+    harness.targets.missing_candidates = (MissingDeliveryCandidate(21, 201),)
+    # An Adform batch of the same night comes first, so the Equativ batch is not merely the first one.
+    window = DeliveryDateRange(date(2026, 11, 11), date(2026, 11, 17))
+    adform_batch = harness.batches.start(DSP_ID, IngestionRoute.API, None, datetime(2026, 11, 18, 2, 0), window)
+    equativ_batch = harness.service.run(EQUATIV_DSP_ID, EQUATIV_TODAY).batch_id
+
+    created = harness.service.detect_missing_delivery(EQUATIV_DSP_ID, EQUATIV_TODAY, equativ_batch)
+
+    [exception] = harness.exceptions.exceptions.values()
+    assert created == 1
+    assert equativ_batch != adform_batch
+    assert (exception.exception_type, exception.campaign_line_id, exception.campaign_period_id,
+            exception.ingestion_batch_id) == (ExceptionType.MISSING_DELIVERY, 21, 201, equativ_batch)
+    assert harness.batches.records[equativ_batch].dsp_id == EQUATIV_DSP_ID
+    assert harness.batches.records[equativ_batch].source_file == REPORT_ID
+    assert harness.targets.missing_requests == [(EQUATIV_DSP_ID, window)]

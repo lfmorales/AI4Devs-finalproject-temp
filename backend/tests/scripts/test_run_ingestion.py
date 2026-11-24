@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import Engine, func, select, text
+from sqlalchemy import Engine, func, select, text, update
 from sqlalchemy.orm import Session
 
 from app.domain.exceptions import DspUnreachableError
@@ -18,12 +18,15 @@ from app.infrastructure.persistence.models.delivery import (
     IngestionExceptionRecord,
 )
 from app.infrastructure.dsp.equativ_delivery_client import EquativDeliveryClient
-from app.infrastructure.persistence.models.masters import DSPRecord
+from app.infrastructure.persistence.models.campaign import CampaignLineRecord
+from app.infrastructure.persistence.models.dsp_catalog import DspCatalogLineRecord
+from app.infrastructure.persistence.models.masters import ChannelRecord, DSPRecord
 from scripts.run_ingestion import NIGHTLY_INGESTION_LOCK_KEY, main
 from tests.fixtures.delivery_data import (
     add_line_to_campaign,
     insert_campaign_line,
     insert_mapping,
+    period_of_line,
     replace_flights,
 )
 from tests.fixtures.delivery_rows import dsp_row
@@ -459,3 +462,65 @@ def test_an_adform_run_detects_absence_whatever_the_hour(scenario: Scenario) -> 
 
     assert code == 0
     assert "absences: 1" in scenario.output
+
+
+# --- «A Deal that never receives bids» (delivery/ingestion-exceptions) ----------------------------------------------
+
+NEVER_BID_RUN = datetime(2026, 11, 18, 6, 15, tzinfo=UTC)
+# Well formed, so it passes the check at creation, but no package of Equativ: it only ever shows up here.
+WRONG_PACKAGE = "900000009"
+DELIVERING_PACKAGE = "900000003"
+
+
+def _target_deal_line(session: Session, name: str, equativ_id: int, package: str) -> tuple[int, int]:
+    """A target line of the Deal channel on Equativ, flight Nov 1 to 15, mapped on Nov 1 by writing `package`."""
+    line = insert_campaign_line(session, name, date(2026, 11, 1), date(2026, 11, 15), dsp_id=equativ_id)
+    deal = session.scalars(select(ChannelRecord).where(ChannelRecord.name == "Deal")).first()
+    if deal is None:
+        deal = ChannelRecord(name="Deal", delivery_metric="impressions")
+        session.add(deal)
+        session.flush()
+    session.execute(
+        update(CampaignLineRecord)
+        .where(CampaignLineRecord.id == line)
+        .values(volume_commitment="target", channel_id=deal.id)
+    )
+    insert_mapping(session, line, equativ_id, package, package, validated_at=datetime(2026, 11, 1, 10, 0))
+    return line, period_of_line(session, line)
+
+
+@pytest.mark.parametrize("package", [PACKAGE, WRONG_PACKAGE], ids=["never-bids", "well-formed-but-unknown-id"])
+def test_a_deal_that_never_receives_bids_is_a_line_without_delivery(
+    rolled_back_session: Session, test_engine: Engine, package: str
+) -> None:
+    session = rolled_back_session
+    equativ = DSPRecord(name="Equativ", is_active=True)
+    session.add(equativ)
+    session.flush()
+    line, period = _target_deal_line(session, "Never bid", equativ.id, package)
+    # The report carries another package, delivering inside the same window; never the one written for the line.
+    fake = FakeEquativ(rows=[package_row(day="2026-11-12T00:00:00", package_id=DELIVERING_PACKAGE, impressions="500")])
+    session.commit()
+    output: list[str] = []
+
+    code = main(
+        ["--dsp", "Equativ"], out=output.append, engine=test_engine, session_factory=lambda: session,
+        client=equativ_client(fake), now=lambda: NEVER_BID_RUN,
+    )
+
+    assert code == 0
+    (batch,) = session.scalars(select(IngestionBatchRecord))
+    assert (batch.status, batch.dsp_id) == ("succeeded", equativ.id)
+    assert [
+        (e.campaign_line_id, e.campaign_period_id, e.ingestion_batch_id)
+        for e in session.scalars(
+            select(IngestionExceptionRecord).where(IngestionExceptionRecord.exception_type == "missing_delivery")
+        )
+    ] == [(line, period, batch.id)]
+    assert "absences: 1" in output
+    assert session.scalar(
+        select(func.count()).select_from(DailyDeliveryRecord).where(DailyDeliveryRecord.campaign_line_id == line)
+    ) == 0
+    assert list(session.scalars(
+        select(DspCatalogLineRecord.external_campaign_id).where(DspCatalogLineRecord.dsp_id == equativ.id)
+    )) == [DELIVERING_PACKAGE]

@@ -7,10 +7,10 @@ import pytest
 
 from app.domain.value_objects.delivery import DeliveryDateRange
 from app.domain.value_objects.ingestion import MissingDeliveryCandidate
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.infrastructure.persistence.models.campaign import CampaignLinePeriodRecord
+from app.infrastructure.persistence.models.campaign import CampaignLinePeriodRecord, CampaignLineRecord
 from app.infrastructure.persistence.repositories.sqlalchemy_ingestion_target_repository import (
     SqlAlchemyIngestionTargetRepository,
 )
@@ -20,6 +20,7 @@ from tests.fixtures.delivery_data import (
     insert_ingestion_batch,
     insert_mapping,
     insert_other_dsp,
+    period_of_line,
     replace_flights,
     seeded_dsp_id,
 )
@@ -283,3 +284,56 @@ def test_a_flight_counted_in_impressions_that_delivered_impressions_is_not_flagg
     insert_delivery(rolled_back_session, line, date(2026, 8, 5), 1, insert_ingestion_batch(rolled_back_session))
 
     assert _candidates(rolled_back_session, dsp_id) == ()
+
+
+# --- Lines on Equativ: a target Deal line is checked like any other, and each DSP checks only its own lines. ---
+
+EQUATIV_PACKAGE = "900000001"
+EQUATIV_FLIGHT_END = date(2026, 8, 7)
+
+
+@pytest.fixture
+def equativ_id(rolled_back_session: Session) -> int:
+    return insert_other_dsp(rolled_back_session, "Equativ")
+
+
+def _target_equativ_line(session: Session, equativ_id: int, name: str) -> tuple[int, int]:
+    """A target line on Equativ over July 20 to Aug 7, mapped by operations to one package, validated at creation."""
+    line = insert_campaign_line(session, name, date(2026, 7, 20), EQUATIV_FLIGHT_END, dsp_id=equativ_id)
+    session.execute(
+        update(CampaignLineRecord).where(CampaignLineRecord.id == line).values(volume_commitment="target")
+    )
+    insert_mapping(
+        session, line, equativ_id, EQUATIV_PACKAGE, EQUATIV_PACKAGE, validated_at=datetime(2026, 7, 20, 9, 0)
+    )
+    return line, period_of_line(session, line)
+
+
+def test_a_target_equativ_line_with_no_row_in_a_flight_that_ended_in_the_window_is_an_equativ_candidate(
+    rolled_back_session: Session, equativ_id: int
+) -> None:
+    line, period = _target_equativ_line(rolled_back_session, equativ_id, "Equativ silent")
+
+    assert _candidates(rolled_back_session, equativ_id) == (MissingDeliveryCandidate(line, period),)
+
+
+def test_a_target_equativ_line_that_delivered_on_some_days_of_its_flight_is_not_a_candidate(
+    rolled_back_session: Session, equativ_id: int
+) -> None:
+    line, _ = _target_equativ_line(rolled_back_session, equativ_id, "Equativ some days")
+    batch = insert_ingestion_batch(rolled_back_session)
+    # Equativ sends no row for a day without delivery: two days delivered, every other day absent.
+    for day in (date(2026, 7, 22), date(2026, 8, 5)):
+        insert_delivery(rolled_back_session, line, day, 61628, batch)
+
+    assert _candidates(rolled_back_session, equativ_id) == ()
+
+
+def test_an_equativ_check_evaluates_no_adform_line_and_an_adform_check_no_equativ_line(
+    rolled_back_session: Session, dsp_id: int, equativ_id: int
+) -> None:
+    adform_line, adform_period = _mapped_line(rolled_back_session, dsp_id, "Adform silent", EQUATIV_FLIGHT_END)
+    equativ_line, equativ_period = _target_equativ_line(rolled_back_session, equativ_id, "Equativ silent")
+
+    assert _candidates(rolled_back_session, equativ_id) == (MissingDeliveryCandidate(equativ_line, equativ_period),)
+    assert _candidates(rolled_back_session, dsp_id) == (MissingDeliveryCandidate(adform_line, adform_period),)

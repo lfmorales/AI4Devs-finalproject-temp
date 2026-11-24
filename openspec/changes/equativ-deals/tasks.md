@@ -54,9 +54,9 @@
 
 ## 6. Lines Without Delivery on Equativ
 
-- [ ] 6.1 Write failing tests in `backend/tests/infrastructure/test_missing_delivery_candidates.py`: a target line on Equativ with a validated Equativ mapping and no row in a flight that ended inside the window is a candidate for the Equativ DSP; a line delivering on some days of the flight is not; an Adform line is never a candidate of an Equativ check and an Equativ line never of an Adform one
-- [ ] 6.2 Write a failing test in `backend/tests/application/test_missing_delivery_detection.py` that the exception is recorded with the Equativ batch
-- [ ] 6.3 Write a failing end-to-end service test, through `run_ingestion --dsp Equativ` with the fake Equativ client, of the scenario «A Deal that never receives bids»: a target `Deal` line mapped on 2026-11-01 by writing `900000001`, a package that appears in no report and no catalogue row, a flight from 2026-11-01 to 2026-11-15 and a run started at 06:15 UTC on 2026-11-18 record one `missing_delivery` exception for that line and period; verify 6.1 to 6.3 pass with no change to the absence query
+- [x] 6.1 Write failing tests in `backend/tests/infrastructure/test_missing_delivery_candidates.py`: a target line on Equativ with a validated Equativ mapping and no row in a flight that ended inside the window is a candidate for the Equativ DSP; a line delivering on some days of the flight is not; an Adform line is never a candidate of an Equativ check and an Equativ line never of an Adform one
+- [x] 6.2 Write a failing test in `backend/tests/application/test_missing_delivery_detection.py` that the exception is recorded with the Equativ batch
+- [x] 6.3 Write a failing end-to-end service test, through `run_ingestion --dsp Equativ` with the fake Equativ client, of the scenario «A Deal that never receives bids»: a target `Deal` line mapped on 2026-11-01 by writing `900000001`, a package that appears in no report and no catalogue row, a flight from 2026-11-01 to 2026-11-15 and a run started at 06:15 UTC on 2026-11-18 record one `missing_delivery` exception for that line and period, and the same for a line mapped to a well-formed id that names no package (`900000009`) while the report carries other packages; verify 6.1 to 6.3 pass with no change to the absence query
 
 ## 7. Margin of a Target Flight (domain)
 
