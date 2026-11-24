@@ -1,8 +1,10 @@
 """The nightly ingestion: one command for the host scheduler, using the same service as every other route.
 
 Calculates the window for today (in the configured time zone, or --date), ingests the lines with a validated
-Adform mapping with one request, records the batch, and then detects absence with that batch's id. A
-PostgreSQL advisory lock stops two runs overlapping.
+mapping on one DSP with one request, records the batch, and then detects absence with that batch's id. --dsp names
+the DSP, Adform when absent; only a DSP with a connector (Adform, Equativ) is accepted. A PostgreSQL advisory lock
+per DSP stops two runs of one DSP overlapping, while runs of different DSPs may. An Equativ run started before
+06:00 UTC still ingests but skips the absence detection: Equativ may not have closed the previous UTC day yet.
 
 Exit codes: 0 the batch succeeded; 1 it failed; 2 another run holds the lock; 3 configuration is missing.
 
@@ -14,7 +16,7 @@ range (at most 31 days, ending no later than yesterday in the configured zone). 
 same idempotent replacement, records the range on the batch and skips the absence detection. It cannot be combined
 with --date, and invalid arguments exit with 3 like every other configuration problem.
 
-Run: python -m scripts.run_ingestion [--date YYYY-MM-DD | --from YYYY-MM-DD --to YYYY-MM-DD]
+Run: python -m scripts.run_ingestion [--dsp NAME] [--date YYYY-MM-DD | --from YYYY-MM-DD --to YYYY-MM-DD]
 Example crontab line (not installed): see design.md.
 """
 
@@ -35,15 +37,19 @@ from app.domain.services.dsp_delivery_client import DspDeliveryClient
 from app.domain.services.local_calendar import local_today, utc_now
 from app.domain.value_objects.delivery import DeliveryDateRange
 from app.infrastructure.dsp.adform_delivery_client import AdformDeliveryClient
+from app.infrastructure.dsp.equativ_delivery_client import EquativDeliveryClient
 from app.infrastructure.persistence.database import build_engine, build_session_factory
 from app.infrastructure.persistence.models.delivery import IngestionExceptionRecord
 from app.infrastructure.persistence.models.masters import DSPRecord
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 EXIT_SUCCEEDED, EXIT_FAILED, EXIT_ALREADY_RUNNING, EXIT_NOT_CONFIGURED = 0, 1, 2, 3
-# Arbitrary but fixed: every run of this command asks for the same session-level advisory lock.
+# Arbitrary but fixed: the first key of the session-level advisory lock of every run; the second is the DSP's id.
 NIGHTLY_INGESTION_LOCK_KEY = 0x41444F50
-_DSP_NAME = "Adform"
+DEFAULT_DSP = "Adform"
+EQUATIV = "Equativ"
+# Before this hour Equativ may not have closed the previous UTC day, so its absence detection waits.
+EQUATIV_ABSENCE_FROM_HOUR_UTC = 6
 MAX_RANGE_DAYS = 31
 
 
@@ -60,6 +66,8 @@ class _Settings(BaseSettings):
     app_timezone: str = "Europe/Madrid"
     adform_client_id: str | None = None
     adform_client_secret: SecretStr | None = None
+    equativ_client_id: str | None = None
+    equativ_client_secret: SecretStr | None = None
 
 
 class _Parser(argparse.ArgumentParser):
@@ -77,6 +85,7 @@ def main(
     client: DspDeliveryClient | None = None,
     now: Callable[[], datetime] = utc_now,
 ) -> int:
+    started_at = now()
     try:
         arguments = _parse(argv)
         settings = _settings()
@@ -84,7 +93,10 @@ def main(
         zone_today = local_today(settings.app_timezone, now)
         today = arguments.date or zone_today
         custom_window = _custom_window(arguments, zone_today)
-        dsp_client = client or _adform_client(settings)
+        build_client = _CLIENT_BUILDERS.get(arguments.dsp)
+        if build_client is None:
+            raise _NotConfigured()
+        dsp_client = client or build_client(settings)
     except (_NotConfigured, ValidationError, ValueError):
         out("status: not configured")
         return EXIT_NOT_CONFIGURED
@@ -92,16 +104,22 @@ def main(
     own_engine = engine is None
     engine = engine or build_engine(settings.database_url)
     try:
-        return _run_locked(
-            engine, session_factory or build_session_factory(engine), dsp_client, today, out, custom_window
-        )
+        sessions = session_factory or build_session_factory(engine)
+        try:
+            dsp_id = _dsp_id(sessions, arguments.dsp)
+        except _NotConfigured:
+            out("status: not configured")
+            return EXIT_NOT_CONFIGURED
+        absence_skipped = _absence_skipped(arguments.dsp, started_at, custom_window)
+        return _run_locked(engine, sessions, dsp_id, dsp_client, today, out, custom_window, absence_skipped)
     finally:
         if own_engine:
             engine.dispose()
 
 
 def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
-    parser = _Parser(prog="run_ingestion", description="Run the nightly Adform ingestion.")
+    parser = _Parser(prog="run_ingestion", description="Run the nightly ingestion of one DSP.")
+    parser.add_argument("--dsp", default=DEFAULT_DSP, help="the DSP to ingest: Adform (default) or Equativ")
     parser.add_argument("--date", type=_iso_date, help="use this date instead of today, to repeat a window")
     parser.add_argument("--from", dest="range_start", type=_iso_date, help="first day of a custom range")
     parser.add_argument("--to", dest="range_end", type=_iso_date, help="last day of a custom range")
@@ -146,42 +164,66 @@ def _adform_client(settings: _Settings) -> DspDeliveryClient:
     )
 
 
+def _equativ_client(settings: _Settings) -> DspDeliveryClient:
+    if not settings.equativ_client_id or settings.equativ_client_secret is None:
+        raise _NotConfigured()
+    return EquativDeliveryClient(
+        client_id=settings.equativ_client_id,
+        client_secret=settings.equativ_client_secret,
+        http_client=httpx.Client(timeout=httpx.Timeout(30.0)),
+    )
+
+
+# The DSPs with a connector. Any other name, Displayce included, is a configuration error.
+_CLIENT_BUILDERS: dict[str, Callable[[_Settings], DspDeliveryClient]] = {
+    DEFAULT_DSP: _adform_client,
+    EQUATIV: _equativ_client,
+}
+
+
+def _absence_skipped(dsp_name: str, started_at: datetime, custom_window: DeliveryDateRange | None) -> str | None:
+    """Why the absence detection does not run, None when it does."""
+    if custom_window is not None:
+        # A custom range says nothing about the rolling window the absence rule looks at.
+        return "custom range"
+    if dsp_name == EQUATIV and started_at.astimezone(UTC).hour < EQUATIV_ABSENCE_FROM_HOUR_UTC:
+        return f"before {EQUATIV_ABSENCE_FROM_HOUR_UTC:02d}:00 UTC"
+    return None
+
+
 def _run_locked(
     engine: Engine,
     session_factory: Callable[[], Session],
+    dsp_id: int,
     client: DspDeliveryClient,
     today: date,
     out: Callable[[str], None],
-    custom_window: DeliveryDateRange | None = None,
+    custom_window: DeliveryDateRange | None,
+    absence_skipped: str | None,
 ) -> int:
     # The lock lives on its own connection for the whole run and goes with it, even if the process dies.
+    lock_keys = {"namespace": NIGHTLY_INGESTION_LOCK_KEY, "dsp_id": dsp_id}
     with engine.connect() as lock_connection:
-        acquired = lock_connection.execute(
-            text("SELECT pg_try_advisory_lock(:key)"), {"key": NIGHTLY_INGESTION_LOCK_KEY}
-        ).scalar()
+        acquired = lock_connection.execute(text("SELECT pg_try_advisory_lock(:namespace, :dsp_id)"), lock_keys).scalar()
         if not acquired:
             out("status: another run is in progress")
             return EXIT_ALREADY_RUNNING
         try:
-            return _run(session_factory, client, today, out, custom_window)
+            return _run(session_factory, dsp_id, client, today, out, custom_window, absence_skipped)
         finally:
-            lock_connection.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": NIGHTLY_INGESTION_LOCK_KEY})
+            lock_connection.execute(text("SELECT pg_advisory_unlock(:namespace, :dsp_id)"), lock_keys)
             lock_connection.commit()
 
 
 def _run(
     session_factory: Callable[[], Session],
+    dsp_id: int,
     client: DspDeliveryClient,
     today: date,
     out: Callable[[str], None],
-    custom_window: DeliveryDateRange | None = None,
+    custom_window: DeliveryDateRange | None,
+    absence_skipped: str | None,
 ) -> int:
-    try:
-        dsp_id = _adform_dsp_id(session_factory)
-    except _NotConfigured:
-        out("status: not configured")
-        return EXIT_NOT_CONFIGURED
-
     service = DeliveryIngestionService(
         dsp_client=client,
         unit_of_work_factory=lambda: SqlAlchemyUnitOfWork(session_factory),
@@ -189,8 +231,7 @@ def _run(
     )
     try:
         result = service.run(dsp_id, today, route=IngestionRoute.API, window=custom_window)
-        # A custom range says nothing about the rolling window the absence rule looks at.
-        absences = None if custom_window else service.detect_missing_delivery(dsp_id, today, result.batch_id)
+        absences = None if absence_skipped else service.detect_missing_delivery(dsp_id, today, result.batch_id)
         new_exceptions = _new_unmatched_exceptions(session_factory, result.batch_id)
     except Exception as error:  # noqa: BLE001 - the class name is all that is reported
         out("status: failed")
@@ -204,14 +245,14 @@ def _run(
     out(f"new_exceptions: {new_exceptions}")
     out(f"mapped_lines: {result.mapped_line_count}")
     out(f"skipped_lines: {len(result.skipped_line_ids)}")
-    out(f"absences: {absences}" if absences is not None else "absences: skipped, custom range")
+    out(f"absences: {absences}" if absences is not None else f"absences: skipped, {absence_skipped}")
     return EXIT_SUCCEEDED
 
 
-def _adform_dsp_id(session_factory: Callable[[], Session]) -> int:
+def _dsp_id(session_factory: Callable[[], Session], dsp_name: str) -> int:
     session = session_factory()
     try:
-        dsp_id = session.scalar(select(DSPRecord.id).where(DSPRecord.name == _DSP_NAME))
+        dsp_id = session.scalar(select(DSPRecord.id).where(DSPRecord.name == dsp_name))
     finally:
         session.close()
     if dsp_id is None:

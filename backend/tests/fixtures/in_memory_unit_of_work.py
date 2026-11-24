@@ -31,6 +31,9 @@ class InMemoryIngestionBatchRepository(IngestionBatchRepository):
         )
         return batch_id
 
+    def record_source(self, batch_id: int, source_file: str) -> None:
+        self.records[batch_id] = replace(self.records[batch_id], source_file=source_file)
+
     def finish(
         self, batch_id: int, status: BatchStatus, finished_at: datetime, row_count: int, ignored_row_count: int,
         zero_unmatched_row_count: int,

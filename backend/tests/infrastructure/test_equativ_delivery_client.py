@@ -309,3 +309,49 @@ def test_equativ_identifiers_are_never_resolved_by_the_dsp() -> None:
         _client(fake).resolve_identifiers("900000001", "900000001")
 
     assert fake.requests == []
+
+
+# --- The batch source: named as soon as the report exists -----------------------------------------------------------
+
+
+def test_the_report_id_is_handed_over_as_soon_as_the_report_is_created_before_the_wait() -> None:
+    fake = FakeEquativ(rows=[package_row()])
+    client = _client(fake)
+    handed_over: list[tuple[str, list[str]]] = []
+    client.on_source_known(lambda source: handed_over.append((source, fake.paths())))
+
+    list(client.fetch_delivery(WINDOW))
+
+    assert handed_over == [(REPORT_ID, ["POST oauth.smartadserverapis.com/oauth2/token", "POST demand-api.eqtv.io/async-report"])]
+
+
+@pytest.mark.parametrize(
+    "fake",
+    [
+        FakeEquativ(rows=[package_row()], statuses=["PubSubPublishSuccessful", "ReportGenerationFailed"]),
+        FakeEquativ(rows=many_rows(3), total_rows=5),
+    ],
+    ids=["failed-wait", "short-preview"],
+)
+def test_the_report_id_is_known_when_the_run_fails_after_the_report_was_created(fake: FakeEquativ) -> None:
+    client = _client(fake)
+    handed_over: list[str] = []
+    client.on_source_known(handed_over.append)
+
+    with pytest.raises((DspReportFailedError, DspResponseFormatError)):
+        list(client.fetch_delivery(WINDOW))
+
+    assert handed_over == [REPORT_ID]
+    assert client.last_report_id == REPORT_ID
+
+
+def test_no_source_is_named_when_the_report_is_never_created() -> None:
+    client = _client(FakeEquativ(create_status=500))
+    handed_over: list[str] = []
+    client.on_source_known(handed_over.append)
+
+    with pytest.raises(DspReportFailedError):
+        list(client.fetch_delivery(WINDOW))
+
+    assert handed_over == []
+    assert client.last_report_id is None

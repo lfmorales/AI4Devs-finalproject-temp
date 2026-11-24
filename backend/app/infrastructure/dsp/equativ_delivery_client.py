@@ -91,6 +91,10 @@ class EquativDeliveryClient(DspDeliveryClient):
         self._api_base = httpx.URL(api_base_url)
         # The id of the report the latest run created, for the batch to record as its source.
         self.last_report_id: str | None = None
+        self._source_listener: Callable[[str], None] | None = None
+
+    def on_source_known(self, listener: Callable[[str], None]) -> None:
+        self._source_listener = listener
 
     def __repr__(self) -> str:
         return "EquativDeliveryClient()"
@@ -99,7 +103,10 @@ class EquativDeliveryClient(DspDeliveryClient):
         """Stream the rows of one report for the range, bounds included, as the preview pages arrive."""
         headers = {"Authorization": f"Bearer {self._request_token()}"}
         report_id = self._create_report(date_range, headers)
+        # Named before the wait: a run that fails while waiting or reading still records its report.
         self.last_report_id = report_id
+        if self._source_listener is not None:
+            self._source_listener(report_id)
         self._wait_for_report(report_id, headers)
         for cells in self._preview_rows(report_id, headers):
             yield _to_delivery_row(cells)

@@ -2,17 +2,20 @@
 
 import re
 from collections.abc import Iterator
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
-from sqlalchemy import text
+import pytest
+from sqlalchemy import Engine, text
+from sqlalchemy.orm import Session
 
 from app.domain.exceptions import DspUnreachableError
 from app.domain.value_objects.delivery import DeliveryDateRange, DspDeliveryRow, ExternalLineKey
-from scripts.run_ingestion import NIGHTLY_INGESTION_LOCK_KEY, main
+from scripts.run_ingestion import main
 from tests.fixtures.delivery_rows import catalog_info, dsp_row
 from tests.fixtures.dsp_delivery_client import InMemoryDspDeliveryClient
-from tests.scripts.test_run_ingestion import Scenario
+from tests.fixtures.fake_equativ import REPORT_ID, FakeEquativ, package_row
+from tests.scripts.test_run_ingestion import EquativScenario, Scenario, held_lock
 
 D5 = date(2026, 8, 5)
 SECRET_ID, SECRET_VALUE = "synthetic-adform-id-5150", "synthetic-adform-secret-6160"
@@ -31,7 +34,7 @@ ALLOWED_LINE = re.compile(
     r"^(status: (succeeded|failed|not configured|another run is in progress)"
     r"|error: [A-Za-z]+Error"
     r"|(rows_read|ignored_rows|zero_unmatched_rows|new_exceptions|mapped_lines|skipped_lines|absences): \d+"
-    r"|absences: skipped, custom range)$"
+    r"|absences: skipped, (custom range|before 06:00 UTC))$"
 )
 
 
@@ -89,12 +92,8 @@ def test_a_failure_prints_the_class_of_the_error_and_nothing_the_dsp_said(rolled
 
 def test_a_busy_lock_prints_only_its_state(rolled_back_session, test_engine):
     scenario = _scenario(rolled_back_session, test_engine)
-    with test_engine.connect() as holder:
-        holder.execute(text("SELECT pg_try_advisory_lock(:key)"), {"key": NIGHTLY_INGESTION_LOCK_KEY})
-        try:
-            assert scenario.run() == 2
-        finally:
-            holder.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": NIGHTLY_INGESTION_LOCK_KEY})
+    with held_lock(test_engine, scenario.dsp_id):
+        assert scenario.run() == 2
 
     _assert_clean(scenario.output)
 
@@ -158,3 +157,35 @@ def test_an_invalid_range_prints_only_its_state(rolled_back_session, test_engine
 
     assert code == 3
     _assert_clean(scenario.output)
+
+
+# The report id, the package ids, the package name and the amounts of the synthetic Equativ: never printed.
+EQUATIV_VALUES = [REPORT_ID, "900000001", "900000002", "900000009", "Synthetic Package One", "338.954", "271.1632", "61628"]
+
+
+def _assert_no_equativ_value(output: list[str]) -> None:
+    _assert_clean(output)
+    printed = "\n".join(output)
+    for value in EQUATIV_VALUES:
+        assert value not in printed, f"{value!r} appeared in the output"
+
+
+@pytest.mark.parametrize("hour", [5, 7], ids=["before-06-00-utc", "after-06-00-utc"])
+def test_an_equativ_run_prints_only_states_and_counts(rolled_back_session: Session, test_engine: Engine, hour: int) -> None:
+    equativ = EquativScenario(rolled_back_session, test_engine)
+
+    assert equativ.run("--dsp", "Equativ", now=datetime(2026, 11, 24, hour, 0, tzinfo=UTC)) == 0
+
+    _assert_no_equativ_value(equativ.output)
+
+
+def test_a_failed_equativ_run_prints_the_class_of_the_error_and_not_the_report(
+    rolled_back_session: Session, test_engine: Engine
+) -> None:
+    fake = FakeEquativ(rows=[package_row()], statuses=["PubSubPublishSuccessful", "ReportGenerationFailed"])
+    equativ = EquativScenario(rolled_back_session, test_engine, fake=fake)
+
+    assert equativ.run("--dsp", "Equativ", "--date", "2026-11-24") == 1
+
+    _assert_no_equativ_value(equativ.output)
+    assert equativ.output == ["status: failed", "error: DspReportFailedError"]

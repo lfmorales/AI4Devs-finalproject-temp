@@ -3,7 +3,8 @@
 from datetime import UTC, date, datetime
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import Engine, func, select
+from sqlalchemy.orm import Session
 
 from app.domain.value_objects.delivery import DeliveryDateRange
 from app.infrastructure.persistence.models.delivery import (
@@ -12,7 +13,7 @@ from app.infrastructure.persistence.models.delivery import (
     IngestionExceptionRecord,
 )
 from scripts.run_ingestion import main
-from tests.scripts.test_run_ingestion import FailsAfterTwoRows, Scenario
+from tests.scripts.test_run_ingestion import EquativScenario, FailsAfterTwoRows, Scenario
 
 # 12:00 UTC on 10 August is the 10th in Madrid, so the last day a range may end on is the 9th.
 NOW = datetime(2026, 8, 10, 12, 0, tzinfo=UTC)
@@ -147,3 +148,21 @@ def test_a_failed_range_leaves_a_failed_batch_and_no_partial_delivery(rolled_bac
 
     assert failing.batch_statuses() == ["failed"]
     assert failing.count(DailyDeliveryRecord) == 0
+
+
+def test_a_custom_range_of_equativ_is_one_report_in_utc_days_and_skips_the_absence_detection(
+    rolled_back_session: Session, test_engine: Engine
+) -> None:
+    equativ = EquativScenario(rolled_back_session, test_engine)
+
+    code = equativ.run(
+        "--dsp", "Equativ", "--from", "2026-11-01", "--to", "2026-11-23", now=datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
+    )
+
+    assert code == 0
+    (report,) = equativ.fake.created_reports()
+    assert (report["startDate"], report["endDate"]) == ("2026-11-01T00:00:00.000Z", "2026-11-24T00:00:00.000Z")
+    (batch,) = equativ.batches()
+    assert (batch.window_start, batch.window_end, batch.dsp_id) == (date(2026, 11, 1), date(2026, 11, 23), equativ.equativ_id)
+    assert equativ.missing_delivery() == []
+    assert "absences: skipped, custom range" in equativ.output

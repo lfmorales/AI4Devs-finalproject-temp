@@ -14,6 +14,10 @@ class IngestionBatchRepository(ABC):
         """Record a run and the window it replaces as running and return the id its deliveries will reference."""
 
     @abstractmethod
+    def record_source(self, batch_id: int, source_file: str) -> None:
+        """Record where the run's rows come from, once it is known (the report an Equativ run created)."""
+
+    @abstractmethod
     def finish(
         self,
         batch_id: int,

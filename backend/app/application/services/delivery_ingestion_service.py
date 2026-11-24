@@ -68,6 +68,7 @@ class DeliveryIngestionService:
         """Ingest the rolling window ending the day before today, or the given window instead (a custom range)."""
         window = window or ingestion_window(today, self._window_days)
         batch_id = self._start_batch(dsp_id, route, source_file, window)
+        self._dsp_client.on_source_known(lambda source: self._record_source(batch_id, source))
         try:
             targets = self._find_targets(dsp_id, window)
             counts = self._ingest(dsp_id, batch_id, window, targets)
@@ -102,6 +103,11 @@ class DeliveryIngestionService:
         # Its own transaction, committed before the data one, so the batch exists whatever happens next.
         with self._unit_of_work_factory() as unit_of_work:
             return unit_of_work.batches.start(dsp_id, route, source_file, self._clock(), window)
+
+    def _record_source(self, batch_id: int, source: str) -> None:
+        # Its own transaction, as the start: a run that fails afterwards still names where its rows were to come from.
+        with self._unit_of_work_factory() as unit_of_work:
+            unit_of_work.batches.record_source(batch_id, source)
 
     def _find_targets(self, dsp_id: int, window: DeliveryDateRange) -> IngestionTargets:
         with self._unit_of_work_factory() as unit_of_work:

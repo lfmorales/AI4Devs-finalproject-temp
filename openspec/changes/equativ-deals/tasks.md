@@ -38,11 +38,11 @@
 
 ## 4. The Nightly Command Takes a DSP
 
-- [ ] 4.1 Write failing tests in `backend/tests/scripts/test_run_ingestion.py`: without `--dsp` the run ingests Adform exactly as today; `--dsp Equativ` ingests only Equativ lines from the fake Equativ client and records the DSP Equativ, the route `api`, the window and the report id as source; `--dsp Displayce`, an unknown name or missing Equativ credentials exit 3 with no batch
-- [ ] 4.2 Write failing tests that two runs of one DSP never overlap (exit 2) and that an Equativ run proceeds while an Adform run holds its lock
-- [ ] 4.3 Write failing tests with an injected clock that an Equativ run started at 05:59 UTC ingests and prints `absences: skipped, before 06:00 UTC`, and one started at 06:00 UTC detects absence with its batch's id; an Adform run is unaffected by the hour
-- [ ] 4.4 Write failing tests in `test_run_ingestion_range.py` that `--dsp Equativ --from 2026-11-01 --to 2026-11-23` makes one report from 2026-11-01 00:00 UTC to 2026-11-24 00:00 UTC and skips absence
-- [ ] 4.5 Implement `--dsp`, the client map, the per-DSP advisory lock and the 06:00 UTC rule in `scripts/run_ingestion.py` (design.md decision 6), and verify 4.1 to 4.4 and `test_run_ingestion_output.py` (counts only, never an identifier)
+- [x] 4.1 Write failing tests in `backend/tests/scripts/test_run_ingestion.py`: without `--dsp` the run ingests Adform exactly as today; `--dsp Equativ` ingests only Equativ lines from the fake Equativ client and records the DSP Equativ, the route `api`, the window and the report id as source; an Equativ run that fails after its report was created leaves a failed batch that names the report as its source; `--dsp Displayce`, an unknown name or missing Equativ credentials exit 3 with no batch
+- [x] 4.2 Write failing tests that two runs of one DSP never overlap (exit 2) and that an Equativ run proceeds while an Adform run holds its lock
+- [x] 4.3 Write failing tests with an injected clock that an Equativ run started at 05:59 UTC ingests and prints `absences: skipped, before 06:00 UTC`, and one started at 06:00 UTC detects absence with its batch's id; an Adform run is unaffected by the hour
+- [x] 4.4 Write failing tests in `test_run_ingestion_range.py` that `--dsp Equativ --from 2026-11-01 --to 2026-11-23` makes one report from 2026-11-01 00:00 UTC to 2026-11-24 00:00 UTC and skips absence
+- [x] 4.5 Implement `--dsp`, the client map, the per-DSP advisory lock and the 06:00 UTC rule in `scripts/run_ingestion.py` (design.md decision 6), and the recording of the report id as the batch source as soon as the report is created, in its own transaction (design.md decision 3), and verify 4.1 to 4.4 and `test_run_ingestion_output.py` (counts only, never an identifier)
 
 ## 5. Catalogue, Mapping Check and Linking for Equativ
 

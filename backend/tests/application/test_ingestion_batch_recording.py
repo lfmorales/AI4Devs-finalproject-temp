@@ -1,6 +1,6 @@
 """Every run leaves a batch behind: succeeded with its counts, or failed with no partial range."""
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from datetime import date
 
 import pytest
@@ -131,3 +131,55 @@ def test_a_run_over_a_given_window_records_that_window_and_asks_for_it():
 
     assert harness.client.requested_ranges == [window]
     assert next(iter(harness.batches.records.values())).window == window
+
+
+class NamesItsSourceClient(DspDeliveryClient):
+    """A DSP whose source is known only once the run has begun, like an Equativ report; it may fail afterwards."""
+
+    def __init__(self, source: str, fail_after_naming: bool) -> None:
+        self._source = source
+        self._fail_after_naming = fail_after_naming
+        self._listener: Callable[[str], None] | None = None
+
+    def on_source_known(self, listener: Callable[[str], None]) -> None:
+        self._listener = listener
+
+    def fetch_delivery(self, date_range: DeliveryDateRange) -> Iterator[DspDeliveryRow]:
+        assert self._listener is not None, "the service listens before it reads"
+        self._listener(self._source)
+        if self._fail_after_naming:
+            raise DspDown()
+        yield dsp_row(date(2026, 8, 5), KEY)
+
+    def resolve_identifiers(self, external_campaign_id: str, external_line_item_id: str) -> ExternalLineKey | None:
+        return None
+
+
+@pytest.mark.parametrize(
+    ("fail_after_naming", "status"),
+    [(False, BatchStatus.SUCCEEDED), (True, BatchStatus.FAILED)],
+    ids=["succeeded", "failed-after-naming"],
+)
+def test_a_source_the_client_names_during_the_run_is_recorded_on_the_batch(
+    fail_after_naming: bool, status: BatchStatus
+) -> None:
+    harness = IngestionHarness(
+        client=NamesItsSourceClient("report-0001", fail_after_naming), mapped_lines=[MappedLine(LINE, KEY)]
+    )
+
+    if fail_after_naming:
+        with pytest.raises(DspDown):
+            harness.service.run(DSP_ID, TODAY)
+    else:
+        harness.service.run(DSP_ID, TODAY)
+
+    batch = _only_batch(harness)
+    assert (batch.source_file, batch.status) == ("report-0001", status)
+
+
+def test_a_client_that_names_no_source_leaves_the_source_given_to_the_run() -> None:
+    harness = IngestionHarness(rows=[dsp_row(date(2026, 8, 5), KEY)], mapped_lines=[MappedLine(LINE, KEY)])
+
+    harness.service.run(DSP_ID, TODAY, route=IngestionRoute.UPLOAD, source_file="export.csv")
+
+    assert _only_batch(harness).source_file == "export.csv"

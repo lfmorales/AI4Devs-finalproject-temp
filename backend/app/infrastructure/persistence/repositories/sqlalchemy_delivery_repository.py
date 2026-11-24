@@ -81,6 +81,11 @@ class SqlAlchemyIngestionBatchRepository(IngestionBatchRepository):
         self._session.flush()
         return record.id
 
+    def record_source(self, batch_id: int, source_file: str) -> None:
+        self._session.execute(
+            update(IngestionBatchRecord).where(IngestionBatchRecord.id == batch_id).values(source_file=source_file)
+        )
+
     def finish(
         self,
         batch_id: int,
