@@ -68,8 +68,8 @@
 
 ## 8. Rebate Base of a Target Flight
 
-- [ ] 8.1 Write failing tests in `backend/tests/domain/test_priced_flights.py`: the worked example's rebate is 550.00 at a flat 10 % and its `position_after` is the position before plus 5,500.00 on the `Deal` counter; a counter at 95,000 € with brackets of 10 % up to 100,000 € and 15 % above charges a target flight of 10,000 € gross 1,250 €; a running target flight is priced on its gross to date and does not advance the counter
-- [ ] 8.2 Pass `rebate_base(facts)` to `RebateFlight.revenue` in `priced_flights.py` and verify 8.1 with `test_rebate_counters.py` and `test_rebate_opening_positions.py` unchanged
+- [x] 8.1 Write failing tests in `backend/tests/domain/test_priced_flights.py`: the worked example's rebate is 550.00 at a flat 10 % and its `position_after` is the position before plus 5,500.00 on the `Deal` counter; a counter at 95,000 € with brackets of 10 % up to 100,000 € and 15 % above charges a target flight of 10,000 € gross 1,250 €; a running target flight is priced on its gross to date and does not advance the counter
+- [x] 8.2 Pass `rebate_base(facts)` to `RebateFlight.revenue` in `priced_flights.py` and verify 8.1 with `test_rebate_counters.py` and `test_rebate_opening_positions.py` unchanged
 
 ## 9. Totals
 

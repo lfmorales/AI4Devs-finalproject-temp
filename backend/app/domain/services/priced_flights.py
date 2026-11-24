@@ -2,7 +2,7 @@ from collections.abc import Mapping, Sequence
 from datetime import date
 from decimal import Decimal
 
-from app.domain.services.flight_margin import calculate_flight_margin, flight_revenue
+from app.domain.services.flight_margin import calculate_flight_margin, rebate_base
 from app.domain.services.platform_rate import resolve_platform_rate
 from app.domain.services.rebate_engine import calculate_rebates
 from app.domain.value_objects.margin import FlightEconomics
@@ -31,7 +31,9 @@ def price_flights(
                 RebateFlight(
                     flight_id=facts.flight_id, flight_start=facts.flight_start, flight_end=facts.flight_end,
                     group_id=facts.group_id, agency_id=facts.agency_id, channel=facts.channel, scope=facts.scope,
-                    revenue=flight_revenue(facts.contracted_impressions, facts.sale_cpm),
+                    # The sale of a committed flight, the served gross of a target one: the engine and the counters
+                    # advance by it without knowing which.
+                    revenue=rebate_base(facts),
                 )
                 for facts in flights
             ],
