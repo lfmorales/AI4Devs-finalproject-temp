@@ -32,7 +32,7 @@ The request field is required on every line of `POST /api/campaigns` (BREAKING):
 
 ### 2. The Equativ pair is (`auctionPackageDealId`, `auctionPackageDealId`)
 
-The package id fills both strings of the pair. The catalogue keeps the package name in both name columns and no line dates. Operations writes the id once in the screen and the frontend sends it in both fields; the server refuses, with 422 `invalid_equativ_package`, a pair for a line on Equativ whose two ids differ or carry anything but digits. Nothing else in the mapping, the exceptions, the linking or the removal changes, and their uniqueness constraints already say "one package, at most one line".
+The package id fills both strings of the pair. The catalogue keeps the package name in both name columns and no line dates. Operations writes the id once in the screen and the frontend sends it in both fields; the server refuses, with 422 `invalid_equativ_package`, a pair for a line on Equativ whose two ids differ or are not a positive integer of ASCII digits with no leading zero (`^[1-9][0-9]*$`): `0` is no package, and `0900000001` would never match the `900000001` of the report and would only show up later as a line without delivery. Nothing else in the mapping, the exceptions, the linking or the removal changes, and their uniqueness constraints already say "one package, at most one line".
 
 *Alternatives*: making `external_line_item_id` nullable (rejected: touches three tables, two check constraints and every query on the pair for no behaviour); (package, `childDealId`) (rejected: the child is 0 on every row); a constant in the second slot (rejected: an invented value that would appear in the exception queue).
 

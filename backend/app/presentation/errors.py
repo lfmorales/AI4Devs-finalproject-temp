@@ -26,6 +26,7 @@ from app.domain.exceptions import (
     DspResponseFormatError,
     DspUnreachableError,
     DuplicateDspMappingError,
+    InvalidEquativPackageError,
     ExceptionNotLinkableError,
     LineDspMismatchError,
     LineNotFoundError,
@@ -134,6 +135,11 @@ _ERROR_MAPPINGS: dict[type[DomainError], _ErrorMapping] = {
     CampaignLineNotFoundError: _ErrorMapping(404, "campaign_line_not_found", "The campaign line does not exist"),
     DspNotSupportedError: _ErrorMapping(
         422, "dsp_not_supported", "The campaign line's DSP has no connector yet"
+    ),
+    InvalidEquativPackageError: _ErrorMapping(
+        422, "invalid_equativ_package",
+        "An Equativ line is mapped by one auction package id, a whole number above zero with no leading zero, "
+        "in both identifiers",
     ),
     DspNotConfiguredError: _ErrorMapping(503, "dsp_not_configured", "The DSP connector is not configured"),
     DspUnreachableError: _ErrorMapping(503, "dsp_unreachable", "The DSP cannot be reached right now"),

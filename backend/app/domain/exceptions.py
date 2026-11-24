@@ -94,6 +94,13 @@ class DspNotSupportedError(DomainError):
     """The campaign line's DSP has no connector yet."""
 
 
+class InvalidEquativPackageError(DomainError):
+    """The pair written for a line on Equativ is not one auction package id in both ids.
+
+    A package id is a whole number above zero, in ASCII digits, with no leading zero.
+    """
+
+
 class DspNotConfiguredError(DomainError):
     """The DSP has a connector but its credentials are not configured."""
 

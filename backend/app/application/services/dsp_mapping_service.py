@@ -1,3 +1,4 @@
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -10,6 +11,7 @@ from app.domain.exceptions import (
     DspReportTimeoutError,
     DspUnreachableError,
     DuplicateDspMappingError,
+    InvalidEquativPackageError,
 )
 from app.domain.repositories.dsp_catalog_query_repository import DspCatalogQueryRepository
 from app.domain.repositories.dsp_mapping_repository import DspMappingRepository
@@ -22,6 +24,13 @@ class IdentifierCheck(StrEnum):
     FOUND = "found"
     UNKNOWN = "unknown"
     UNREACHABLE = "unreachable"
+    # Not checked with the DSP: the user who wrote the identifier vouches for it (Equativ's package id).
+    USER_VALIDATED = "user_validated"
+
+
+# An auction package id: a whole number above zero, in ASCII digits, with no leading zero. Neither "9000-01" nor
+# full-width or superscript digits pass, "0" is no package, and "0900000001" would never match the report's 900000001.
+_PACKAGE_ID = re.compile(r"[1-9][0-9]*")
 
 
 @dataclass(frozen=True)
@@ -40,6 +49,10 @@ class DspMappingService:
     The mapping is created whether the pair is found, unknown or the DSP is unreachable; only a found pair
     gets validated_at. Through the Adform stats API, "unknown" also covers a line item that exists but has not
     delivered in the lookback period: the API reports delivery, not configuration, so the two look alike.
+
+    The mappings of a DSP in `user_validated_dsps` (Equativ) are validated by the user who writes the identifier:
+    no client and no catalogue is asked, the pair must be one package id in both identifiers, and a wrong id
+    surfaces later as a line without delivery.
     """
 
     def __init__(
@@ -49,8 +62,10 @@ class DspMappingService:
         clock: Callable[[], datetime],
         catalog: DspCatalogQueryRepository | None = None,
         today: Callable[[], date] | None = None,
+        user_validated_dsps: frozenset[str] = frozenset(),
     ) -> None:
         self._repository = repository
+        self._user_validated_dsps = user_validated_dsps
         self._client_for_dsp = client_for_dsp
         self._clock = clock
         self._catalog = catalog
@@ -62,17 +77,22 @@ class DspMappingService:
         line_dsp = self._repository.get_line_dsp(campaign_line_id)
         if line_dsp is None:
             raise CampaignLineNotFoundError(f"campaign line {campaign_line_id} does not exist")
-        client = self._client_for_dsp(line_dsp.dsp_name)
-        if client is None:
-            raise DspNotSupportedError(f"no connector for {line_dsp.dsp_name}")
-
         key = ExternalLineKey.from_raw(external_campaign_id, external_line_item_id)
+        user_validated = line_dsp.dsp_name in self._user_validated_dsps
+        if user_validated:
+            _require_one_package_id(key)
+            client = None
+        else:
+            client = self._client_for_dsp(line_dsp.dsp_name)
+            if client is None:
+                raise DspNotSupportedError(f"no connector for {line_dsp.dsp_name}")
+
         # Checked before asking the DSP: every question spends part of an agency-wide request quota.
         if self._repository.pair_exists(line_dsp.dsp_id, key):
             raise DuplicateDspMappingError("pair already mapped")
 
-        check = self._check_with_dsp(client, key)
-        validated_at = self._clock() if check is IdentifierCheck.FOUND else None
+        check = IdentifierCheck.USER_VALIDATED if client is None else self._check_with_dsp(client, key)
+        validated_at = self._clock() if check in (IdentifierCheck.FOUND, IdentifierCheck.USER_VALIDATED) else None
         mapping = self._repository.add(campaign_line_id, line_dsp.dsp_id, key, validated_at)
         last_impressions_date = None if self._catalog is None else self._catalog.find_last_impressions_date(
             line_dsp.dsp_id, key)
@@ -90,3 +110,8 @@ class DspMappingService:
             # Any other DSP failure, such as refused credentials, propagates: it is not "unreachable".
             return IdentifierCheck.UNREACHABLE
         return IdentifierCheck.UNKNOWN if resolved is None else IdentifierCheck.FOUND
+
+
+def _require_one_package_id(key: ExternalLineKey) -> None:
+    if key.external_campaign_id != key.external_line_item_id or not _PACKAGE_ID.fullmatch(key.external_campaign_id):
+        raise InvalidEquativPackageError("the pair is not one auction package id in both identifiers")

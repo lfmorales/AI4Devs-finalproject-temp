@@ -125,6 +125,9 @@ def _dsp_http_client() -> httpx.Client:
     return httpx.Client(timeout=httpx.Timeout(30.0))
 
 
+# The DSPs whose mappings the user validates by writing the identifier: their pairs are never checked with them.
+USER_VALIDATED_DSPS = frozenset({"Equativ"})
+
 # A request must not wait minutes for a report: ten polls at three seconds, then the DSP counts as unreachable.
 _REQUEST_PATH_MAX_POLL_ATTEMPTS = 10
 
@@ -165,6 +168,7 @@ def get_dsp_mapping_service(
         clock=lambda: datetime.now(UTC).replace(tzinfo=None),
         catalog=SqlAlchemyDspCatalogQueryRepository(session),
         today=lambda: today,
+        user_validated_dsps=USER_VALIDATED_DSPS,
     )
 
 

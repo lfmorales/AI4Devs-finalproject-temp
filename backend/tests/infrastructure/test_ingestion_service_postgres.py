@@ -11,12 +11,15 @@ from app.application.services.delivery_ingestion_service import DeliveryIngestio
 from app.domain.entities.ingestion_batch import IngestionRoute
 from app.domain.value_objects.delivery import ExternalLineKey
 from app.infrastructure.dsp.adform_delivery_client import AdformDeliveryClient
+from app.infrastructure.dsp.equativ_delivery_client import EquativDeliveryClient
 from app.infrastructure.persistence.models.delivery import (
     DailyDeliveryRecord,
     IngestionBatchRecord,
     IngestionExceptionDeliveryRecord,
     IngestionExceptionRecord,
 )
+from app.infrastructure.persistence.models.dsp_catalog import DspCatalogLineRecord
+from app.infrastructure.persistence.models.masters import DSPRecord
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from tests.fixtures.delivery_data import (
     insert_campaign_line,
@@ -28,6 +31,7 @@ from tests.fixtures.delivery_data import (
 )
 from tests.fixtures.delivery_rows import dsp_row
 from tests.fixtures.fake_adform import FakeAdform, report_row
+from tests.fixtures.fake_equativ import FakeEquativ, package_row
 from tests.fixtures.dsp_delivery_client import InMemoryDspDeliveryClient
 
 TODAY = date(2026, 8, 10)
@@ -190,3 +194,38 @@ def test_a_dooh_line_and_a_ctv_line_of_an_adform_report_are_stored_with_their_ot
         500, Decimal("8999.7500"), 0)
     assert (stored[ctv_line].impressions, stored[ctv_line].ots, stored[ctv_line].video_completions) == (
         50000, Decimal("0.0000"), 40615)
+
+
+def test_an_equativ_run_fills_one_catalogue_row_per_package_with_no_mapping_at_all(rolled_back_session: Session) -> None:
+    equativ = DSPRecord(name="Equativ", is_active=True)
+    rolled_back_session.add(equativ)
+    rolled_back_session.flush()
+    zero_width_name = "Synthetic​ Package Two"
+    fake = FakeEquativ(rows=[
+        package_row(day="2026-11-19T00:00:00", package_id="900000001", name="Synthetic Package One", impressions="500"),
+        package_row(day="2026-11-21T00:00:00", package_id="900000001", name="Synthetic Package One", impressions="0"),
+        package_row(day="2026-11-20T00:00:00", package_id="900000002", name=zero_width_name, impressions="70"),
+    ])
+    client = EquativDeliveryClient("synthetic-id", "synthetic-secret", fake.client(), sleep=lambda _: None,
+                                   monotonic=lambda: 0.0)
+    service = DeliveryIngestionService(
+        client, lambda: SqlAlchemyUnitOfWork(lambda: rolled_back_session), lambda: datetime(2026, 11, 24, 6, 15))
+
+    service.run(equativ.id, date(2026, 11, 24))
+
+    rows = rolled_back_session.scalars(
+        select(DspCatalogLineRecord).where(DspCatalogLineRecord.dsp_id == equativ.id)
+        .order_by(DspCatalogLineRecord.external_campaign_id)
+    ).all()
+    assert [
+        (r.external_campaign_id, r.external_line_item_id, r.campaign_name, r.line_item_name, r.line_start_date,
+         r.line_end_date, r.first_seen_date, r.last_seen_date, r.last_impressions_date)
+        for r in rows
+    ] == [
+        ("900000001", "900000001", "Synthetic Package One", "Synthetic Package One", None, None,
+         date(2026, 11, 19), date(2026, 11, 21), date(2026, 11, 19)),
+        ("900000002", "900000002", zero_width_name, zero_width_name, None, None,
+         date(2026, 11, 20), date(2026, 11, 20), date(2026, 11, 20)),
+    ]
+    assert "​" in rows[1].campaign_name
+    assert rolled_back_session.scalar(select(func.count()).select_from(DailyDeliveryRecord)) == 0

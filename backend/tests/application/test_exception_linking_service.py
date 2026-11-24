@@ -148,3 +148,38 @@ def test_an_exception_resolved_by_someone_else_in_the_meantime_rolls_the_mapping
     with pytest.raises(IngestionExceptionAlreadyResolvedError):
         service.link(1, LINE, USER)
     assert links.mappings == {}
+
+
+# --- An unmatched Equativ package ------------------------------------------------------------------------------------
+
+ADFORM, EQUATIV = 1, 3
+ADFORM_LINE, DEAL_LINE = 21, 22
+PACKAGE = ExternalLineKey("900000001", "900000001")
+
+
+def _equativ_exception() -> ExceptionSummary:
+    return _summary(
+        dsp_id=EQUATIV, external_campaign_id="900000001", external_line_item_id="900000001",
+        first_date=date(2026, 11, 17), last_date=date(2026, 11, 23),
+    )
+
+
+def test_an_unmatched_equativ_package_links_to_a_line_on_equativ_validated_without_asking_equativ() -> None:
+    # The linking service has no DSP client at all: the exception is the proof that the package exists.
+    service, links, queue = _build(_equativ_exception(), line_dsp={DEAL_LINE: EQUATIV, ADFORM_LINE: ADFORM})
+
+    result = service.link(1, DEAL_LINE, USER)
+
+    assert (result.mapping.dsp_id, result.mapping.key, result.mapping.validated_at) == (EQUATIV, PACKAGE, NOW)
+    assert links.mappings == {(EQUATIV, PACKAGE): DEAL_LINE}
+    assert queue.summaries[1].status is ExceptionStatus.RESOLVED
+
+
+def test_an_unmatched_equativ_package_linked_to_an_adform_line_is_a_dsp_mismatch() -> None:
+    service, links, queue = _build(_equativ_exception(), line_dsp={DEAL_LINE: EQUATIV, ADFORM_LINE: ADFORM})
+
+    with pytest.raises(LineDspMismatchError):
+        service.link(1, ADFORM_LINE, USER)
+
+    assert links.mappings == {}
+    assert queue.summaries[1].status is ExceptionStatus.OPEN

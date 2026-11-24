@@ -140,7 +140,7 @@ The system SHALL combine the delivery of every external line item mapped to the 
 
 ### Requirement: A DSP mapping is created against an identifier pair checked with the DSP
 
-The system SHALL check an external identifier pair with the DSP when a mapping is created, SHALL distinguish a pair that was found, one the DSP does not know and a DSP that could not be reached, SHALL create the mapping in all three cases, and SHALL set `validated_at` only when the pair was found. Equativ is the exception: its mapping is created from the `auctionPackageDealId` operations writes, SHALL count as validated by the user, SHALL set `validated_at` at creation with the outcome `user_validated`, and SHALL ask Equativ nothing and require nothing of the catalogue. Its pair SHALL carry the same `auctionPackageDealId`, made only of digits, in both identifiers; any other pair for a line on Equativ SHALL be rejected with 422 `invalid_equativ_package` and nothing stored. A wrong id is not detected at creation: it is surfaced by the check for lines without delivery (`delivery/ingestion-exceptions`).
+The system SHALL check an external identifier pair with the DSP when a mapping is created, SHALL distinguish a pair that was found, one the DSP does not know and a DSP that could not be reached, SHALL create the mapping in all three cases, and SHALL set `validated_at` only when the pair was found. Equativ is the exception: its mapping is created from the `auctionPackageDealId` operations writes, SHALL count as validated by the user, SHALL set `validated_at` at creation with the outcome `user_validated`, and SHALL ask Equativ nothing and require nothing of the catalogue. Its pair SHALL carry the same `auctionPackageDealId` in both identifiers, written as a positive integer of ASCII digits with no leading zero (`^[1-9][0-9]*$`): `0` is not a package, and `0900000001` would never match the `900000001` the report carries; any other pair for a line on Equativ SHALL be rejected with 422 `invalid_equativ_package` and nothing stored. A wrong id is not detected at creation: it is surfaced by the check for lines without delivery (`delivery/ingestion-exceptions`).
 
 #### Scenario: A found pair is validated
 - **WHEN** a mapping is created for a pair the DSP knows
@@ -166,6 +166,14 @@ The system SHALL check an external identifier pair with the DSP when a mapping i
 
 #### Scenario: A malformed Equativ pair is refused
 - **WHEN** a mapping for a line on Equativ carries two different identifiers, or an identifier with characters other than digits
+- **THEN** the request is rejected with 422 `invalid_equativ_package` and no mapping is stored
+
+#### Scenario: A zero Equativ package is refused
+- **WHEN** a mapping for a line on Equativ carries `0` in both identifiers
+- **THEN** the request is rejected with 422 `invalid_equativ_package` and no mapping is stored
+
+#### Scenario: An Equativ package with a leading zero is refused
+- **WHEN** a mapping for a line on Equativ carries `0900000001` in both identifiers
 - **THEN** the request is rejected with 422 `invalid_equativ_package` and no mapping is stored
 
 ### Requirement: Today and the ingestion window are calendar days in a configured time zone

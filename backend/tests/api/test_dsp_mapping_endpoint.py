@@ -1,8 +1,11 @@
 """POST /campaign-lines/{id}/dsp-mappings: operations only, three validation outcomes, global error bodies."""
 
 from datetime import date
+from typing import Any
 
 import pytest
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.domain.exceptions import DspAuthenticationError, DspUnreachableError
 from app.domain.value_objects.catalog import CatalogLineObservation
@@ -10,6 +13,8 @@ from app.domain.value_objects.delivery import ExternalLineKey
 from app.infrastructure.persistence.repositories.sqlalchemy_dsp_catalog_repository import (
     SqlAlchemyDspCatalogRepository,
 )
+from app.infrastructure.persistence.models.dsp_mapping import DSPMappingRecord
+from app.infrastructure.persistence.models.masters import DSPRecord
 from app.presentation.dependencies import providers
 from tests.fixtures.delivery_data import insert_campaign_line, seeded_dsp_id
 from tests.fixtures.dsp_delivery_client import ScriptedDspDeliveryClient
@@ -184,3 +189,87 @@ def test_the_response_says_whether_the_line_needs_a_history_load_at_both_edges_o
     response = _post(authenticated_client, _line_starting(test_db_session, start))
 
     assert (response.status_code, response.json()["needs_history_load"]) == (201, expected)
+
+
+# --- An Equativ package written by operations ----------------------------------------------------------------------
+
+PACKAGE = "900000001"
+PACKAGE_BODY = {"external_campaign_id": PACKAGE, "external_line_item_id": PACKAGE}
+
+
+def _equativ_line(session: Session) -> int:
+    equativ = session.scalars(select(DSPRecord).where(DSPRecord.name == "Equativ")).first()
+    if equativ is None:
+        equativ = DSPRecord(name="Equativ", is_active=True)
+        session.add(equativ)
+        session.flush()
+    return insert_campaign_line(session, campaign_name="Equativ endpoint", dsp_id=equativ.id)
+
+
+def _no_client_may_be_asked(client: Any) -> None:
+    def resolve(dsp_name: str) -> None:
+        raise AssertionError(f"no client is asked for {dsp_name}")
+
+    client.app.dependency_overrides[providers.get_dsp_client_resolver] = lambda: resolve
+
+
+def test_an_equativ_package_is_mapped_validated_by_the_user(authenticated_client: Any, test_db_session: Session) -> None:
+    line = _equativ_line(test_db_session)
+    _no_client_may_be_asked(authenticated_client)
+
+    response = _post(authenticated_client, line, PACKAGE_BODY)
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert (body["validation"], body["campaign_line_id"]) == ("user_validated", line)
+    assert (body["external_campaign_id"], body["external_line_item_id"]) == (PACKAGE, PACKAGE)
+    assert body["validated_at"] is not None
+    assert body["last_impressions_date"] is None
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"external_campaign_id": PACKAGE, "external_line_item_id": "900000002"},
+        {"external_campaign_id": "abc", "external_line_item_id": "abc"},
+        {"external_campaign_id": "9000-01", "external_line_item_id": "9000-01"},
+        {"external_campaign_id": "0", "external_line_item_id": "0"},
+        {"external_campaign_id": "0900000001", "external_line_item_id": "0900000001"},
+    ],
+    ids=["two-ids", "letters", "dash", "zero", "leading-zero"],
+)
+def test_a_malformed_equativ_pair_is_unprocessable_and_stores_nothing(
+    authenticated_client: Any, test_db_session: Session, body: dict[str, str]
+) -> None:
+    line = _equativ_line(test_db_session)
+    _no_client_may_be_asked(authenticated_client)
+
+    response = _post(authenticated_client, line, body)
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "code": "invalid_equativ_package",
+        "message": "An Equativ line is mapped by one auction package id, a whole number above zero with no leading zero, in both identifiers",
+    }
+    assert test_db_session.scalar(
+        select(func.count()).select_from(DSPMappingRecord).where(DSPMappingRecord.campaign_line_id == line)
+    ) == 0
+
+
+def test_a_user_without_the_operations_role_cannot_map_an_equativ_line(
+    authenticated_client_no_operations_role: Any, test_db_session: Session
+) -> None:
+    line = _equativ_line(test_db_session)
+    _no_client_may_be_asked(authenticated_client_no_operations_role)
+
+    response = _post(authenticated_client_no_operations_role, line, PACKAGE_BODY)
+
+    assert (response.status_code, response.json()["code"]) == (403, "missing_role")
+
+
+def test_a_request_without_a_token_cannot_map_an_equativ_line(client: Any, test_db_session: Session) -> None:
+    line = _equativ_line(test_db_session)
+
+    response = _post(client, line, PACKAGE_BODY)
+
+    assert (response.status_code, response.json()["code"]) == (401, "unauthenticated")
