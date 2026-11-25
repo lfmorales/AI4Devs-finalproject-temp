@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 from app.domain.entities.campaign_status import CampaignStatusRow
 from app.domain.services.pacing import PacingStatus
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 from app.presentation.schemas.quantity import IN_DELIVERY_METRIC, QuantityString
 
 
@@ -47,6 +48,12 @@ class CampaignStatusResponse(BaseModel):
     pacing: PacingResponse
     pacing_flag: bool
     missing_data_flag: bool
+    volume_commitment: VolumeCommitment = Field(
+        description=(
+            "What the line's volume means: `committed`, a volume the buyer committed to, or `target`, an objective the "
+            "buyer may exceed, whose pacing is flagged only below it. Not a cost or margin figure."
+        )
+    )
 
     @classmethod
     def from_row(cls, row: CampaignStatusRow) -> "CampaignStatusResponse":
@@ -71,4 +78,5 @@ class CampaignStatusResponse(BaseModel):
             ),
             pacing_flag=row.pacing_flag,
             missing_data_flag=row.missing_data_flag,
+            volume_commitment=row.volume_commitment,
         )

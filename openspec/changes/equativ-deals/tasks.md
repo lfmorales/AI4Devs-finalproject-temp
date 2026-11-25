@@ -101,9 +101,9 @@
 
 ## 13. Response Schemas
 
-- [ ] 13.1 Write failing API tests in `test_campaign_status_endpoint.py` that every row carries `volume_commitment`, and that a user holding only `trading` receives it and, walking every key however nested, no cost, revenue, rebate, spend, gross or margin field
-- [ ] 13.2 Write failing API tests in `test_margin_endpoint.py` (or a new `test_margin_target_flights.py`): the worked example's flight carries `volume_commitment` `target`, `revenue` `"4400.00"`, `contracted_revenue` `"5000.00"`, `gross_revenue` `"5500.00"`, `margin` `"2750.00"` and `margin_pct` 62.50; a committed flight has `gross_revenue` null; line, campaign and totals carry the summed gross, the shared or null commitment and the two counts
-- [ ] 13.3 Add the fields to `schemas/campaign_status.py` and `schemas/margin.py`, and verify 13.1, 13.2 and that `test_route_protection.py` passes with `ACCESS_MATRIX` unchanged: no route is added, so no new negative case is needed beyond the existing ones of the three routes
+- [x] 13.1 Write failing API tests in `test_campaign_status_endpoint.py` that every row carries `volume_commitment`, and that a user holding only `trading` receives it and, walking every key however nested, no cost, revenue, rebate, spend, gross or margin field
+- [x] 13.2 Write failing API tests in `test_margin_endpoint.py` (or a new `test_margin_target_flights.py`): the worked example's flight carries `volume_commitment` `target`, `revenue` `"4400.00"`, `contracted_revenue` `"5000.00"`, `gross_revenue` `"5500.00"`, `margin` `"2750.00"` and `margin_pct` 62.50; a committed flight has `gross_revenue` null; line, campaign and totals carry the summed gross, the shared or null commitment and the two counts
+- [x] 13.3 Add the fields to `schemas/campaign_status.py` and `schemas/margin.py`, and verify 13.1, 13.2 and that `test_route_protection.py` passes with `ACCESS_MATRIX` unchanged: no route is added, so no new negative case is needed beyond the existing ones of the three routes
 
 ## 14. Screens
 

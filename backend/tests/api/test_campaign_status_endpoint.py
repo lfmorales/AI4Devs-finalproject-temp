@@ -8,8 +8,10 @@ from typing import cast
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
+from app.infrastructure.persistence.models.campaign import CampaignLineRecord
 from app.presentation.dependencies import providers
 from app.presentation.schemas.campaign_status import CampaignStatusResponse
 from tests.fixtures.delivery_data import (
@@ -281,10 +283,15 @@ def test_a_trading_user_reads_the_ots_of_a_dooh_row_and_finds_no_money_field_at_
     trading = client_for_roles("trading")
     trading.app.dependency_overrides[providers.get_today] = lambda: TODAY
     _dooh_line(test_db_session)
+    # A target line whose delivery carries every amount Equativ reports: none of them may reach trading.
+    _target_line_with_reported_amounts(test_db_session)
 
-    [row] = _rows(trading)
+    rows = _rows(trading)
+    [row] = [r for r in rows if r["delivery_metric"] == "ots"]
+    [target_row] = [r for r in rows if r["volume_commitment"] == "target"]
 
     assert row["delivered"] == "95000.7500" and row["delivery_metric"] == "ots"
+    assert row["volume_commitment"] == "committed"
 
     def keys_of(value: object) -> set[str]:
         if isinstance(value, dict):
@@ -293,7 +300,48 @@ def test_a_trading_user_reads_the_ots_of_a_dooh_row_and_finds_no_money_field_at_
             return {key for item in value for key in keys_of(item)}
         return set()
 
-    money_words = (*COST_WORDS, "platform", "amount", "rate", "fee", "euro", "money", "spend", "price")
-    names = keys_of(row)
-    assert {"campaign", "flight", "pacing", "delivered", "delivery_metric"} <= names  # the walk reached the nested keys
+    # The reported revenue, the buyer's spend, the gross and the data costs are money too.
+    money_words = (
+        *COST_WORDS, "platform", "amount", "rate", "fee", "euro", "money", "spend", "price", "gross", "buyer",
+        "reported", "data_cost",
+    )
+    names = keys_of(rows)
+    assert {"campaign", "flight", "pacing", "delivered", "delivery_metric", "volume_commitment"} <= names
     assert not [name for name in names if any(word in name.lower() for word in money_words)]
+    # No value of the target row is one of the amounts stored for it.
+    assert not {str(value) for value in _leaf_values(target_row)} & {
+        "4400.00", "4400.000000", "5500.00", "5500.000000", "1.25", "1.250000",
+    }
+
+
+def _target_line_with_reported_amounts(session: Session) -> int:
+    """A target line that delivered 40,000 impressions on D-1 with every amount Equativ reports."""
+    line = insert_campaign_line(session, campaign_name="Target with amounts")
+    session.execute(update(CampaignLineRecord).where(CampaignLineRecord.id == line).values(volume_commitment="target"))
+    insert_delivery(
+        session, line, date(2026, 8, 10), 40_000, insert_ingestion_batch(session), buyer_spend=Decimal("5500.000000"),
+        reported_revenue=Decimal("4400.000000"), third_party_data_cost=Decimal("0.25"),
+        audience_data_cost=Decimal("1.00"),
+    )
+    return line
+
+
+def _leaf_values(value: object) -> list[object]:
+    """Every value of a response that is not itself an object or a list, however nested."""
+    if isinstance(value, dict):
+        return [leaf for item in value.values() for leaf in _leaf_values(item)]
+    if isinstance(value, list):
+        return [leaf for item in value for leaf in _leaf_values(item)]
+    return [value]
+
+
+def test_every_row_carries_the_commitment_of_its_line(business_client: TestClient, test_db_session: Session) -> None:
+    committed = insert_campaign_line(test_db_session, campaign_name="Both commitments")
+    target = add_line_to_campaign(test_db_session, committed, 2)
+    test_db_session.execute(
+        update(CampaignLineRecord).where(CampaignLineRecord.id == target).values(volume_commitment="target")
+    )
+
+    rows = _rows(business_client)
+
+    assert sorted((row["line_number"], row["volume_commitment"]) for row in rows) == [(1, "committed"), (2, "target")]

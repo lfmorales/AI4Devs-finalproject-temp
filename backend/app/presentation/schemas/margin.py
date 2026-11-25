@@ -7,6 +7,7 @@ from pydantic import BaseModel, BeforeValidator, Field, PlainSerializer, model_v
 from app.domain.value_objects.margin import MarginTotals
 from app.domain.value_objects.margin_report import FlightReport, FlightState, MarginReport
 from app.domain.value_objects.platform_rate import PlatformRateLevel
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 from app.presentation.schemas.quantity import IN_DELIVERY_METRIC, QuantityString
 
 
@@ -48,6 +49,16 @@ class TotalsResponse(BaseModel):
     below_cost_count: int
     zero_sale_count: int
     margin_pct: DecimalString | None
+    volume_commitment: VolumeCommitment | None = Field(
+        description="The one commitment of the flights below, `committed` or `target`. Null when they mix both."
+    )
+    gross_revenue: DecimalString | None = Field(
+        description="The exact sum of the gross of the target flights below, two decimals. Null when there is none."
+    )
+    gross_differs_count: int = Field(
+        description="How many flights below have a gross more than 1 % away from the buyer's spend."
+    )
+    data_cost_count: int = Field(description="How many flights below report a third-party or audience data cost.")
 
     @classmethod
     def from_totals(cls, totals: MarginTotals) -> "TotalsResponse":
@@ -58,6 +69,8 @@ class TotalsResponse(BaseModel):
             rebate=totals.rebate, platform_cost=totals.platform_cost, margin=totals.margin, provisional=totals.provisional,
             flights_counted=totals.flights_counted, below_cost_count=totals.below_cost_count,
             zero_sale_count=totals.zero_sale_count, margin_pct=totals.margin_pct,
+            volume_commitment=totals.volume_commitment, gross_revenue=totals.gross_revenue,
+            gross_differs_count=totals.gross_differs_count, data_cost_count=totals.data_cost_count,
         )
 
 
@@ -96,6 +109,24 @@ class FlightMarginResponse(BaseModel):
     margin: DecimalString
     margin_pct: DecimalString | None
     rates: AppliedRatesResponse
+    volume_commitment: VolumeCommitment = Field(
+        description=(
+            "`committed`: revenue is the contracted volume times the CPM. `target`: revenue is what the DSP reports, "
+            "and `contracted_revenue` is the sale of the target."
+        )
+    )
+    gross_revenue: DecimalString | None = Field(
+        description=(
+            "A target flight's served impressions times the line's CPM, two decimals: the base of its rebate. Frozen "
+            "with a closed month. Null for a committed flight."
+        )
+    )
+    gross_differs_from_buyer_spend: bool = Field(
+        description="A target flight whose gross differs from the buyer's spend by more than 1 %, or has no spend."
+    )
+    data_cost_reported: bool = Field(
+        description="The DSP reports a third-party or audience data cost inside the flight's window; never subtracted."
+    )
 
     @classmethod
     def from_report(cls, report: FlightReport) -> "FlightMarginResponse":
@@ -105,6 +136,7 @@ class FlightMarginResponse(BaseModel):
         assert margin.contracted_revenue is not None and margin.accrued_days is not None and margin.window_days is not None
         assert margin.delivered_impressions is not None and margin.contracted_impressions is not None
         assert margin.delivered is not None and margin.delivery_metric is not None
+        assert margin.volume_commitment is not None
         rates = report.rates
         return cls(
             flight_id=report.flight_id, period_year=report.period_year, period_month=report.period_month,
@@ -120,6 +152,9 @@ class FlightMarginResponse(BaseModel):
                 rebate_step=rates.rebate_step, agency_exception=rates.agency_exception,
                 zero_reason=rates.zero_reason, source_year=rates.source_year,
             ),
+            volume_commitment=margin.volume_commitment, gross_revenue=margin.gross_revenue,
+            gross_differs_from_buyer_spend=margin.gross_differs_from_buyer_spend,
+            data_cost_reported=margin.data_cost_reported,
         )
 
 
