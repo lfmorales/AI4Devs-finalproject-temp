@@ -79,7 +79,11 @@ def calculate_flight_margin(flight: FlightEconomics, as_of: date) -> FlightMargi
     if flight.volume_commitment is VolumeCommitment.TARGET:
         revenue = round_amount(flight.reported_revenue)
         rebate = round_amount(flight.rebate_amount)
-        gross = gross_revenue(flight.delivered_impressions, flight.sale_cpm)
+        # A closed month's gross was frozen with it; any other flight's is what was served, at the CPM.
+        gross = (
+            round_amount(flight.gross_revenue) if flight.gross_revenue is not None
+            else gross_revenue(flight.delivered_impressions, flight.sale_cpm)
+        )
         gross_differs = _gross_differs_from_buyer_spend(gross, flight.buyer_spend)
     else:
         full_revenue = Decimal(flight.contracted_impressions) / _THOUSAND * flight.sale_cpm

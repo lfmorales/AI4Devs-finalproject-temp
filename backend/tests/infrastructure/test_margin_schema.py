@@ -6,6 +6,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import Numeric, inspect, select, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.orm import Session
 
 from app.infrastructure.persistence.models.campaign import CampaignLinePeriodRecord, CampaignLineRecord, CampaignRecord
 from app.infrastructure.persistence.models.identity import UserRecord
@@ -326,3 +327,51 @@ def test_the_columns_of_the_margin_tables_hold_no_floating_point(rolled_back_ses
     for table in ("rebate_schedules", "rebate_brackets", "platform_rate_settings", "applied_rates", "applied_rate_brackets"):
         for column in inspector.get_columns(table):
             assert column["type"].__class__.__name__ not in {"FLOAT", "REAL", "DOUBLE_PRECISION"}, (table, column["name"])
+
+
+# ---------------------------------------------------------------- the revenue and the base frozen for a target flight
+
+@pytest.mark.parametrize("column", ["revenue_amount", "rebate_base_amount"])
+def test_the_frozen_revenue_and_base_are_exact_nullable_numerics(rolled_back_session: Session, column: str) -> None:
+    model_column = AppliedRateRecord.__table__.columns[column]
+    stored = {c["name"]: c for c in inspect(rolled_back_session.get_bind()).get_columns("applied_rates")}[column]
+
+    assert isinstance(model_column.type, Numeric) and isinstance(stored["type"], Numeric)
+    assert (model_column.type.precision, model_column.type.scale) == (24, 12)
+    assert model_column.nullable is True
+    assert (stored["type"].precision, stored["type"].scale, stored["nullable"]) == (24, 12, True)
+
+
+def test_a_committed_flights_row_holds_neither_frozen_amount(rolled_back_session: Session, ids: _Ids) -> None:
+    row = _applied(ids)
+    _add(rolled_back_session, row)
+    rolled_back_session.expire_all()
+
+    stored = rolled_back_session.get(AppliedRateRecord, row.id)
+
+    assert stored is not None
+    assert (stored.revenue_amount, stored.rebate_base_amount) == (None, None)
+
+
+def test_a_target_flights_row_holds_both_frozen_amounts_without_losing_precision(
+    rolled_back_session: Session, ids: _Ids
+) -> None:
+    row = _applied(ids, revenue_amount=Decimal("4400.000000000001"), rebate_base_amount=Decimal("5500.00"))
+    _add(rolled_back_session, row)
+    rolled_back_session.expire_all()
+
+    stored = rolled_back_session.get(AppliedRateRecord, row.id)
+
+    assert stored is not None
+    assert (stored.revenue_amount, stored.rebate_base_amount) == (Decimal("4400.000000000001"), Decimal("5500.00"))
+
+
+@pytest.mark.parametrize(
+    "amounts", [{"revenue_amount": Decimal("4400.00")}, {"rebate_base_amount": Decimal("5500.00")}],
+    ids=["revenue-only", "base-only"],
+)
+def test_the_frozen_revenue_and_base_are_both_null_or_both_set(
+    rolled_back_session: Session, ids: _Ids, amounts: dict[str, Decimal]
+) -> None:
+    with pytest.raises(IntegrityError):
+        _add(rolled_back_session, _applied(ids, **amounts))

@@ -68,10 +68,10 @@ The Equativ client is therefore needed only by the nightly command, never by the
 
 ### 7. The margin of a target flight
 
-`FlightEconomics` gains `volume_commitment`, `reported_revenue`, `buyer_spend` and `data_cost` (the two data costs summed: only their presence is flagged). `calculate_flight_margin` branches once on the commitment:
+`FlightEconomics` gains `volume_commitment`, `reported_revenue`, `buyer_spend` and `data_cost` (the two data costs summed: only their presence is flagged), and `gross_revenue: Decimal | None`, required with no default in the domain: `None` computes the gross from the served impressions, as every flight that is not closed does; a closed target flight passes the gross frozen at closing (decision 9). `calculate_flight_margin` branches once on the commitment:
 
 - `committed`: unchanged.
-- `target`: revenue `round(reported_revenue)`; gross `round(served / 1000 × CPM)`; no pro-rating of revenue or rebate; `contracted_revenue` stays the target's sale.
+- `target`: revenue `round(reported_revenue)`; gross the given `gross_revenue`, or `round(served / 1000 × CPM)` when it is `None`; no pro-rating of revenue or rebate; `contracted_revenue` stays the target's sale. The flag `gross_differs_from_buyer_spend` compares that gross with the buyer's spend as stored now, so on a closed flight the flag can change after a restatement while no amount does.
 
 The rebate base is computed in `priced_flights.py` from a pure helper of `flight_margin.py` (`rebate_base(facts)`: the contracted revenue for `committed`, the gross for `target`), so the engine, the counters and the frozen positions advance by the gross without knowing why. `FlightMargin` gains `volume_commitment`, `gross_revenue`, `gross_differs_from_buyer_spend` and `data_cost_reported`; `MarginTotals` sums the gross of target flights (null when none), counts the two flags and carries the shared commitment or null, like `delivery_metric`.
 
@@ -85,7 +85,7 @@ The two copies of the flight query in `sqlalchemy_margin_repositories.py` are fi
 
 ### 9. Closing freezes the revenue and the base of target flights, and waits for the last day
 
-`applied_rates` gains `revenue_amount` and `rebate_base_amount`, `Numeric(24,12)` nullable, with a check that both are null or both set; `save` fills them for target flights. `MarginQueryService._margin_from_frozen` passes the frozen revenue and base to the margin instead of the live sums. Media cost and platform cost keep their current behaviour (live delivery, frozen platform rate): freezing them is the immutable month-end snapshot of phase 2.
+`applied_rates` gains `revenue_amount` and `rebate_base_amount`, `Numeric(24,12)` nullable, with a check that both are null or both set; `save` fills them for target flights. `MarginQueryService._margin_from_frozen` passes the frozen revenue as `reported_revenue` and the frozen base as `gross_revenue` (decision 7) instead of the live sums, so a restatement of the impressions or of the reported revenue moves neither the revenue, the gross nor the rebate of a closed target flight; a committed flight's row holds neither and passes `gross_revenue=None`. Media cost and platform cost keep their current behaviour (live delivery, frozen platform rate): freezing them is the immutable month-end snapshot of phase 2.
 
 The block: `MarginClosingService` asks a new repository method for the DSPs of the month's target flights that have no succeeded batch whose window contains the month's last day; any answer raises `MonthDeliveryNotLoadedError(year, month, dsp_name)`, mapped to 409 `month_delivery_not_loaded`, inside the same transaction and before anything is written. The check runs after `previous_month_open`, so the earliest blocker is reported first.
 

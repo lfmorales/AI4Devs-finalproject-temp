@@ -40,7 +40,8 @@ class FlightEconomics:
 
     `volume_commitment` is declared on the line. A target flight earns `reported_revenue`, what its DSP reports inside the
     window, and its `buyer_spend` is only compared with its gross. `data_cost` is the third-party and audience data costs
-    inside the window, summed: only its presence is flagged, it is never subtracted.
+    inside the window, summed: only its presence is flagged, it is never subtracted. `gross_revenue` is the gross frozen
+    when the flight's month was closed; None computes it from the served impressions, as for every flight not closed.
     """
 
     flight_start: date
@@ -57,6 +58,7 @@ class FlightEconomics:
     reported_revenue: Decimal
     buyer_spend: Decimal
     data_cost: Decimal
+    gross_revenue: Decimal | None
 
     def __post_init__(self) -> None:
         if self.flight_start > self.flight_end:
@@ -66,6 +68,8 @@ class FlightEconomics:
             "data_cost",
         ):
             _require_decimal(name, getattr(self, name))
+        if self.gross_revenue is not None:
+            _require_decimal("gross_revenue", self.gross_revenue)
 
     @property
     def total_days(self) -> int:

@@ -2,7 +2,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from app.domain.exceptions import PreviousMonthOpenError
+from app.domain.exceptions import MonthDeliveryNotLoadedError, PreviousMonthOpenError
 from app.domain.repositories.margin_repositories import MarginClosingTransaction
 from app.domain.services.priced_flights import price_flights
 
@@ -43,6 +43,10 @@ class MarginClosingService:
         blocking_month = self._transaction.flights.earliest_month_with_open_flights(year, month, as_of)
         if blocking_month is not None:
             raise PreviousMonthOpenError(year, blocking_month)
+        # A target flight earns what its DSP reports: its month waits until the DSP has loaded the month's last day.
+        not_loaded = self._transaction.flights.dsps_without_the_months_last_day(year, month, as_of)
+        if not_loaded:
+            raise MonthDeliveryNotLoadedError(year, month, not_loaded[0])
 
         already_closed = self._transaction.applied_rates.count_frozen(year, month)
         flights = self._transaction.flights.open_ended_flights(year, month, as_of)

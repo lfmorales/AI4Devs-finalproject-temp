@@ -27,6 +27,9 @@ class FrozenRates:
     source_year: int | None
     position_before: Decimal
     position_after: Decimal
+    # Only a target flight's: the revenue its DSP reported and the gross its rebate was priced on, as of closing.
+    revenue_amount: Decimal | None
+    rebate_base_amount: Decimal | None
 
 
 @dataclass(frozen=True)

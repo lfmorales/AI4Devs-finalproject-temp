@@ -1,3 +1,4 @@
+from calendar import monthrange
 from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
@@ -29,7 +30,7 @@ from app.infrastructure.persistence.models.campaign import (
     CampaignPeriodRecord,
     CampaignRecord,
 )
-from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord
+from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord, IngestionBatchRecord
 from app.infrastructure.persistence.models.margin import (
     AppliedRateBracketRecord,
     AppliedRateRecord,
@@ -37,7 +38,7 @@ from app.infrastructure.persistence.models.margin import (
     RebateBracketRecord,
     RebateScheduleRecord,
 )
-from app.infrastructure.persistence.models.masters import AgencyRecord, ChannelRecord
+from app.infrastructure.persistence.models.masters import AgencyRecord, ChannelRecord, DSPRecord
 from app.infrastructure.persistence.repositories.delivered_volume import delivered_in_channel_metric
 
 # The first key of the advisory locks that serialise the closing of a month; the second is year * 100 + month.
@@ -230,7 +231,7 @@ class SqlAlchemyMarginFlightRepository(MarginFlightRepository):
         self._session = session
 
     @staticmethod
-    def _not_frozen():
+    def _not_frozen() -> ColumnElement[bool]:
         return ~exists().where(AppliedRateRecord.campaign_line_period_id == CampaignLinePeriodRecord.id)
 
     def open_ended_flights(self, year: int, month: int, as_of: date) -> list[FlightFacts]:
@@ -246,6 +247,33 @@ class SqlAlchemyMarginFlightRepository(MarginFlightRepository):
             .order_by(flight.flight_start, flight.id)
         ).all()
         return [_flight_facts(row) for row in rows]
+
+    def dsps_without_the_months_last_day(self, year: int, month: int, as_of: date) -> list[str]:
+        flight = CampaignLinePeriodRecord
+        last_day = date(year, month, monthrange(year, month)[1])
+        loaded = exists().where(
+            IngestionBatchRecord.dsp_id == CampaignLineRecord.dsp_id,
+            IngestionBatchRecord.status == "succeeded",
+            IngestionBatchRecord.window_start <= last_day,
+            IngestionBatchRecord.window_end >= last_day,
+        )
+        return list(self._session.scalars(
+            select(DSPRecord.name)
+            .select_from(flight)
+            .join(CampaignLineRecord, CampaignLineRecord.id == flight.campaign_line_id)
+            .join(DSPRecord, DSPRecord.id == CampaignLineRecord.dsp_id)
+            .join(CampaignPeriodRecord, CampaignPeriodRecord.id == flight.campaign_period_id)
+            .where(
+                CampaignPeriodRecord.period_year == year,
+                CampaignPeriodRecord.period_month == month,
+                flight.flight_end <= as_of,
+                self._not_frozen(),
+                CampaignLineRecord.volume_commitment == VolumeCommitment.TARGET.value,
+                ~loaded,
+            )
+            .distinct()
+            .order_by(DSPRecord.name)
+        ))
 
     def earliest_month_with_open_flights(self, year: int, before_month: int, as_of: date) -> int | None:
         flight = CampaignLinePeriodRecord
@@ -296,6 +324,8 @@ class SqlAlchemyMarginReadRepository(MarginReadRepository):
                 applied.source_year.label("source_year"),
                 applied.position_before.label("position_before"),
                 applied.position_after.label("position_after"),
+                applied.revenue_amount.label("frozen_revenue_amount"),
+                applied.rebate_base_amount.label("frozen_rebate_base_amount"),
             )
             .outerjoin(applied, applied.campaign_line_period_id == flight.id)
             .where(flight.flight_start <= as_of)
@@ -317,7 +347,8 @@ class SqlAlchemyMarginReadRepository(MarginReadRepository):
                 effective_rate=values["effective_rate"], ladder_step=int(values["ladder_step"]),
                 agency_exception=values["agency_exception"], zero_reason=values["zero_reason"],
                 source_year=values["source_year"], position_before=values["position_before"],
-                position_after=values["position_after"],
+                position_after=values["position_after"], revenue_amount=values["frozen_revenue_amount"],
+                rebate_base_amount=values["frozen_rebate_base_amount"],
             )
             results.append(ReadFlight(
                 _flight_facts(row), values["campaign_name"], values["campaign_status"], values["line_number"],
@@ -366,6 +397,9 @@ class SqlAlchemyAppliedRateRepository(AppliedRateRepository):
     def save(self, priced: Sequence[PricedFlight], closed_at: datetime, closed_by: int) -> None:
         for item in priced:
             rebate = item.rebate
+            # A target flight's revenue and gross are what its DSP reported as of closing: frozen with its rates. A
+            # committed flight's revenue is its contract, which does not move, so its row holds neither.
+            target = item.facts.volume_commitment is VolumeCommitment.TARGET
             row = AppliedRateRecord(
                 campaign_line_period_id=item.facts.flight_id,
                 rebate_schedule_id=rebate.schedule_id,
@@ -382,6 +416,8 @@ class SqlAlchemyAppliedRateRepository(AppliedRateRepository):
                 position_after=rebate.position_after,
                 rebate_amount=rebate.rebate,
                 platform_rate=item.platform.rate,
+                revenue_amount=item.margin.revenue if target else None,
+                rebate_base_amount=item.margin.gross_revenue if target else None,
                 closed_at=closed_at,
                 closed_by=closed_by,
             )

@@ -135,7 +135,11 @@ class MarginQueryService:
 
 
 def _margin_from_frozen(flight: ReadFlight, frozen: FrozenRates, as_of: date) -> FlightMargin:
+    """A closed flight from what its closing froze: the rebate and the platform rate, and for a target flight its
+    revenue and its gross, so that a restatement of its DSP does not move them. Media cost and platform cost still
+    read the delivery as stored now (design.md decision 9)."""
     facts = flight.facts
+    frozen_target = frozen.revenue_amount is not None
     return calculate_flight_margin(
         FlightEconomics(
             flight_start=facts.flight_start, flight_end=facts.flight_end,
@@ -143,8 +147,10 @@ def _margin_from_frozen(flight: ReadFlight, frozen: FrozenRates, as_of: date) ->
             delivered_impressions=facts.delivered_impressions, media_cost=facts.media_cost,
             rebate_amount=frozen.rebate_amount, platform_rate=Decimal(frozen.platform_rate),
             delivery_metric=facts.delivery_metric, delivered=facts.delivered,
-            volume_commitment=facts.volume_commitment, reported_revenue=facts.reported_revenue,
+            volume_commitment=facts.volume_commitment,
+            reported_revenue=frozen.revenue_amount if frozen.revenue_amount is not None else facts.reported_revenue,
             buyer_spend=facts.buyer_spend, data_cost=facts.data_cost,
+            gross_revenue=frozen.rebate_base_amount if frozen_target else None,
         ),
         as_of,
     )

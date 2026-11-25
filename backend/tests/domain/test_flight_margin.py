@@ -591,3 +591,44 @@ def test_the_rebate_base_of_a_committed_flight_is_its_contracted_revenue() -> No
 def test_the_rebate_base_of_a_target_flight_is_its_served_gross() -> None:
     assert rebate_base(_facts(VolumeCommitment.TARGET, 1_100_000)) == Decimal("5500.00")
     assert rebate_base(_facts(VolumeCommitment.TARGET, 0)) == Decimal("0.00")
+
+
+# --- A gross frozen at closing is the flight's gross, whatever is served now (design.md decisions 7 and 9) ----------
+
+def test_a_given_gross_is_the_gross_of_a_target_flight_whatever_is_served_now() -> None:
+    # Restated after closing: 1,200,000 served would be 6,000.00 €; the gross frozen at closing was 5,500.00 €.
+    flight = replace(_target_flight(delivered_impressions=1_200_000), gross_revenue=Decimal("5500.00"))
+
+    result = calculate_flight_margin(flight, as_of=AFTER_NOVEMBER)
+
+    assert result.gross_revenue == Decimal("5500.00")
+    assert result.platform_cost == Decimal("1200.00")  # the platform cost still reads the delivery as stored now
+
+
+def test_the_gross_flag_compares_the_given_gross_with_the_spend_as_stored_now() -> None:
+    frozen = replace(_target_flight(buyer_spend="6050.00"), gross_revenue=Decimal("5500.00"))
+    within = replace(
+        _target_flight(buyer_spend="5500.00", delivered_impressions=1_300_000), gross_revenue=Decimal("5500.00")
+    )
+
+    assert calculate_flight_margin(frozen, as_of=AFTER_NOVEMBER).gross_differs_from_buyer_spend is True
+    assert calculate_flight_margin(within, as_of=AFTER_NOVEMBER).gross_differs_from_buyer_spend is False
+
+
+def test_no_given_gross_computes_it_from_the_served_impressions() -> None:
+    result = calculate_flight_margin(replace(_target_flight(), gross_revenue=None), as_of=AFTER_NOVEMBER)
+
+    assert result.gross_revenue == Decimal("5500.00")
+
+
+def test_a_committed_flight_has_no_gross_even_when_one_is_given() -> None:
+    plain = calculate_flight_margin(_flight(), as_of=AFTER_AUGUST)
+    given = calculate_flight_margin(replace(_flight(), gross_revenue=Decimal("1.00")), as_of=AFTER_AUGUST)
+
+    assert given == plain
+    assert given.gross_revenue is None
+
+
+def test_a_float_given_gross_is_refused() -> None:
+    with pytest.raises(TypeError, match="gross_revenue"):
+        replace(_target_flight(), gross_revenue=1.5)  # type: ignore[arg-type]

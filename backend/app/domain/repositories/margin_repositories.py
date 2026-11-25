@@ -42,6 +42,11 @@ class MarginFlightRepository(ABC):
         """
 
     @abstractmethod
+    def dsps_without_the_months_last_day(self, year: int, month: int, as_of: date) -> list[str]:
+        """The DSPs, by name, of the month's ended and unfrozen target flights that have no succeeded ingestion batch
+        whose window includes the month's last day. Empty when the month can be closed."""
+
+    @abstractmethod
     def earliest_month_with_open_flights(self, year: int, before_month: int, as_of: date) -> int | None:
         """The earliest month of `year` before `before_month` that has an ended flight without frozen rates."""
 

@@ -119,6 +119,10 @@ class AppliedRateRecord(Base):
             name="ck_applied_rates_zero_reason",
         ),
         CheckConstraint("platform_rate >= 0", name="ck_applied_rates_platform_rate_not_negative"),
+        CheckConstraint(
+            "(revenue_amount IS NULL) = (rebate_base_amount IS NULL)",
+            name="ck_applied_rates_frozen_revenue_and_base_together",
+        ),
         Index(
             "ix_applied_rates_counter", "counter_group_id", "counter_agency_id", "counter_channel_id", "counter_year"
         ),
@@ -142,6 +146,10 @@ class AppliedRateRecord(Base):
     position_after: Mapped[Decimal] = mapped_column(_AMOUNT, nullable=False)
     rebate_amount: Mapped[Decimal] = mapped_column(_AMOUNT, nullable=False)
     platform_rate: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    # Only for a target flight: the revenue its DSP reported and the gross its rebate was priced on, as of closing, so
+    # that a later restatement does not move a closed month. Both null for a committed flight, whose sale is the contract.
+    revenue_amount: Mapped[Decimal | None] = mapped_column(_AMOUNT, nullable=True)
+    rebate_base_amount: Mapped[Decimal | None] = mapped_column(_AMOUNT, nullable=True)
     closed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     closed_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 

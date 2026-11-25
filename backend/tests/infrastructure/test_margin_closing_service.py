@@ -1,20 +1,22 @@
 """Closing a month: it freezes the rates of the flights that ended in it, once, in order, and all or nothing."""
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import Engine, func, select, update
 from sqlalchemy.orm import Session
 
 from app.application.services import margin_closing_service
 from app.application.services.margin_query_service import MarginQueryService
 from app.application.services.margin_closing_service import MarginClosingService
-from app.domain.exceptions import PreviousMonthOpenError
+from app.domain.exceptions import MonthDeliveryNotLoadedError, PreviousMonthOpenError
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.priced_flights import price_flights
 from app.domain.value_objects.margin import FlightMargin
-from app.infrastructure.persistence.models.campaign import CampaignLineRecord, CampaignRecord
+from app.infrastructure.dsp.equativ_delivery_client import EquativDeliveryClient
+from app.infrastructure.persistence.models.campaign import CampaignLinePeriodRecord, CampaignLineRecord, CampaignRecord
+from app.infrastructure.persistence.models.delivery import IngestionBatchRecord
 from app.infrastructure.persistence.models.margin import (
     AppliedRateBracketRecord,
     AppliedRateRecord,
@@ -22,7 +24,7 @@ from app.infrastructure.persistence.models.margin import (
     RebateBracketRecord,
     RebateScheduleRecord,
 )
-from app.infrastructure.persistence.models.masters import AgencyRecord
+from app.infrastructure.persistence.models.masters import AgencyRecord, ChannelRecord
 from app.infrastructure.persistence.repositories import sqlalchemy_margin_repositories
 from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories import (
     SqlAlchemyAppliedRateRepository,
@@ -31,14 +33,18 @@ from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories 
     SqlAlchemyPlatformRateRepository,
     SqlAlchemyRebateScheduleRepository,
 )
+from scripts.run_ingestion import main as run_ingestion
 from tests.fixtures.delivery_data import (
     add_line_to_campaign,
     insert_campaign_line,
     insert_delivery,
     insert_ingestion_batch,
+    insert_mapping,
+    insert_other_dsp,
     insert_user,
     replace_flights,
 )
+from tests.fixtures.fake_equativ import FakeEquativ, package_row
 from tests.fixtures.flight_inputs import flight_economics
 
 SEPTEMBER_FIRST = date(2026, 9, 1)  # D; as_of is 31 August, so August is over
@@ -359,3 +365,220 @@ def test_closing_a_dooh_month_freezes_a_platform_cost_on_impressions_and_changes
             Decimal("280000.5000"), 12_000, "ots",
         )
     assert len(_rows(rolled_back_session)) == 1
+
+
+# ---------------------------------------------------------------- target flights: the freeze and the block (decision 9)
+#
+# November 2026, closed on 1 December (as_of 30 November). One campaign on the Deal counter of its group, with a flat
+# 10 % schedule: line 1 is committed (1,000,000 at 5.00 €, a sale of 5,000.00 €), line 2 is the worked example, a
+# target line on Equativ mapped to the package 900000001, whose 1,100,000 served at 5.00 € are a gross of 5,500.00 €
+# and whose reported revenue is 4,400.00 €.
+
+DECEMBER_FIRST = date(2026, 12, 1)
+NOVEMBER = (date(2026, 11, 1), date(2026, 11, 30))
+PACKAGE = "900000001"
+
+
+class _November:
+    def __init__(self, session: Session, engine: Engine) -> None:
+        self.session = session
+        self.engine = engine
+        self.equativ = insert_other_dsp(session, "Equativ")
+        self.committed = insert_campaign_line(session, "Deal campaign", *NOVEMBER)
+        replace_flights(session, self.committed, [NOVEMBER])
+        self.target = add_line_to_campaign(session, self.committed, 2)
+        deal = session.scalars(select(ChannelRecord).where(ChannelRecord.name == "Deal")).first()
+        if deal is None:
+            deal = ChannelRecord(name="Deal", delivery_metric="impressions")
+            session.add(deal)
+            session.flush()
+        self.deal_channel = deal.id
+        session.execute(
+            update(CampaignLineRecord).where(CampaignLineRecord.id.in_([self.committed, self.target]))
+            .values(channel_id=deal.id)
+        )
+        session.execute(
+            update(CampaignLineRecord).where(CampaignLineRecord.id == self.target)
+            .values(volume_commitment="target", dsp_id=self.equativ)
+        )
+        insert_mapping(session, self.target, self.equativ, PACKAGE, PACKAGE, validated_at=datetime(2026, 11, 1, 10, 0))
+        _schedule(session, _group_of(session, self.committed), ("0", None, "0.10"))
+        session.commit()
+
+    def ingest(self, start: str, end: str, *rows: dict[str, str]) -> None:
+        """Run the nightly command for Equativ over a custom range, against the synthetic Equativ.
+
+        The command closes the session it is given, so what the test added before is committed first.
+        """
+        self.session.commit()
+        client = EquativDeliveryClient(
+            "synthetic-equativ-client-id", "synthetic-equativ-client-secret", FakeEquativ(rows=list(rows)).client(),
+            sleep=lambda _: None, monotonic=lambda: 0.0,
+        )
+        code = run_ingestion(
+            ["--dsp", "Equativ", "--from", start, "--to", end], out=lambda _: None,
+            engine=self.engine, session_factory=lambda: self.session, client=client,
+            now=lambda: datetime(2026, 12, 1, 7, 0, tzinfo=UTC),
+        )
+        assert code == 0
+
+    def ingest_the_month(self) -> None:
+        self.ingest(
+            "2026-11-01", "2026-11-30",
+            package_row(day="2026-11-10T00:00:00", impressions="600000", spend="3000.00", revenue="2400.00"),
+            package_row(day="2026-11-30T00:00:00", impressions="500000", spend="2500.00", revenue="2000.00"),
+        )
+
+    def row_of(self, line_id: int) -> AppliedRateRecord:
+        return self.session.scalars(
+            select(AppliedRateRecord).join(
+                CampaignLinePeriodRecord, CampaignLinePeriodRecord.id == AppliedRateRecord.campaign_line_period_id
+            ).where(CampaignLinePeriodRecord.campaign_line_id == line_id)
+        ).one()
+
+    def target_margin(self) -> FlightMargin:
+        service = MarginQueryService(
+            SqlAlchemyMarginReadRepository(self.session), SqlAlchemyRebateScheduleRepository(self.session),
+            SqlAlchemyPlatformRateRepository(self.session), SqlAlchemyAppliedRateRepository(self.session),
+            today=lambda: DECEMBER_FIRST,
+        )
+        flights = [
+            flight for campaign in service.get_margin().campaigns for line in campaign.lines for flight in line.flights
+            if line.campaign_line_id == self.target
+        ]
+        (flight,) = flights
+        return flight.margin
+
+
+@pytest.fixture
+def november(rolled_back_session: Session, test_engine: Engine) -> _November:
+    return _November(rolled_back_session, test_engine)
+
+
+def _batch(session: Session, dsp_id: int, status: str, window: tuple[date, date]) -> None:
+    session.add(IngestionBatchRecord(
+        dsp_id=dsp_id, route="api", source_file=None, started_at=datetime(2026, 12, 1, 6, 15),
+        finished_at=datetime(2026, 12, 1, 6, 20), status=status, row_count=0, window_start=window[0],
+        window_end=window[1],
+    ))
+    session.commit()
+
+
+def test_closing_the_worked_examples_month_freezes_its_revenue_and_its_gross_and_none_on_a_committed_row(
+    november: _November, user_id: int
+) -> None:
+    november.ingest_the_month()
+
+    result = _service(november.session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
+
+    assert (result.closed, result.already_closed) == (2, 0)
+    target, committed = november.row_of(november.target), november.row_of(november.committed)
+    assert (target.revenue_amount, target.rebate_base_amount) == (Decimal("4400.00"), Decimal("5500.00"))
+    assert target.rebate_amount == Decimal("550.00")  # 10 % of the gross, not of the 4,400.00 reported
+    # The Deal counter advances by the gross: from the committed flight's 5,000.00 to 10,500.00.
+    assert target.counter_channel_id == committed.counter_channel_id == november.deal_channel
+    assert (target.position_before, target.position_after) == (Decimal("5000.00"), Decimal("10500.00"))
+    assert (committed.revenue_amount, committed.rebate_base_amount) == (None, None)
+    assert (committed.position_before, committed.position_after) == (Decimal(0), Decimal("5000.00"))
+
+
+def test_a_restatement_after_closing_moves_neither_the_revenue_nor_the_gross_nor_the_rebate_of_the_closed_month(
+    november: _November, user_id: int
+) -> None:
+    november.ingest_the_month()
+    _service(november.session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
+    closed = november.target_margin()
+
+    # Equativ restates 30 November: more impressions, more reported revenue and more spend. The run replaces the day.
+    november.ingest(
+        "2026-11-30", "2026-11-30",
+        package_row(day="2026-11-30T00:00:00", impressions="700000", spend="3500.00", revenue="2600.00"),
+    )
+    restated = november.target_margin()
+
+    assert (closed.revenue, closed.gross_revenue, closed.rebate) == (
+        Decimal("4400.00"), Decimal("5500.00"), Decimal("550.00"),
+    )
+    assert (restated.revenue, restated.gross_revenue, restated.rebate) == (
+        closed.revenue, closed.gross_revenue, closed.rebate,
+    )
+    # The platform cost reads the delivery as stored now, as for every flight (decision 9).
+    assert (closed.platform_cost, restated.platform_cost) == (Decimal("1100.00"), Decimal("1300.00"))
+    # The flag compares the frozen gross with the spend as stored now: 5,500.00 against 6,500.00 is beyond 1 %.
+    assert (closed.gross_differs_from_buyer_spend, restated.gross_differs_from_buyer_spend) == (False, True)
+
+
+def test_closing_a_month_with_target_flights_twice_neither_adds_nor_changes_a_row(
+    november: _November, user_id: int
+) -> None:
+    november.ingest_the_month()
+    _service(november.session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
+    before = [(r.id, r.rebate_amount, r.revenue_amount, r.rebate_base_amount, r.position_after)
+              for r in _rows(november.session)]
+
+    second = _service(november.session, today=date(2026, 12, 20)).close_month(2026, 11, user_id)
+
+    assert (second.closed, second.already_closed) == (0, 2)
+    assert [(r.id, r.rebate_amount, r.revenue_amount, r.rebate_base_amount, r.position_after)
+            for r in _rows(november.session)] == before
+
+
+def test_a_month_with_a_target_flight_whose_dsp_has_not_loaded_its_last_day_is_not_closed(
+    november: _November, user_id: int
+) -> None:
+    _batch(november.session, november.equativ, "succeeded", (date(2026, 11, 23), date(2026, 11, 29)))
+
+    with pytest.raises(MonthDeliveryNotLoadedError) as blocked:
+        _service(november.session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
+
+    assert (blocked.value.year, blocked.value.month, blocked.value.dsp_name) == (2026, 11, "Equativ")
+    assert _rows(november.session) == []
+
+
+def test_a_succeeded_batch_of_its_dsp_whose_window_includes_the_last_day_unblocks_the_month(
+    november: _November, user_id: int
+) -> None:
+    _batch(november.session, november.equativ, "succeeded", (date(2026, 11, 23), date(2026, 11, 29)))
+    _batch(november.session, november.equativ, "succeeded", (date(2026, 11, 24), date(2026, 11, 30)))
+
+    result = _service(november.session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
+
+    assert result.closed == 2
+
+
+def test_a_failed_batch_of_its_dsp_or_a_succeeded_batch_of_another_dsp_does_not_unblock(
+    november: _November, user_id: int
+) -> None:
+    adform = insert_other_dsp(november.session, "Adform")
+    _batch(november.session, november.equativ, "failed", (date(2026, 11, 24), date(2026, 11, 30)))
+    _batch(november.session, adform, "succeeded", (date(2026, 11, 24), date(2026, 11, 30)))
+
+    with pytest.raises(MonthDeliveryNotLoadedError):
+        _service(november.session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
+    assert _rows(november.session) == []
+
+
+def test_a_month_of_committed_adform_lines_only_closes_as_before_whatever_the_batches(
+    rolled_back_session: Session, user_id: int
+) -> None:
+    adform = insert_other_dsp(rolled_back_session, "Adform")
+    line = insert_campaign_line(rolled_back_session, "Adform only", *NOVEMBER, dsp_id=adform)
+    replace_flights(rolled_back_session, line, [NOVEMBER])
+    # No batch has loaded 30 November at all: a committed month does not wait for it.
+
+    result = _service(rolled_back_session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
+
+    assert result.closed == 1
+    (row,) = _rows(rolled_back_session)
+    assert (row.revenue_amount, row.rebate_base_amount) == (None, None)
+
+
+def test_an_earlier_open_month_is_still_reported_before_a_month_not_loaded(november: _November, user_id: int) -> None:
+    october = insert_campaign_line(november.session, "October open", date(2026, 10, 1), date(2026, 10, 31))
+    replace_flights(november.session, october, [(date(2026, 10, 1), date(2026, 10, 31))])
+
+    with pytest.raises(PreviousMonthOpenError) as blocked:
+        _service(november.session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
+
+    assert (blocked.value.year, blocked.value.month) == (2026, 10)
+    assert _rows(november.session) == []

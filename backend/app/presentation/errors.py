@@ -50,6 +50,7 @@ from app.domain.exceptions import (
     InvalidIdentityTokenError,
     LastActiveOperationsUserError,
     MissingRoleError,
+    MonthDeliveryNotLoadedError,
     PreviousMonthOpenError,
     RebateRuleError,
     SystemPlatformRateMissingError,
@@ -190,6 +191,19 @@ async def _previous_month_open_handler(request: Request, error: Exception) -> JS
     return JSONResponse(status_code=409, content=body.model_dump())
 
 
+async def _month_delivery_not_loaded_handler(request: Request, error: Exception) -> JSONResponse:
+    """Names the month and the DSP that block the closing; neither is sensitive."""
+    assert isinstance(error, MonthDeliveryNotLoadedError)
+    body = ErrorResponse(
+        code="month_delivery_not_loaded",
+        message=(
+            f"The delivery of {error.year}-{error.month:02d} from {error.dsp_name} is not loaded up to its last day. "
+            "Load it, then close the month."
+        ),
+    )
+    return JSONResponse(status_code=409, content=body.model_dump())
+
+
 # Each rebate rule has its own status and message; the message never carries the detail of the failure.
 _REBATE_RULE_ERRORS: dict[str, tuple[int, str]] = {
     "bracket_table_empty": (422, "A bracket table needs at least one bracket"),
@@ -251,6 +265,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     for exception_type, mapping in _ERROR_MAPPINGS.items():
         app.add_exception_handler(exception_type, _handler_for(mapping))
     app.add_exception_handler(PreviousMonthOpenError, _previous_month_open_handler)
+    app.add_exception_handler(MonthDeliveryNotLoadedError, _month_delivery_not_loaded_handler)
     app.add_exception_handler(RebateRuleError, _rebate_rule_handler)
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
     app.add_exception_handler(StarletteHTTPException, _http_error_handler)

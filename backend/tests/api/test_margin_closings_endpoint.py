@@ -1,13 +1,18 @@
 """POST /margin/closings: freezes the rates of the flights that ended in a month; operations and finance only."""
 
-from datetime import date
+from datetime import date, datetime
+from typing import Any
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.orm import Session
 
+from app.infrastructure.persistence.models.campaign import CampaignLineRecord
+from app.infrastructure.persistence.models.delivery import IngestionBatchRecord
 from app.infrastructure.persistence.models.margin import AppliedRateRecord
+from app.infrastructure.persistence.models.masters import DSPRecord
 from app.presentation.dependencies import providers
-from tests.fixtures.delivery_data import add_line_to_campaign, insert_campaign_line, replace_flights
+from tests.fixtures.delivery_data import add_line_to_campaign, insert_campaign_line, insert_other_dsp, replace_flights
 
 D = date(2026, 9, 1)  # as_of is 31 August: August has ended
 
@@ -72,6 +77,35 @@ def test_an_earlier_open_month_is_a_conflict_that_names_it(finance_client, test_
     assert set(response.json()) == {"code", "message"}
     assert response.json()["code"] == "previous_month_open"
     assert "2026-06" in response.json()["message"]
+    assert _count(test_db_session) == 0
+
+
+def _august_target_line_on_equativ(session: Session) -> None:
+    """A target line on Equativ whose August flight ended; Equativ has loaded only up to 30 August."""
+    existing = session.scalars(select(DSPRecord.id).where(DSPRecord.name == "Equativ")).first()
+    equativ = existing if existing is not None else insert_other_dsp(session, "Equativ")
+    line_id = insert_campaign_line(session, "Equativ target", dsp_id=equativ)
+    session.execute(update(CampaignLineRecord).where(CampaignLineRecord.id == line_id).values(volume_commitment="target"))
+    session.add(IngestionBatchRecord(
+        dsp_id=equativ, route="api", source_file=None, started_at=datetime(2026, 8, 31, 6, 15),
+        finished_at=datetime(2026, 8, 31, 6, 20), status="succeeded", row_count=0,
+        window_start=date(2026, 8, 24), window_end=date(2026, 8, 30),
+    ))
+    session.flush()
+
+
+def test_a_month_whose_target_flights_dsp_has_not_loaded_its_last_day_is_a_conflict_that_names_both(
+    finance_client: Any, test_db_session: Session
+) -> None:
+    _august_target_line_on_equativ(test_db_session)
+
+    response = _close(finance_client)
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "month_delivery_not_loaded",
+        "message": "The delivery of 2026-08 from Equativ is not loaded up to its last day. Load it, then close the month.",
+    }
     assert _count(test_db_session) == 0
 
 

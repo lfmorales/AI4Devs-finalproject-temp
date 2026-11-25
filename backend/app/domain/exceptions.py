@@ -186,5 +186,19 @@ class PreviousMonthOpenError(DomainError):
         self.month = month
 
 
+class MonthDeliveryNotLoadedError(DomainError):
+    """A month holding a target flight cannot be closed until its DSP has loaded the month's last day.
+
+    A target flight earns what its DSP reports, so a month closed before its last day was ingested would freeze a
+    revenue short of that day.
+    """
+
+    def __init__(self, year: int, month: int, dsp_name: str) -> None:
+        super().__init__(f"{year}-{month:02d} is not loaded up to its last day from {dsp_name}")
+        self.year = year
+        self.month = month
+        self.dsp_name = dsp_name
+
+
 class CampaignNotFoundError(DomainError):
     """The campaign named by a request does not exist."""
