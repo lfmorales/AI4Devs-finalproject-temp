@@ -39,6 +39,12 @@ context: |
   - Applied rebate and platform rates are frozen on the campaign line at calculation
     time with their provenance, and so are the revenue and the rebate base (the gross)
     of a target line. They are never recomputed from masters at read time.
+  - A closed month never moves. Closing stores a snapshot of each flight (every
+    amount it reports and the delivery it was computed on) and a closed flight is
+    read only from it, never from the stored delivery, the masters or the formulas.
+    The ingestion keeps replacing a closed month's delivery as information; a
+    difference only flags the flight, it never changes a figure. A month can be
+    closed as soon as its last day is loaded: there is no waiting rule.
   - The channel comes from the configuration (tipo_plataforma), never from the DSP's
     line_format. It is the rebate accumulation key.
   - Purchase orders are versioned, never overwritten.
