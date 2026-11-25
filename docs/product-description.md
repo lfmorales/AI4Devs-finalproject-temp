@@ -517,20 +517,13 @@ This matters more under the tiered rebate than it did before. The channel is the
 
    One consequence the team should expect regardless: historical rows carry only contracted volumes, never actual delivery (§1). Historical margin is therefore a *planned* margin and must be labelled as such in every report, or Finance will unknowingly compare it against the actual margins the system starts producing from phase 1 onwards.
 
-### Resolved limitation: the delivery of `Deal` lines
+### The delivery of `Deal` lines
 
-*Resolved by the change `equativ-deals` (phase 2), which ingests Equativ through its asynchronous report and prices `Deal` lines as target lines (§5.3). The text below describes the behaviour before that change.*
-
-`Deal` inventory is bought through Equativ, and the only connector of phase 1 is Adform, so the ingestion never brings delivery for a `Deal` line. Until the Equativ connector exists:
-
-- The check for lines without delivery never evaluates a `Deal` line. It runs for the DSP of the ingestion (Adform) and looks only at lines that run on that DSP and have a validated mapping to it, so a `Deal` line on Equativ, or without an Adform mapping, is not a candidate and no `missing_delivery` exception is raised for it. This is how the check already behaved before the delivery metric was introduced; that change did not alter it.
-- The daily status still lists the running flights of a `Deal` campaign, with 0 delivered and both flags («no data received» and pacing deviation), and the margin shows its revenue and rebate with no media cost and no platform cost, because there is no delivery to read. **Until the delivery through Equativ exists, the margin of a `Deal` is therefore overstated**, and its status rows carry both flags for the same reason.
-
-The delivery of `Deal` lines through Equativ (the connector, the mapping and the check for lines without delivery for that DSP) is left to a change of its own; it is not part of the change that introduced the delivery metric.
+`Deal` inventory is bought through Equativ and is ingested from it (change `equativ-deals`): one asynchronous report per run, read through its preview, over UTC days (§5.3). Its lines are target lines, priced on the revenue Equativ reports, with the served gross as the base of their rebate. Operations maps a `Deal` line by writing its auction package id, which counts as validated by the user; a wrong id is not detected when it is written, but surfaces as a line without delivery once its flight has ended, because the check for lines without delivery runs for Equativ as it does for Adform, each DSP over its own lines.
 
 ### Phase 2
 
-Equativ and Displayce connectors (the Adform connector defines the contract; Equativ is the change `equativ-deals`, through the asynchronous report, with no CSV, upload or S3); immutable month-end snapshot; email/Teams alerting; rebate-rate versioning UI for Finance.
+The Displayce connector (the Adform connector defines the contract; the Equativ connector is delivered by the change `equativ-deals`, through the asynchronous report, with no CSV, upload or S3); immutable month-end snapshot (until it exists, a closed month's media cost and platform cost still follow a re-ingestion inside the seven-day window, so a month is closed from the 8th of the next month); email/Teams alerting; rebate-rate versioning UI for Finance.
 
 ### Phase 3
 

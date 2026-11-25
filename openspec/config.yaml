@@ -37,7 +37,8 @@ context: |
     may carry an exception, which overrides its group's schedule AND carves it out
     of the group's counter for that channel.
   - Applied rebate and platform rates are frozen on the campaign line at calculation
-    time with their provenance. They are never recomputed from masters at read time.
+    time with their provenance, and so are the revenue and the rebate base (the gross)
+    of a target line. They are never recomputed from masters at read time.
   - The channel comes from the configuration (tipo_plataforma), never from the DSP's
     line_format. It is the rebate accumulation key.
   - Purchase orders are versioned, never overwritten.

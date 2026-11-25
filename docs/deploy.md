@@ -60,6 +60,7 @@ Edit it and replace every example value. Besides the usual variables, set:
 - `SERVER_NAME`: the host name, without scheme (`adops.example.com`).
 - `NEXT_PUBLIC_API_URL`: `https://<SERVER_NAME>/api`.
 - `ENTRA_TENANT_ID` (`<tenant-id>`) and `ENTRA_CLIENT_ID` (`<client-id>` of the production registration). Both are required: without either of them every `docker compose` command stops with `required variable ENTRA_TENANT_ID is missing a value` (or the client one), and the backend refuses to start. Compose also passes them to the frontend build as `NEXT_PUBLIC_ENTRA_TENANT_ID` and `NEXT_PUBLIC_ENTRA_CLIENT_ID`; you do not write those yourself.
+- `EQUATIV_CLIENT_ID` and `EQUATIV_CLIENT_SECRET`: the credentials of the Equativ API, **only in this `.env`**, with `chmod 600`, never in the repository, a ticket or a chat. The API does not need them (mapping a Deal line never asks Equativ, section 12); only `run_ingestion --dsp Equativ` does, and without them it stops with `status: not configured` and exit code 3. A container keeps the environment it was created with: after adding or changing them, recreate the backend (`docker compose -f docker-compose.prod.yml up -d --force-recreate backend`), or a command run with `exec` in it will not receive them. A `run --rm`, as the cron of section 12 uses, starts a new container and reads them.
 - `NEXT_PUBLIC_MASK_NAMES` (optional): with the exact value `true`, every Adform campaign and line name is drawn blurred, cannot be selected and does not reveal on hover, which is useful for screenshots and demos. Leave it empty to show names normally. It is a build variable like the other `NEXT_PUBLIC_*` ones: it is inlined when the frontend image is built, so changing it means rebuilding that image. It only blurs the names visually. The names are still in the page's data and in the API responses, so it is **not a guarantee of confidentiality** on a published page: do not rely on it to keep the names from anyone who can open the application.
 
 `NEXT_PUBLIC_*` values, including the two Entra ones derived from `ENTRA_*`, are inlined into the browser bundle when the frontend image is built, so changing them requires rebuilding that image. The production build of the frontend fails, naming the variable, when `NEXT_PUBLIC_ENTRA_TENANT_ID` or `NEXT_PUBLIC_ENTRA_CLIENT_ID` is empty, instead of failing in the browser. Only the public settings reach the frontend build; the DSP credentials never do. Never commit `.env`, and do not paste it in tickets or chats.
@@ -167,7 +168,7 @@ To deactivate or reactivate a user later, an operations user calls `POST /api/us
 
 ## 12. Nightly ingestion
 
-The ingestion is a command for the host scheduler, not a container. It needs the Adform credentials in `.env`. Run it once by hand and look at its output before scheduling it:
+The ingestion is a command for the host scheduler, not a container. It ingests one DSP per run, chosen with `--dsp` (`Adform` by default, or `Equativ`), and needs that DSP's credentials in `.env`. Each DSP has its own lock, so an Adform run and an Equativ run can overlap. Run it once by hand and look at its output before scheduling it:
 
 ```
 docker compose -f docker-compose.prod.yml run --rm backend python -m scripts.run_ingestion
@@ -181,6 +182,7 @@ rows_read: ...
 ignored_rows: ...
 zero_unmatched_rows: ...
 new_exceptions: ...
+mapped_lines: ...
 skipped_lines: ...
 absences: ...
 ```
@@ -233,6 +235,37 @@ Rules of the range:
 - The output is counts only, as in the nightly run, and an invalid range prints `status: not configured` and exits with 3.
 
 For a longer history, run it once per block of at most 31 days.
+
+### Equativ: Deal lines, at 06:15 UTC
+
+`Deal` lines are bought through Equativ and ingested with `--dsp Equativ`, through Equativ's asynchronous report. Run it once by hand first, as for Adform:
+
+```
+docker compose -f docker-compose.prod.yml run --rm backend python -m scripts.run_ingestion --dsp Equativ
+```
+
+Schedule it at **06:15 UTC**, which is 07:15 in Madrid in winter and 08:15 in summer. Equativ bills by UTC day and its days are asked as `Etc/UTC` days, so the time is set in UTC, not in Madrid. A run started before 06:00 UTC still ingests, but skips the check for lines without delivery (`absences: skipped, before 06:00 UTC`), because the previous UTC day may not be complete yet. In the same crontab, after the Adform line:
+
+```
+CRON_TZ=UTC
+15 6 * * * cd /opt/adops360 && /usr/bin/docker compose -f docker-compose.prod.yml run --rm -T backend python -m scripts.run_ingestion --dsp Equativ >> /var/log/adops360/ingestion-equativ.log 2>&1; echo "$(date -Is) exit=$?" >> /var/log/adops360/ingestion-equativ.log
+```
+
+`CRON_TZ` applies to the lines after it, so keep the Adform line, under `CRON_TZ=Europe/Madrid`, before this one. The exit codes are those of Adform.
+
+- **The first history.** The nightly run covers D-7 to D-1. To load the Deal lines that were already running, run it once with a range from the first day of the oldest running Deal line to D-1, with the rules of the range above (at most 31 days per run):
+
+  ```
+  docker compose -f docker-compose.prod.yml run --rm backend python -m scripts.run_ingestion --dsp Equativ --from YYYY-MM-DD --to YYYY-MM-DD
+  ```
+
+- **Each run leaves one report in the Equativ account.** It is named `adops360-<window>` so it can be recognised, and it is not deleted; deleting them, if Equativ asks, is a change of its own.
+- **The company currency is assumed to be EUR.** The amounts are read in the account's company currency and carry no currency column, as Adform's cost does. An account in another currency would need the euro metrics of Equativ instead.
+- **Mapping a Deal line.** On the «Catálogo Adform» page, «Vincular una línea de Equativ» lists the lines on Equativ without a mapping; operations writes the line's auction package id (a whole number above zero with no leading zero), suggested from the Equativ packages already seen in the catalogue but never required from it. The mapping counts as validated by the user: Equativ is not asked. **A wrong id is not detected when it is written**: no delivery ever arrives for it, and once its flight has ended it shows up in «Excepciones» as a line without delivery.
+
+### Closing a month: from the 8th of the next month
+
+The nightly runs replace D-7 to D-1 whatever the closing, and a closed flight still reads its media cost and its platform cost from the delivery stored now: only its rebate, its platform rate and, for a target line, its revenue and its gross are frozen. A day restated after the closing therefore moves the margin of a closed month. Until the closing freezes a full snapshot (a change of its own), **close a month from the 8th of the next month**, when the nightly window no longer reaches it. A `--from`/`--to` or `--date` run can still rewrite it, so avoid them on closed months. A month with a target flight cannot be closed anyway until its DSP has a succeeded run whose window includes the month's last day: the closing answers «month_delivery_not_loaded» until then.
 
 ## 13. Backups
 
@@ -336,7 +369,7 @@ Run the command once by hand (section 12) and check that its output starts with 
 docker compose -f docker-compose.prod.yml run --rm backend python -m scripts.run_ingestion; echo "exit=$?"
 ```
 
-Once campaigns and their DSP mappings exist, the "Excepciones" page lists what a run could not place.
+With the Equativ credentials set, do the same with `--dsp Equativ`. Once campaigns and their DSP mappings exist, the "Excepciones" page lists what a run could not place.
 
 ## 15. Logs and restarts
 
