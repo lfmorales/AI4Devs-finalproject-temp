@@ -4,6 +4,8 @@ from decimal import Decimal
 from enum import StrEnum
 from fractions import Fraction
 
+from app.domain.value_objects.volume_commitment import VolumeCommitment
+
 # A deviation of exactly this much is inside the threshold; only more than this is flagged.
 PACING_DEVIATION_THRESHOLD = Fraction(1, 10)
 
@@ -66,3 +68,11 @@ def calculate_pacing(
         status=status,
         days_remaining=days_remaining,
     )
+
+
+def pacing_flag(pacing: PacingResult, commitment: VolumeCommitment) -> bool:
+    """Whether the daily status flags the flight: any deviation beyond the threshold for a committed volume, only
+    under-delivery for a target, which the buyer may exceed. The pacing still reports the over-delivery."""
+    if commitment is VolumeCommitment.TARGET:
+        return pacing.status is PacingStatus.UNDER_DELIVERING
+    return pacing.is_deviating

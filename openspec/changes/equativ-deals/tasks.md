@@ -95,9 +95,9 @@
 
 ## 12. Daily Status
 
-- [ ] 12.1 Write failing tests in `backend/tests/domain/test_pacing.py` for `pacing_flag`: a target flight at +20 % is `over_delivering` and not flagged; at −15 % it is flagged; a committed flight at +20 % is flagged
-- [ ] 12.2 Write failing repository tests in `test_sqlalchemy_campaign_status_repository.py` that each figure carries its line's commitment, and service tests in `test_campaign_status_service.py` that the target row at +20 % has no `pacing_flag` and does not sort among the flagged rows
-- [ ] 12.3 Implement `pacing_flag` in `pacing.py`, the commitment in `FlightDeliveryFigures`, `CampaignStatusRow` and the repository, and verify 12.1 and 12.2
+- [x] 12.1 Write failing tests in `backend/tests/domain/test_pacing.py` for `pacing_flag`: a target flight at +20 % is `over_delivering` and not flagged; at −15 % it is flagged; a committed flight at +20 % is flagged
+- [x] 12.2 Write failing repository tests in `test_sqlalchemy_campaign_status_repository.py` that each figure carries its line's commitment, and service tests in `test_campaign_status_service.py` that the target row at +20 % has no `pacing_flag` and does not sort among the flagged rows
+- [x] 12.3 Implement `pacing_flag` in `pacing.py`, the commitment in `FlightDeliveryFigures`, `CampaignStatusRow` and the repository, and verify 12.1 and 12.2
 
 ## 13. Response Schemas
 

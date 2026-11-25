@@ -9,7 +9,8 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.services.pacing import PacingResult, PacingStatus, calculate_pacing
+from app.domain.services.pacing import PacingResult, PacingStatus, calculate_pacing, pacing_flag
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 
 AUGUST_START = date(2026, 8, 1)
 AUGUST_END = date(2026, 8, 31)
@@ -164,3 +165,42 @@ def test_a_decimal_volume_is_compared_exactly_without_going_through_float() -> N
 def test_a_negative_decimal_volume_is_rejected() -> None:
     with pytest.raises(ValueError):
         _pace_ots("-0.0001")
+
+
+# --- The pacing flag by commitment (campaign/daily-status) ----------------------------------------------------------
+#
+# A flight from 2026-11-01 to 2026-11-30 with 300,000 impressions; D-1 is 2026-11-10, so 100,000 are expected.
+
+def _november(delivered: str) -> PacingResult:
+    return calculate_pacing(300_000, date(2026, 11, 1), date(2026, 11, 30), date(2026, 11, 10), Decimal(delivered))
+
+
+def test_a_target_flight_above_its_target_is_over_delivering_and_not_flagged() -> None:
+    pacing = _november("120000")
+
+    assert (pacing.expected_impressions, pacing.deviation, pacing.status) == (
+        Decimal(100_000), Decimal("0.2"), PacingStatus.OVER_DELIVERING,
+    )
+    assert pacing_flag(pacing, VolumeCommitment.TARGET) is False
+
+
+def test_a_target_flight_below_its_target_is_flagged_with_its_days_remaining() -> None:
+    pacing = _november("85000")
+
+    assert (pacing.deviation, pacing.days_remaining) == (Decimal("-0.15"), 20)
+    assert pacing_flag(pacing, VolumeCommitment.TARGET) is True
+
+
+def test_a_committed_flight_above_its_volume_is_still_flagged() -> None:
+    assert pacing_flag(_november("120000"), VolumeCommitment.COMMITTED) is True
+    assert pacing_flag(_november("85000"), VolumeCommitment.COMMITTED) is True
+
+
+@pytest.mark.parametrize("delivered", ["90000", "100000", "110000"])
+@pytest.mark.parametrize("commitment", list(VolumeCommitment))
+def test_within_ten_percent_neither_commitment_is_flagged(delivered: str, commitment: VolumeCommitment) -> None:
+    assert pacing_flag(_november(delivered), commitment) is False
+
+
+def test_half_an_impression_beyond_ten_percent_below_flags_a_target_flight() -> None:
+    assert pacing_flag(_november("89999.5"), VolumeCommitment.TARGET) is True

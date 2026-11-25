@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.domain.entities.campaign_status import FlightDeliveryFigures
 from app.domain.repositories.campaign_status_repository import CampaignStatusRepository
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 from app.infrastructure.persistence.models.campaign import (
     CampaignLinePeriodRecord,
     CampaignLineRecord,
@@ -56,6 +57,7 @@ class SqlAlchemyCampaignStatusRepository(CampaignStatusRepository):
                 CampaignPeriodRecord.period_year, CampaignPeriodRecord.period_month,
                 flight.flight_start, flight.flight_end, flight.contracted_impressions,
                 ChannelRecord.delivery_metric, delivered, delivered_impressions, latest_of_campaign,
+                CampaignLineRecord.volume_commitment,
             )
             .select_from(flight)
             .join(CampaignLineRecord, CampaignLineRecord.id == flight.campaign_line_id)
@@ -74,7 +76,7 @@ class SqlAlchemyCampaignStatusRepository(CampaignStatusRepository):
             FlightDeliveryFigures(
                 *row[:10], contracted_impressions=int(row[10]), delivery_metric=row[11],
                 delivered=Decimal(row[12]), delivered_impressions=int(row[13]),
-                campaign_latest_delivery_date=row[14],
+                campaign_latest_delivery_date=row[14], volume_commitment=VolumeCommitment(row[15]),
             )
             for row in rows
         ]

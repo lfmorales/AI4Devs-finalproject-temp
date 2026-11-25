@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 
 from app.domain.services.pacing import PacingResult
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,8 @@ class FlightDeliveryFigures:
     delivered_impressions: int
     # The latest delivery date of any line of the campaign; None when the campaign has no delivery at all.
     campaign_latest_delivery_date: date | None
+    # Declared on the line: a target volume is only flagged when delivery falls behind it.
+    volume_commitment: VolumeCommitment
 
 
 @dataclass(frozen=True)
@@ -53,3 +56,4 @@ class CampaignStatusRow:
     pacing_flag: bool
     # Belongs to the campaign and repeats on every row of it.
     missing_data_flag: bool
+    volume_commitment: VolumeCommitment

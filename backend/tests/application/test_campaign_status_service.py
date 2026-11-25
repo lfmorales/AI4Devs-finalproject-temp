@@ -7,6 +7,7 @@ from app.application.services.campaign_status_service import CampaignStatusServi
 from app.domain.entities.campaign_status import FlightDeliveryFigures
 from app.domain.repositories.campaign_status_repository import CampaignStatusRepository
 from app.domain.services.pacing import PacingStatus
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 
 TODAY = date(2026, 8, 11)  # D; D-1 is 10 August
 
@@ -32,6 +33,7 @@ def _figures(
     latest: date | None = date(2026, 8, 10),
     delivery_metric: str = "impressions",
     delivered_volume: Decimal | None = None,
+    volume_commitment: VolumeCommitment = VolumeCommitment.COMMITTED,
 ) -> FlightDeliveryFigures:
     # A 31-day flight, 10 days elapsed at D-1: 1_000 impressions are expected.
     return FlightDeliveryFigures(
@@ -40,7 +42,7 @@ def _figures(
         flight_start=date(2026, 8, 1), flight_end=date(2026, 8, 31), contracted_impressions=contracted,
         delivery_metric=delivery_metric,
         delivered=Decimal(delivered) if delivered_volume is None else delivered_volume,
-        delivered_impressions=delivered, campaign_latest_delivery_date=latest,
+        delivered_impressions=delivered, campaign_latest_delivery_date=latest, volume_commitment=volume_commitment,
     )
 
 
@@ -142,3 +144,37 @@ def test_a_dooh_flight_on_pace_in_ots_is_not_flagged_whatever_its_impressions() 
 
     assert row.pacing.deviation == 0
     assert row.pacing_flag is False
+
+
+# --- The pacing flag by commitment: a target line may deliver above its target ---------------------------------------
+
+def test_a_target_row_above_its_target_reports_over_delivery_without_a_flag_and_names_its_commitment() -> None:
+    [row] = _rows(_figures(delivered=1_200, volume_commitment=VolumeCommitment.TARGET))
+
+    assert row.volume_commitment is VolumeCommitment.TARGET
+    assert (row.pacing.deviation, row.pacing.status) == (Decimal("0.2"), PacingStatus.OVER_DELIVERING)
+    assert row.pacing_flag is False
+
+
+def test_a_target_row_below_its_target_is_flagged() -> None:
+    [row] = _rows(_figures(delivered=850, volume_commitment=VolumeCommitment.TARGET))
+
+    assert row.pacing_flag is True
+
+
+def test_a_committed_row_above_its_volume_is_still_flagged_and_names_its_commitment() -> None:
+    [row] = _rows(_figures(delivered=1_200))
+
+    assert row.volume_commitment is VolumeCommitment.COMMITTED
+    assert row.pacing_flag is True
+
+
+def test_a_target_row_above_its_target_does_not_sort_among_the_flagged_rows() -> None:
+    # Agencies A, B and C: the target row of A at +20 % sorts after the flagged committed row of C.
+    rows = _rows(
+        _figures(campaign_id=1, agency_name="A", delivered=1_200, volume_commitment=VolumeCommitment.TARGET),
+        _figures(campaign_id=2, agency_name="B", delivered=1_000),
+        _figures(campaign_id=3, agency_name="C", delivered=1_200),
+    )
+
+    assert [(row.agency_name, row.pacing_flag) for row in rows] == [("C", True), ("A", False), ("B", False)]

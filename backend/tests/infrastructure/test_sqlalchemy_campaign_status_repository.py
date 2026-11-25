@@ -3,9 +3,11 @@
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import event
+from sqlalchemy import event, update
 from sqlalchemy.orm import Session
 
+from app.domain.value_objects.volume_commitment import VolumeCommitment
+from app.infrastructure.persistence.models.campaign import CampaignLineRecord
 from app.infrastructure.persistence.repositories.sqlalchemy_campaign_status_repository import (
     SqlAlchemyCampaignStatusRepository,
 )
@@ -203,3 +205,16 @@ def test_a_dooh_row_with_impressions_and_no_ots_still_sets_the_latest_delivery_d
     assert figures.campaign_latest_delivery_date == date(2026, 8, 10)
     assert figures.delivered == Decimal("500.0000")
     assert figures.delivered_impressions == 12
+
+
+def test_each_figure_carries_the_commitment_of_its_line(rolled_back_session: Session) -> None:
+    committed = insert_campaign_line(rolled_back_session, campaign_name="Commitments")
+    target = add_line_to_campaign(rolled_back_session, committed, 2)
+    rolled_back_session.execute(
+        update(CampaignLineRecord).where(CampaignLineRecord.id == target).values(volume_commitment="target")
+    )
+
+    by_line = {figures.line_number: figures for figures in _running(rolled_back_session)}
+
+    assert by_line[1].volume_commitment is VolumeCommitment.COMMITTED
+    assert by_line[2].volume_commitment is VolumeCommitment.TARGET

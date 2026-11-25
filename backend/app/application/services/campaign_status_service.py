@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from app.domain.entities.campaign_status import CampaignStatusRow, FlightDeliveryFigures
 from app.domain.repositories.campaign_status_repository import CampaignStatusRepository
 from app.domain.services.missing_data import has_missing_data
-from app.domain.services.pacing import calculate_pacing
+from app.domain.services.pacing import calculate_pacing, pacing_flag
 
 
 class CampaignStatusService:
@@ -38,5 +38,6 @@ class CampaignStatusService:
             period_month=figures.period_month, flight_start=figures.flight_start, flight_end=figures.flight_end,
             contracted_impressions=figures.contracted_impressions, delivery_metric=figures.delivery_metric,
             delivered=figures.delivered, delivered_impressions=figures.delivered_impressions,
-            delivery_ratio=ratio, pacing=pacing, pacing_flag=pacing.is_deviating, missing_data_flag=missing_data_flag,
+            delivery_ratio=ratio, pacing=pacing, pacing_flag=pacing_flag(pacing, figures.volume_commitment),
+            missing_data_flag=missing_data_flag, volume_commitment=figures.volume_commitment,
         )
