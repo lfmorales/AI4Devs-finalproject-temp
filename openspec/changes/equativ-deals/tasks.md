@@ -126,20 +126,20 @@
 
 ## 17. Run Unit Tests and Verify Database State (MANDATORY)
 
-- [ ] 17.1 Capture the pre-test baseline of the development database: row counts of `campaign_lines`, `daily_deliveries`, `dsp_catalog_lines`, `dsp_mappings`, `ingestion_batches`, `ingestion_exceptions` and `applied_rates`
-- [ ] 17.2 Run the targeted tests of tasks 1 to 15, then the whole backend suite (`pytest`), mypy on the touched files as `docs/base-standards.md` §4 says, and the frontend suite (`npm test`), recording totals, failures and runtime
-- [ ] 17.3 Re-check the baseline and restore any change the tests left
-- [ ] 17.4 Create `docs/reports/YYYY-MM-DD-step-17-unit-test-and-db-verification.md`; the step is complete only once it exists
+- [x] 17.1 Capture the pre-test baseline of the development database: row counts of `campaign_lines`, `daily_deliveries`, `dsp_catalog_lines`, `dsp_mappings`, `ingestion_batches`, `ingestion_exceptions` and `applied_rates`
+- [x] 17.2 Run the targeted tests of tasks 1 to 15, then the whole backend suite (`pytest`), mypy on the touched files as `docs/base-standards.md` §4 says, and the frontend suite (`npm test`), recording totals, failures and runtime
+- [x] 17.3 Re-check the baseline and restore any change the tests left
+- [x] 17.4 Create `docs/reports/YYYY-MM-DD-step-17-unit-test-and-db-verification.md`; the step is complete only once it exists
 
 ## 18. Manual Endpoint Testing with curl (MANDATORY - AGENT MUST EXECUTE)
 
-- [ ] 18.1 With the stack running and a test-issuer token, `POST /api/campaigns` without `volume_commitment` and check 422; post a valid campaign with a target `Deal` line, check 201 and its `volume_commitment`, then delete it to restore the database
-- [ ] 18.2 `POST /api/campaign-lines/{id}/dsp-mappings` for a line on Equativ with `900000001` in both ids and check 201 with `validation` `user_validated`; with two different ids check 422 `invalid_equativ_package`; as `business` check 403; then delete the mapping to restore the database
-- [ ] 18.3 Call `GET /api/campaign-status` as `operations` and as `trading` and check `volume_commitment` on the Deal demo row, no pacing flag above target, and no money field for `trading`
-- [ ] 18.4 Call `GET /api/margin` as `operations` and check the Deal demo's revenue, gross, flags and counts; as `business` check 403
-- [ ] 18.5 `POST /api/margin/closings` for a month whose target flight lacks its last day and check 409 `month_delivery_not_loaded` with nothing written; as `trading` check 403
-- [ ] 18.6 Run `python -m scripts.run_ingestion --dsp Equativ` once against the real API with the configured credentials, check exit 0 and that the output shows only counts, then restore the development database to the baseline of 17.1 (delete the batch, its rows, catalogue rows and exceptions it created)
-- [ ] 18.7 Document every command and response in `docs/reports/YYYY-MM-DD-step-18-curl.md`, with no package name, package id, amount or token, and verify the database matches the baseline of 17.1
+- [x] 18.1 With the stack running and a test-issuer token, `POST /api/campaigns` without `volume_commitment` and check 422; post a valid campaign with a target `Deal` line, check 201 and its `volume_commitment`, then delete it to restore the database
+- [x] 18.2 `POST /api/campaign-lines/{id}/dsp-mappings` for a line on Equativ with `900000001` in both ids and check 201 with `validation` `user_validated`; with two different ids check 422 `invalid_equativ_package`; as `business` check 403; then delete the mapping to restore the database
+- [x] 18.3 Call `GET /api/campaign-status` as `operations` and as `trading` and check `volume_commitment` on the Deal demo row, no pacing flag above target, and no money field for `trading`
+- [x] 18.4 Call `GET /api/margin` as `operations` and check the Deal demo's revenue, gross, flags and counts; as `business` check 403
+- [x] 18.5 `POST /api/margin/closings` for a month whose target flight lacks its last day and check 409 `month_delivery_not_loaded` with nothing written; as `trading` check 403
+- [x] 18.6 Run `python -m scripts.run_ingestion --dsp Equativ` once against the real API with the configured credentials, check exit 0 and that the output shows only counts, then restore the development database to the baseline of 17.1 (delete the batch, its rows, catalogue rows and exceptions it created)
+- [x] 18.7 Document every command and response in `docs/reports/YYYY-MM-DD-step-18-curl.md`, with no package name, package id, amount or token, and verify the database matches the baseline of 17.1
 
 ## 19. E2E Testing with Playwright (MANDATORY - AGENT MUST EXECUTE)
 
