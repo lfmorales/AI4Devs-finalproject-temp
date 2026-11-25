@@ -143,8 +143,8 @@
 
 ## 19. E2E Testing with Playwright (MANDATORY - AGENT MUST EXECUTE)
 
-- [ ] 19.1 Reset the E2E data with `e2e/scripts/reset-data.sh` and run the whole Playwright suite, including the cases of task 15
-- [ ] 19.2 Check in the browser the campaign form, the status and the margin of the Deal demo, restore the data, and document the run in `docs/reports/YYYY-MM-DD-step-19-e2e.md`
+- [x] 19.1 Reset the E2E data with `e2e/scripts/reset-data.sh` and run the whole Playwright suite, including the cases of task 15
+- [x] 19.2 Check in the browser the campaign form, the status and the margin of the Deal demo, restore the data, and document the run in `docs/reports/YYYY-MM-DD-step-19-e2e.md`
 
 ## 20. Update Technical Documentation (MANDATORY)
 
