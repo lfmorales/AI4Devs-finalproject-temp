@@ -107,12 +107,12 @@
 
 ## 14. Screens
 
-- [ ] 14.1 (Brought forward to group 1 as task 1.7: nothing left to do here.) Write failing Vitest tests in `frontend/tests/unit/app/campaigns/` that the form shows a commitment selector per line, proposes «Objetivo» when the channel is `Deal` and «Compromiso» otherwise, keeps the user's choice when the channel changes afterwards, and sends the value shown
-- [ ] 14.2 Write failing Vitest tests in `frontend/tests/unit/app/status/status-page.test.tsx` that a target row labels its volume «Objetivo» and shows no pacing tag above its target
-- [ ] 14.3 Write failing Vitest tests in `frontend/tests/unit/features/margin/` that a target flight shows «Venta objetivo», a «Bruto» column with the API's gross, and the tags «Bruto distinto del gasto» and «Coste de datos» where raised; a committed flight shows «Venta contratada» and an empty gross
-- [ ] 14.4 Write failing Vitest tests in `frontend/tests/unit/app/catalogue/` that, for a line on Equativ without a mapping, operations can write a package id, the request sends it as both identifiers, the screen shows the mapping as validated by the user, the Equativ packages of the catalogue are suggested by name and id, a package not suggested is still accepted, and `invalid_equativ_package` shows its Spanish message beside the field
-- [ ] 14.5 Write a failing test that the closing maps `month_delivery_not_loaded` to a Spanish message naming the month and the DSP
-- [ ] 14.6 Update (`campaigns.ts` and the form's commitment selector were done in task 1.7) `frontend/lib/api/campaigns.ts`, `status.ts`, `margin.ts` and `dsp-catalog.ts`, `CreateCampaignForm.tsx`, the catalogue screen, `StatusTable.tsx`, `MarginTree.tsx`, `Figures.tsx` and the closing messages; verify 14.1 to 14.5, the frontend suite and the no-arithmetic test
+- [x] 14.1 (Brought forward to group 1 as task 1.7: nothing left to do here.) Write failing Vitest tests in `frontend/tests/unit/app/campaigns/` that the form shows a commitment selector per line, proposes «Objetivo» when the channel is `Deal` and «Compromiso» otherwise, keeps the user's choice when the channel changes afterwards, and sends the value shown
+- [x] 14.2 Write failing Vitest tests in `frontend/tests/unit/app/status/status-page.test.tsx` that a target row labels its volume «Objetivo» and shows no pacing tag above its target
+- [x] 14.3 Write failing Vitest tests in `frontend/tests/unit/features/margin/` that a target flight shows «Venta objetivo», a «Bruto» column with the API's gross, and the tags «Bruto distinto del gasto» and «Coste de datos» where raised; a committed flight shows «Venta contratada» and an empty gross
+- [x] 14.4 Write failing Vitest tests in `frontend/tests/unit/app/catalogue/` that, for a line on Equativ without a mapping, operations can write a package id, the request sends it as both identifiers, the screen shows the mapping as validated by the user, the Equativ packages of the catalogue are suggested by name and id, a package not suggested is still accepted, and `invalid_equativ_package` shows its Spanish message beside the field
+- [x] 14.5 Write a failing test that the closing maps `month_delivery_not_loaded` to a Spanish message naming the month and the DSP
+- [x] 14.6 Update (`campaigns.ts` and the form's commitment selector were done in task 1.7) `frontend/lib/api/campaigns.ts`, `status.ts`, `margin.ts` and `dsp-catalog.ts`, `CreateCampaignForm.tsx`, the catalogue screen, `StatusTable.tsx`, `MarginTree.tsx`, `Figures.tsx` and the closing messages; verify 14.1 to 14.5, the frontend suite and the no-arithmetic test
 
 ## 15. Demo Data and E2E
 

@@ -63,7 +63,7 @@ describe("the states of the status page", () => {
       contracted_impressions: 10, delivery_metric: "impressions", delivered: "5.0000", delivered_impressions: 5,
       delivery_ratio: 0.5,
       pacing: { expected_impressions: 5, deviation: 0, days_remaining: 1, status: "on_pace" },
-      pacing_flag: false, missing_data_flag: false,
+      pacing_flag: false, missing_data_flag: false, volume_commitment: "committed",
     }]) });
 
     renderAuthenticated(<StatusPage />);

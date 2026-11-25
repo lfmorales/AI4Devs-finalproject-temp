@@ -52,3 +52,29 @@ describe("the delivery legend", () => {
     expect(deliveryLegend("198500.0000", 200000, "impressions")).toBe("Entregado 198.500 de 200.000 impresiones");
   });
 });
+
+
+describe("the closing of a month whose delivery is not loaded up to its last day", () => {
+  const november = { year: 2026, month: 11 };
+
+  it("names the month and the DSP of month_delivery_not_loaded in Spanish and says what to wait for", () => {
+    const message = closingErrorMessage(
+      "month_delivery_not_loaded",
+      "The delivery of 2026-11 from Equativ is not loaded up to its last day. Load it, then close the month.",
+      november,
+    );
+
+    expect(message).toBe(
+      "No se puede cerrar noviembre de 2026: Equativ aún no ha cargado la entrega de su último día. "
+      + "Espera a la ingesta de ese día y vuelve a cerrar el mes.",
+    );
+    expect(message).not.toContain("not loaded");
+  });
+
+  it("still names the month being closed when the backend's message cannot be read", () => {
+    expect(closingErrorMessage("month_delivery_not_loaded", undefined, november)).toBe(
+      "No se puede cerrar noviembre de 2026: falta cargar la entrega de su último día. "
+      + "Espera a la ingesta de ese día y vuelve a cerrar el mes.",
+    );
+  });
+});

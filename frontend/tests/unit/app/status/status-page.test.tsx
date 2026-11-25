@@ -27,6 +27,7 @@ function row(overrides: Partial<CampaignStatusRow> = {}): CampaignStatusRow {
     pacing: { expected_impressions: 15000.4, deviation: -0.2, days_remaining: 20, status: "under_delivering" },
     pacing_flag: false,
     missing_data_flag: false,
+    volume_commitment: "committed",
     ...overrides,
   };
 }
@@ -240,5 +241,56 @@ describe("the unit of the delivery", () => {
 
     const cell = await cellsByHeader();
     expect([cell(1, "Unidad"), cell(2, "Unidad")]).toEqual(["OTS", "impresiones"]);
+  });
+});
+
+
+describe("a row of a target line", () => {
+  // 30,000 impressions of target, 12,000 expected to date and 14,400 delivered: 20 % above, which is not a warning.
+  const ABOVE_TARGET = row({
+    volume_commitment: "target", contracted_impressions: 30000, delivered: "14400.0000", delivered_impressions: 14400,
+    pacing: { expected_impressions: 12000, deviation: 0.2, days_remaining: 20, status: "over_delivering" },
+    pacing_flag: false,
+  });
+
+  async function cellOf(header: string): Promise<string> {
+    const table = await screen.findByRole("table", { name: "Estado de las campañas" });
+    const headers = within(table).getAllByRole("columnheader").map((h) => plain(h));
+    const cells = within(within(table).getAllByRole("row")[1]!).getAllByRole("cell");
+    return plain(cells[headers.indexOf(header)]!);
+  }
+
+  it("labels its volume «Objetivo»", async () => {
+    installRoutes({ "GET /campaign-status": () => reply(200, [ABOVE_TARGET]) });
+
+    renderAuthenticated(<StatusPage />);
+
+    expect(await cellOf("Contratado")).toBe("Objetivo 30.000");
+  });
+
+  it("shows no pacing warning above its target, while still showing the deviation the server sent", async () => {
+    installRoutes({ "GET /campaign-status": () => reply(200, [ABOVE_TARGET]) });
+
+    renderAuthenticated(<StatusPage />);
+
+    expect(await cellOf("Avisos")).toBe("—");
+    expect(await cellOf("Desviación")).toBe("20 %");
+    expect(screen.queryByText("Desviación de ritmo")).not.toBeInTheDocument();
+  });
+
+  it("still shows the pacing warning the server raises below its target", async () => {
+    installRoutes({ "GET /campaign-status": () => reply(200, [row({ ...ABOVE_TARGET, pacing_flag: true })]) });
+
+    renderAuthenticated(<StatusPage />);
+
+    expect(await cellOf("Avisos")).toBe("Desviación de ritmo");
+  });
+
+  it("does not label a committed volume «Objetivo»", async () => {
+    installRoutes({ "GET /campaign-status": () => reply(200, [row()]) });
+
+    renderAuthenticated(<StatusPage />);
+
+    expect(await cellOf("Contratado")).toBe("31.000");
   });
 });

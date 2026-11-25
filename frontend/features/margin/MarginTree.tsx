@@ -5,7 +5,18 @@ import type { CampaignMargin, FlightMargin, FlightState, LineMargin, MarginRespo
 import { formatMoney, formatPercent } from "@/lib/format/decimal";
 import { Figures } from "./Figures";
 import { TotalsFlags } from "./Flags";
-import { ACCRUED_HELP, ACCRUED_LABEL, daysLegend, deliveryLegend } from "./messages";
+import {
+  ACCRUED_HELP,
+  ACCRUED_LABEL,
+  DATA_COST_HELP,
+  DATA_COST_LABEL,
+  GROSS_DIFFERS_HELP,
+  GROSS_DIFFERS_LABEL,
+  GROSS_LABEL,
+  daysLegend,
+  deliveryLegend,
+  saleLabel,
+} from "./messages";
 
 const STATE_LABEL: Record<FlightState, string> = {
   closed: "Cerrado",
@@ -25,7 +36,18 @@ function twoDigits(month: number): string {
   return month < 10 ? `0${month}` : `${month}`;
 }
 
-function FlightRow({ flight }: { flight: FlightMargin }) {
+/** A warning of a target flight, with what to check as its accessible description. */
+function Warning({ label, help, className }: { label: string; help: string; className: string }) {
+  const helpId = useId();
+  return (
+    <>
+      <span className={className} aria-describedby={helpId} title={help}>{label}</span>
+      <span id={helpId} hidden>{help}</span>
+    </>
+  );
+}
+
+function FlightRow({ flight, showGross }: { flight: FlightMargin; showGross: boolean }) {
   return (
     <tr>
       <td>{twoDigits(flight.period_month)}/{flight.period_year}</td>
@@ -38,6 +60,7 @@ function FlightRow({ flight }: { flight: FlightMargin }) {
       </td>
       <td className="num">{formatMoney(flight.contracted_revenue)}</td>
       <td className="num">{formatMoney(flight.revenue)}</td>
+      {showGross && <td className="num">{flight.gross_revenue === null ? "—" : formatMoney(flight.gross_revenue)}</td>}
       <td className="num">{formatMoney(flight.media_cost)}</td>
       <td className="num">{formatMoney(flight.rebate)}</td>
       <td className="num">{formatMoney(flight.platform_cost)}</td>
@@ -47,6 +70,10 @@ function FlightRow({ flight }: { flight: FlightMargin }) {
         {flight.below_cost && <span className="tag tag-warning">Margen negativo</span>}
         {flight.below_cost && flight.zero_sale ? " " : null}
         {flight.zero_sale && <span className="tag tag-info">Sin venta</span>}
+        {flight.gross_differs_from_buyer_spend && (
+          <Warning label={GROSS_DIFFERS_LABEL} help={GROSS_DIFFERS_HELP} className="tag tag-warning" />
+        )}
+        {flight.data_cost_reported && <Warning label={DATA_COST_LABEL} help={DATA_COST_HELP} className="tag tag-info" />}
       </td>
       <td>{deliveryLegend(flight.delivered, flight.contracted_impressions, flight.delivery_metric)}</td>
     </tr>
@@ -55,6 +82,8 @@ function FlightRow({ flight }: { flight: FlightMargin }) {
 
 function LineLevel({ campaign, line }: { campaign: CampaignMargin; line: LineMargin }) {
   const helpId = useId();
+  // A line has one commitment: a target line names its sale «Venta objetivo» and shows the gross of its flights.
+  const target = line.totals.volume_commitment === "target";
   return (
     <details className="margin-level margin-line" aria-label={`Línea ${line.line_number} de ${campaign.name}`}>
       <summary className="margin-summary">
@@ -71,8 +100,9 @@ function LineLevel({ campaign, line }: { campaign: CampaignMargin; line: LineMar
               <th scope="col">Periodo</th>
               <th scope="col">Ventana</th>
               <th scope="col">Estado</th>
-              <th scope="col">Venta contratada</th>
+              <th scope="col">{saleLabel(line.totals.volume_commitment)}</th>
               <th scope="col" aria-describedby={helpId} title={ACCRUED_HELP}>{ACCRUED_LABEL}</th>
+              {target && <th scope="col">{GROSS_LABEL}</th>}
               <th scope="col">Coste de medios</th>
               <th scope="col">Rebate</th>
               <th scope="col">Coste de plataforma</th>
@@ -83,7 +113,7 @@ function LineLevel({ campaign, line }: { campaign: CampaignMargin; line: LineMar
             </tr>
           </thead>
           <tbody>
-            {line.flights.map((flight) => <FlightRow key={flight.flight_id} flight={flight} />)}
+            {line.flights.map((flight) => <FlightRow key={flight.flight_id} flight={flight} showGross={target} />)}
           </tbody>
         </table>
         <span id={helpId} hidden>{ACCRUED_HELP}</span>

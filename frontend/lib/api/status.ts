@@ -1,6 +1,7 @@
 import type { DeliveryMetric } from "@/lib/format/delivery-metric";
 
 import type { ApiClient } from "./client";
+import type { VolumeCommitment } from "./volume-commitment";
 
 // Shapes of GET /campaign-status, as published by the backend's OpenAPI schema
 // (CampaignStatusResponse, NamedReference, FlightWindowResponse and PacingResponse).
@@ -46,8 +47,11 @@ export interface CampaignStatusRow {
   /** Delivered over contracted, as a fraction; null when it cannot be computed. */
   delivery_ratio: number | null;
   pacing: Pacing;
+  /** Raised below a target, but never above it: a target line may deliver more than its target. */
   pacing_flag: boolean;
   missing_data_flag: boolean;
+  /** The line's commitment: its volume is labelled «Objetivo» when it is a target. Not a cost figure. */
+  volume_commitment: VolumeCommitment;
 }
 
 /** The daily status, already ordered by the server (rows with a flag first). */

@@ -2,6 +2,7 @@ import type { DeliveryMetric } from "@/lib/format/delivery-metric";
 
 import type { ApiClient } from "./client";
 import { buildQuery } from "./query";
+import type { VolumeCommitment } from "./volume-commitment";
 
 // Shapes of GET /margin and POST /margin/closings, as published by the backend's OpenAPI schema
 // (MarginResponse, CampaignMarginResponse, LineMarginResponse, FlightMarginResponse, TotalsResponse,
@@ -34,6 +35,13 @@ export interface MarginTotals {
   zero_sale_count: number;
   /** Computed by the server, in points of revenue; null when there is no revenue. */
   margin_pct: DecimalString | null;
+  /** The one commitment of the flights below; null when they mix both. */
+  volume_commitment: VolumeCommitment | null;
+  /** The sum of the gross of the target flights below, by the server; null when there is none. */
+  gross_revenue: DecimalString | null;
+  /** How many flights below carry each warning. */
+  gross_differs_count: number;
+  data_cost_count: number;
 }
 
 export interface AppliedRates {
@@ -76,6 +84,14 @@ export interface FlightMargin {
   margin: DecimalString;
   margin_pct: DecimalString | null;
   rates: AppliedRates;
+  /** A target flight earns what its DSP reports, and its `contracted_revenue` is the sale of its target. */
+  volume_commitment: VolumeCommitment;
+  /** A target flight's served impressions at the line's CPM, the base of its rebate; null for a committed flight. */
+  gross_revenue: DecimalString | null;
+  /** The gross differs from the buyer's spend by more than 1 %, or there is no spend («Bruto distinto del gasto»). */
+  gross_differs_from_buyer_spend: boolean;
+  /** The DSP reports a third-party or audience data cost («Coste de datos»); never subtracted. */
+  data_cost_reported: boolean;
 }
 
 export interface LineMargin {

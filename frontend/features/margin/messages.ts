@@ -1,6 +1,7 @@
 import { formatQuantity } from "@/lib/format/decimal";
 import { metricLabel, type DeliveryMetric } from "@/lib/format/delivery-metric";
 import { formatInteger } from "@/lib/format/integer";
+import type { VolumeCommitment } from "@/lib/api/volume-commitment";
 const MONTH_NAMES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
@@ -61,9 +62,20 @@ function previousMonthOpen(message: string | undefined, target: ClosingTarget): 
   return `Hay un mes anterior sin cerrar: ${monthOfYear(match[1] ?? "", index + 1)}. Ciérralo antes de cerrar ${closing}.`;
 }
 
-/** The Spanish message for a failed closing, from the backend's code. `message` is only read for the blocking month. */
+/** What the backend names when a DSP has not loaded the month's last day: "... of 2026-11 from Equativ is not ...". */
+const NOT_LOADED_DSP = /\d{4}-\d{2} from (.+?) is not loaded/;
+
+function monthDeliveryNotLoaded(message: string | undefined, target: ClosingTarget): string {
+  const closing = monthOfYear(target.year, target.month);
+  const match = message === undefined ? null : NOT_LOADED_DSP.exec(message);
+  const missing = match === null ? "falta cargar la entrega" : `${match[1] ?? ""} aún no ha cargado la entrega`;
+  return `No se puede cerrar ${closing}: ${missing} de su último día. Espera a la ingesta de ese día y vuelve a cerrar el mes.`;
+}
+
+/** The Spanish message for a failed closing, from the backend's code. `message` is only read for a month or a DSP. */
 export function closingErrorMessage(code: string | undefined, message: string | undefined, target: ClosingTarget): string {
   if (code === "previous_month_open") return previousMonthOpen(message, target);
+  if (code === "month_delivery_not_loaded") return monthDeliveryNotLoaded(message, target);
   if (code !== undefined && code in MESSAGE_BY_CODE) return MESSAGE_BY_CODE[code] ?? GENERIC_CLOSING_ERROR;
   return GENERIC_CLOSING_ERROR;
 }
@@ -93,3 +105,24 @@ export function daysLegend(accruedDays: number, windowDays: number): string {
 export function deliveryLegend(delivered: string, contracted: number, metric: DeliveryMetric): string {
   return `Entregado ${formatQuantity(delivered)} de ${formatInteger(contracted)} ${metricLabel(metric)}`;
 }
+
+/** The sale of a level: what was contracted, or for a target line what its target is worth. */
+export const CONTRACTED_SALE_LABEL = "Venta contratada";
+export const TARGET_SALE_LABEL = "Venta objetivo";
+
+export function saleLabel(commitment: VolumeCommitment | null): string {
+  return commitment === "target" ? TARGET_SALE_LABEL : CONTRACTED_SALE_LABEL;
+}
+
+/** The served impressions of a target flight at the line's CPM, as the server computed it. */
+export const GROSS_LABEL = "Bruto";
+
+export const GROSS_DIFFERS_LABEL = "Bruto distinto del gasto";
+export const GROSS_DIFFERS_HELP =
+  "El bruto (impresiones servidas por el CPM de la línea) se aleja más de un 1 % del gasto del comprador que comunica "
+  + "el DSP. Revisa el CPM de la línea y el paquete vinculado.";
+
+export const DATA_COST_LABEL = "Coste de datos";
+export const DATA_COST_HELP =
+  "El DSP comunica costes de datos de terceros o de audiencia en este flight. No se restan del margen: revisa con el "
+  + "comprador si deben repercutirse.";

@@ -301,6 +301,16 @@ select:has(+ .field-error) {
   font-size: 0.875rem;
 }
 
+/* Packages of the catalogue offered while an Equativ package is written; one is never required. */
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
 fieldset {
   margin-bottom: var(--space);
   padding: 20px;

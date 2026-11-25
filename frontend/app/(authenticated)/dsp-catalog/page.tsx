@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { CatalogueView } from "@/features/catalogue/CatalogueView";
+import { EquativMapping } from "@/features/catalogue/EquativMapping";
 import type { FatalKind } from "@/features/linking/LinePickerDialog";
 import { useReportForbidden } from "@/lib/auth/ForbiddenPages";
 import { AccessDeniedPage } from "@/lib/components/AccessDeniedPage";
@@ -18,6 +19,7 @@ export default function DspCatalogPage() {
   return (
     <div>
       <h1>Catálogo Adform</h1>
+      <EquativMapping onFatal={setFatal} />
       <CatalogueView onFatal={setFatal} />
     </div>
   );

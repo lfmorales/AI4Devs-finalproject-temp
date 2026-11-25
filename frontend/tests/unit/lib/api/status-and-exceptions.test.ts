@@ -41,6 +41,7 @@ const STATUS_ROW: CampaignStatusRow = {
   pacing: { expected_impressions: 1500.5, deviation: -0.2, days_remaining: 20, status: "under_delivering" },
   pacing_flag: true,
   missing_data_flag: false,
+  volume_commitment: "committed",
 };
 
 const EXCEPTION: IngestionException = {

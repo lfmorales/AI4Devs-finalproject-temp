@@ -1,7 +1,7 @@
 import type { ApiClient } from "./client";
 import { buildQuery } from "./query";
 
-// Shapes of the Adform catalogue endpoints, as published by the backend's OpenAPI schema
+// Shapes of the DSP catalogue endpoints (Adform pairs and Equativ packages), as published by the backend's OpenAPI schema
 // (DspCatalogPageResponse, DspCatalogItemResponse, UnmappedLineResponse, DspMappingCreateRequest,
 // DspMappingResponse and UnlinkLineResponse). There is no cost field.
 
@@ -64,7 +64,8 @@ export function listUnmappedLines(client: ApiClient): Promise<UnmappedLine[]> {
   return client.get<UnmappedLine[]>("/campaign-lines/unmapped");
 }
 
-export type IdentifierCheck = "found" | "unknown" | "unreachable";
+/** What the DSP said of the pair; `user_validated` is a pair operations wrote for a DSP that is never asked (Equativ). */
+export type IdentifierCheck = "found" | "unknown" | "unreachable" | "user_validated";
 
 export interface DspMappingRequest {
   external_campaign_id: string;

@@ -31,6 +31,10 @@ export function totals(overrides: Partial<MarginTotals> = {}): MarginTotals {
     below_cost_count: 0,
     zero_sale_count: 0,
     margin_pct: "22.67",
+    volume_commitment: "committed",
+    gross_revenue: null,
+    gross_differs_count: 0,
+    data_cost_count: 0,
     ...overrides,
   };
 }
@@ -73,6 +77,10 @@ export function flight(overrides: Partial<FlightMargin> = {}): FlightMargin {
     margin: "823.26",
     margin_pct: "22.67",
     rates: rates(),
+    volume_commitment: "committed",
+    gross_revenue: null,
+    gross_differs_from_buyer_spend: false,
+    data_cost_reported: false,
     ...overrides,
   };
 }

@@ -8,6 +8,9 @@ import { metricLabel } from "@/lib/format/delivery-metric";
 import { formatFraction, formatImpressions, formatPeriod, NOT_AVAILABLE } from "./format";
 import { nextSort, sortRows, type SortColumn, type SortState } from "./sorting";
 
+/** A target line's volume is an objective, not a commitment: it is named so in its own cell. */
+const TARGET_VOLUME_LABEL = "Objetivo";
+
 function SortableHeader({ column, label, sort, onSort }: {
   column: SortColumn;
   label: string;
@@ -65,7 +68,10 @@ export function StatusTable({ rows }: { rows: CampaignStatusRow[] }) {
             <td>{formatPeriod(row.flight.year, row.flight.month)}</td>
             <td>{row.flight.start} – {row.flight.end}</td>
             <td>{metricLabel(row.delivery_metric)}</td>
-            <td className="num">{formatImpressions(row.contracted_impressions)}</td>
+            <td className="num">
+              {row.volume_commitment === "target" && <span className="figure-label">{TARGET_VOLUME_LABEL} </span>}
+              {formatImpressions(row.contracted_impressions)}
+            </td>
             <td className="num">{formatQuantity(row.delivered)}</td>
             <td className="num">{formatFraction(row.delivery_ratio)}</td>
             <td className="num">{formatImpressions(row.pacing.expected_impressions)}</td>

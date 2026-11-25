@@ -3,14 +3,19 @@ import { useId } from "react";
 import { formatInteger } from "@/lib/format/integer";
 import { formatMoney, formatPercent } from "@/lib/format/decimal";
 import type { MarginTotals } from "@/lib/api/margin";
-import { ACCRUED_HELP, ACCRUED_LABEL, deliveryLegend } from "./messages";
+import { ACCRUED_HELP, ACCRUED_LABEL, GROSS_LABEL, deliveryLegend, saleLabel } from "./messages";
 
-/** The figures of a level, labelled, exactly as the server computed them, and what it delivered of what it sold. */
+/**
+ * The figures of a level, labelled, exactly as the server computed them, and what it delivered of what it sold. The
+ * sale of a target level is «Venta objetivo», and the gross of its target flights follows its revenue when it has one.
+ */
 export function Figures({ figured }: { figured: MarginTotals }) {
   const helpId = useId();
+  const gross: [string, string][] = figured.gross_revenue === null ? [] : [[GROSS_LABEL, formatMoney(figured.gross_revenue)]];
   const entries: [string, string][] = [
-    ["Venta contratada", formatMoney(figured.contracted_revenue)],
+    [saleLabel(figured.volume_commitment), formatMoney(figured.contracted_revenue)],
     [ACCRUED_LABEL, formatMoney(figured.revenue)],
+    ...gross,
     ["Coste de medios", formatMoney(figured.media_cost)],
     ["Rebate", formatMoney(figured.rebate)],
     ["Coste de plataforma", formatMoney(figured.platform_cost)],
