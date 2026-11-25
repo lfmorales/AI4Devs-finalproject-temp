@@ -1,4 +1,5 @@
-"""Margin tables: rebate schedules and brackets, platform rate settings, and the rates frozen at closing."""
+"""Margin tables: rebate schedules and brackets, platform rate settings, the rates frozen at closing, and the closing
+headers with the snapshot of every closed flight."""
 
 from datetime import date, datetime
 from decimal import Decimal
@@ -152,6 +153,88 @@ class AppliedRateRecord(Base):
     rebate_base_amount: Mapped[Decimal | None] = mapped_column(_AMOUNT, nullable=True)
     closed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     closed_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+
+class MonthClosingRecord(Base):
+    """One closing run that froze at least one flight of a month. Added once, never changed or deleted.
+
+    A month is closed when it holds one; it holds more when a flight registered in it after its closing is frozen by
+    a later closing.
+    """
+
+    __tablename__ = "month_closings"
+    __table_args__ = (
+        CheckConstraint("period_month BETWEEN 1 AND 12", name="ck_month_closings_period_month"),
+        Index("ix_month_closings_period", "period_year", "period_month"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    period_year: Mapped[int] = mapped_column(Integer, nullable=False)
+    period_month: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    closed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    closed_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    # The last day the closing counted (D-1 of the day it ran).
+    as_of: Mapped[date] = mapped_column(Date, nullable=False)
+
+
+class MonthClosingBatchRecord(Base):
+    """The latest succeeded ingestion batch of one DSP when a closing ran: the delivery its flights were frozen with."""
+
+    __tablename__ = "month_closing_batches"
+
+    month_closing_id: Mapped[int] = mapped_column(ForeignKey("month_closings.id"), primary_key=True)
+    dsp_id: Mapped[int] = mapped_column(ForeignKey("dsps.id"), primary_key=True)
+    ingestion_batch_id: Mapped[int] = mapped_column(ForeignKey("ingestion_batches.id"), nullable=False)
+
+
+# Amounts frozen as the margin reports them, rounded to the cent; the window sums keep the precision of the delivery.
+_ROUNDED = Numeric(18, 2)
+_WINDOW_SUM = Numeric(18, 6)
+
+
+class ClosedFlightSnapshotRecord(Base):
+    """Every figure a closed flight reports and the delivery it was computed on. Added once, never changed or deleted.
+
+    A closed flight is read only from here; the delivery stored afterwards only feeds the warning that it changed.
+    """
+
+    __tablename__ = "closed_flight_snapshots"
+    __table_args__ = (
+        CheckConstraint(
+            "(volume_commitment = 'target') = (gross_revenue IS NOT NULL)",
+            name="ck_closed_flight_snapshots_gross_with_target",
+        ),
+        CheckConstraint(
+            "delivery_metric IN ('impressions', 'ots')", name="ck_closed_flight_snapshots_delivery_metric"
+        ),
+        CheckConstraint(
+            "volume_commitment IN ('committed', 'target')", name="ck_closed_flight_snapshots_volume_commitment"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    applied_rate_id: Mapped[int] = mapped_column(ForeignKey("applied_rates.id"), nullable=False, unique=True)
+    month_closing_id: Mapped[int] = mapped_column(ForeignKey("month_closings.id"), nullable=False, index=True)
+    revenue: Mapped[Decimal] = mapped_column(_ROUNDED, nullable=False)
+    contracted_revenue: Mapped[Decimal] = mapped_column(_ROUNDED, nullable=False)
+    media_cost: Mapped[Decimal] = mapped_column(_ROUNDED, nullable=False)
+    rebate: Mapped[Decimal] = mapped_column(_ROUNDED, nullable=False)
+    platform_cost: Mapped[Decimal] = mapped_column(_ROUNDED, nullable=False)
+    margin: Mapped[Decimal] = mapped_column(_ROUNDED, nullable=False)
+    # Only a target flight has a gross: the check above ties it to the commitment.
+    gross_revenue: Mapped[Decimal | None] = mapped_column(_ROUNDED, nullable=True)
+    delivered_impressions: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    delivered: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    window_media_cost: Mapped[Decimal] = mapped_column(_WINDOW_SUM, nullable=False)
+    window_reported_revenue: Mapped[Decimal] = mapped_column(_WINDOW_SUM, nullable=False)
+    window_buyer_spend: Mapped[Decimal] = mapped_column(_WINDOW_SUM, nullable=False)
+    window_data_cost: Mapped[Decimal] = mapped_column(_WINDOW_SUM, nullable=False)
+    gross_differs_from_buyer_spend: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    data_cost_reported: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    delivery_metric: Mapped[str] = mapped_column(String, nullable=False)
+    sale_cpm: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    contracted_impressions: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    volume_commitment: Mapped[str] = mapped_column(String, nullable=False)
 
 
 class AppliedRateBracketRecord(Base):

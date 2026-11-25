@@ -36,6 +36,9 @@ from app.infrastructure.persistence.models.margin import (
     PlatformRateSettingRecord,
     AppliedRateRecord,
     AppliedRateBracketRecord,
+    MonthClosingRecord,
+    MonthClosingBatchRecord,
+    ClosedFlightSnapshotRecord,
 )
 
 __all__ = [
@@ -68,4 +71,7 @@ __all__ = [
     "PlatformRateSettingRecord",
     "AppliedRateRecord",
     "AppliedRateBracketRecord",
+    "MonthClosingRecord",
+    "MonthClosingBatchRecord",
+    "ClosedFlightSnapshotRecord",
 ]

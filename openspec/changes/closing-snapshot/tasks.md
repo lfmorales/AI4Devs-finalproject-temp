@@ -4,13 +4,13 @@
 
 ## 0. Setup: Create Feature Branch (MANDATORY - FIRST STEP)
 
-- [ ] 0.1 Verify `git branch --show-current` reports `feature/closing-snapshot` and `git status --short` shows only this change's artifacts before the first code change
-- [ ] 0.2 Check that `docs/product-description.md`, revised with this specification (§4 diagram and key decisions, §6 Phase 2, §8 Resolved), agrees with the specs of this change; verify with a read-through
+- [x] 0.1 Verify `git branch --show-current` reports `feature/closing-snapshot` and `git status --short` shows only this change's artifacts before the first code change
+- [x] 0.2 Check that `docs/product-description.md`, revised with this specification (§4 diagram and key decisions, §6 Phase 2, §8 Resolved), agrees with the specs of this change; verify with a read-through
 
 ## 1. Snapshot Tables (migration)
 
-- [ ] 1.1 Write failing tests in a new `backend/tests/infrastructure/test_closing_snapshot_migration.py`, on a scratch database as `test_frozen_revenue_migration.py` does: migrating from `950895fa2d75` with one `applied_rates` row fails with a message naming `e2e/scripts/reset-data.sh` and creates no table; on a database without closed flights it creates `month_closings`, `month_closing_batches` and `closed_flight_snapshots`; every column is `NOT NULL` except `gross_revenue`; `gross_revenue` is refused on a committed row and required on a target row; `delivery_metric` and `volume_commitment` refuse other values; `applied_rate_id` is unique; an update or a delete of any of the three tables is refused by the append-only trigger; no column is floating point; `downgrade -1` drops the three tables; the history has one head
-- [ ] 1.2 Add the three models to `backend/app/infrastructure/persistence/models/margin.py` and generate the migration with `--autogenerate`; add by hand the guard on `applied_rates` and the triggers; review it; verify 1.1, that a second `--autogenerate` finds no difference, and that `test_frozen_revenue_migration.py` still passes with its revisions pinned
+- [x] 1.1 Write failing tests in a new `backend/tests/infrastructure/test_closing_snapshot_migration.py`, on a scratch database as `test_frozen_revenue_migration.py` does: migrating from `950895fa2d75` with one `applied_rates` row fails with a message naming `e2e/scripts/reset-data.sh` and creates no table; on a database without closed flights it creates `month_closings`, `month_closing_batches` and `closed_flight_snapshots`; every column is `NOT NULL` except `gross_revenue`; `gross_revenue` is refused on a committed row and required on a target row; `delivery_metric` and `volume_commitment` refuse other values; `applied_rate_id` is unique; an update or a delete of any of the three tables is refused by the append-only trigger; no column is floating point; `downgrade -1` drops the three tables; the history has one head
+- [x] 1.2 Add the three models to `backend/app/infrastructure/persistence/models/margin.py` and generate the migration with `--autogenerate`; add by hand the guard on `applied_rates` and the triggers; review it; verify 1.1, that a second `--autogenerate` finds no difference, that `test_migration_schema_sync.py` lists the three tables, and that `test_frozen_revenue_migration.py` still passes with its revisions pinned
 
 ## 2. Domain: the Snapshot of a Closed Flight
 
