@@ -4,13 +4,14 @@ from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.domain.services.platform_rate import resolve_platform_rate
 from app.domain.services.priced_flights import price_flights
-from app.domain.value_objects.priced_flight import PlatformRates
+from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates
 from app.domain.value_objects.rebate import Bracket, CounterKey
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 from app.infrastructure.persistence.models.campaign import CampaignLineRecord, CampaignRecord
 from app.infrastructure.persistence.models.margin import (
     AppliedRateBracketRecord,
@@ -32,6 +33,7 @@ from tests.fixtures.delivery_data import (
     insert_campaign_line,
     insert_delivery,
     insert_ingestion_batch,
+    insert_other_dsp,
     insert_user,
     replace_flights,
 )
@@ -386,3 +388,82 @@ def test_a_flight_without_delivery_has_zero_delivered_in_its_metric(rolled_back_
     (flight,) = SqlAlchemyMarginFlightRepository(rolled_back_session).open_ended_flights(2026, 8, AS_OF)
 
     assert flight.delivered == 0 and isinstance(flight.delivered, Decimal) and flight.delivered_impressions == 0
+
+
+# ---------------------------------------------------------------- the commitment and the amounts the DSP reports
+
+def _equativ_target_august(session: Session) -> int:
+    """The worked example as stored: a target line on Equativ, 1,000,000 at 5.00 €, served 1,100,000 in August."""
+    equativ = insert_other_dsp(session, "Equativ")
+    line_id = _line(session, campaign_name="Equativ target", dsp_id=equativ)
+    session.execute(update(CampaignLineRecord).where(CampaignLineRecord.id == line_id).values(volume_commitment="target"))
+    batch = insert_ingestion_batch(session)
+    insert_delivery(
+        session, line_id, date(2026, 8, 1), 600_000, batch, buyer_spend=Decimal("3000.000001"),
+        reported_revenue=Decimal("2400.123456"), third_party_data_cost=Decimal("0.25"),
+    )
+    insert_delivery(
+        session, line_id, date(2026, 8, 31), 500_000, batch, buyer_spend=Decimal("2499.999999"),
+        reported_revenue=Decimal("1999.876544"), audience_data_cost=Decimal("1.00"),
+    )
+    insert_delivery(  # the day after the window: counts for nothing
+        session, line_id, date(2026, 9, 1), 9_999, batch, buyer_spend=Decimal(999), reported_revenue=Decimal(999),
+        third_party_data_cost=Decimal(999), audience_data_cost=Decimal(999),
+    )
+    return line_id
+
+
+def _adform_committed_august(session: Session) -> int:
+    line_id = _line(session, campaign_name="Adform committed")
+    insert_delivery(session, line_id, date(2026, 8, 10), 700_000, insert_ingestion_batch(session), Decimal("1200.00"))
+    return line_id
+
+
+def _by_line(facts: list[FlightFacts]) -> dict[int, FlightFacts]:
+    return {flight.campaign_line_id: flight for flight in facts}
+
+
+def test_both_reads_return_the_commitment_and_the_reported_amounts_of_a_target_flight_from_the_database(
+    rolled_back_session: Session,
+) -> None:
+    target = _equativ_target_august(rolled_back_session)
+
+    opened = _by_line(SqlAlchemyMarginFlightRepository(rolled_back_session).open_ended_flights(2026, 8, AS_OF))[target]
+    read = _by_line([r.facts for r in SqlAlchemyMarginReadRepository(rolled_back_session).list_flights(AS_OF)])[target]
+
+    for facts in (opened, read):
+        assert facts.volume_commitment is VolumeCommitment.TARGET
+        assert facts.reported_revenue == Decimal("4400.000000")
+        assert facts.buyer_spend == Decimal("5500.000000")
+        assert facts.data_cost == Decimal("1.250000")  # third-party and audience, summed
+        assert facts.delivered_impressions == 1_100_000
+        assert all(isinstance(value, Decimal) for value in (facts.reported_revenue, facts.buyer_spend, facts.data_cost))
+
+
+def test_a_committed_flight_reads_committed_and_zero_reported_amounts(rolled_back_session: Session) -> None:
+    committed = _adform_committed_august(rolled_back_session)
+    _equativ_target_august(rolled_back_session)
+
+    opened = _by_line(SqlAlchemyMarginFlightRepository(rolled_back_session).open_ended_flights(2026, 8, AS_OF))[committed]
+    read = _by_line([r.facts for r in SqlAlchemyMarginReadRepository(rolled_back_session).list_flights(AS_OF)])[committed]
+
+    for facts in (opened, read):
+        assert facts.volume_commitment is VolumeCommitment.COMMITTED
+        assert (facts.reported_revenue, facts.buyer_spend, facts.data_cost) == (Decimal(0), Decimal(0), Decimal(0))
+        assert facts.media_cost == Decimal("1200.00")
+
+
+def test_the_target_flight_read_from_the_database_is_priced_on_what_equativ_reported(rolled_back_session: Session) -> None:
+    target = _equativ_target_august(rolled_back_session)
+    (read,) = [r for r in SqlAlchemyMarginReadRepository(rolled_back_session).list_flights(AS_OF)
+               if r.facts.campaign_line_id == target]
+
+    (priced,) = price_flights([], PlatformRates(system=Decimal("1.00")), [read.facts], AS_OF)
+
+    assert priced.margin.volume_commitment is VolumeCommitment.TARGET
+    assert (priced.margin.revenue, priced.margin.gross_revenue, priced.margin.platform_cost) == (
+        Decimal("4400.00"), Decimal("5500.00"), Decimal("1100.00"),
+    )
+    assert priced.margin.contracted_revenue == Decimal("5000.00")
+    assert priced.margin.gross_differs_from_buyer_spend is False
+    assert priced.margin.data_cost_reported is True

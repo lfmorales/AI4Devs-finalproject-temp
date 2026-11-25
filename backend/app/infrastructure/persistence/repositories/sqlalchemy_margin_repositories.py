@@ -1,8 +1,9 @@
 from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
-from sqlalchemy import Numeric, cast, exists, func, select, text
+from sqlalchemy import ColumnElement, Numeric, Row, Select, cast, exists, func, select, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -145,6 +146,85 @@ class SqlAlchemyPlatformRateRepository(PlatformRateRepository):
         )
 
 
+def _flight_facts_query(*extra: ColumnElement[Any]) -> Select[*tuple[Any, ...]]:
+    """Every flight with the facts its margin is computed from, joined to its line, campaign, agency, channel and period.
+
+    The one query behind the closing (`open_ended_flights`) and the reads (`list_flights`): each adds its own filters,
+    order and `extra` columns. The delivery is summed in the database over the indexed (line, date) pair, inside the
+    flight's own window: no delivery row is fetched.
+    """
+    flight = CampaignLinePeriodRecord
+    window = (
+        DailyDeliveryRecord.campaign_line_id == flight.campaign_line_id,
+        DailyDeliveryRecord.delivery_date.between(flight.flight_start, flight.flight_end),
+    )
+    delivered_impressions = (
+        select(func.coalesce(func.sum(DailyDeliveryRecord.impressions), 0)).where(*window).scalar_subquery()
+    )
+    # The delivery in the channel's own unit, as a four-decimal number (OTS has decimals, impressions do not).
+    delivered = select(
+        cast(func.coalesce(func.sum(delivered_in_channel_metric()), 0), Numeric(18, 4))
+    ).where(*window).scalar_subquery()
+    media_cost = select(func.coalesce(func.sum(DailyDeliveryRecord.media_cost), 0)).where(*window).scalar_subquery()
+    # What the DSP reported besides its cost: the revenue a target flight earns, the buyer's spend its gross is
+    # compared with, and the two data costs as one amount, whose presence is flagged.
+    reported_revenue = (
+        select(func.coalesce(func.sum(DailyDeliveryRecord.reported_revenue), 0)).where(*window).scalar_subquery()
+    )
+    buyer_spend = select(func.coalesce(func.sum(DailyDeliveryRecord.buyer_spend), 0)).where(*window).scalar_subquery()
+    data_cost = select(
+        func.coalesce(func.sum(DailyDeliveryRecord.third_party_data_cost + DailyDeliveryRecord.audience_data_cost), 0)
+    ).where(*window).scalar_subquery()
+    return (
+        select(
+            flight.id.label("flight_id"),
+            CampaignLineRecord.id.label("campaign_line_id"),
+            CampaignRecord.id.label("campaign_id"),
+            flight.flight_start.label("flight_start"),
+            flight.flight_end.label("flight_end"),
+            AgencyRecord.holding_group_id.label("group_id"),
+            AgencyRecord.id.label("agency_id"),
+            CampaignRecord.campaign_type_id.label("campaign_type_id"),
+            ChannelRecord.name.label("channel"),
+            ChannelRecord.id.label("channel_id"),
+            CampaignLineRecord.scope.label("scope"),
+            flight.contracted_impressions.label("contracted_impressions"),
+            CampaignLineRecord.sale_cpm.label("sale_cpm"),
+            delivered_impressions.label("delivered_impressions"),
+            media_cost.label("media_cost"),
+            ChannelRecord.delivery_metric.label("delivery_metric"),
+            delivered.label("delivered"),
+            CampaignLineRecord.volume_commitment.label("volume_commitment"),
+            reported_revenue.label("reported_revenue"),
+            buyer_spend.label("buyer_spend"),
+            data_cost.label("data_cost"),
+            *extra,
+        )
+        .select_from(flight)
+        .join(CampaignLineRecord, CampaignLineRecord.id == flight.campaign_line_id)
+        .join(CampaignRecord, CampaignRecord.id == CampaignLineRecord.campaign_id)
+        .join(AgencyRecord, AgencyRecord.id == CampaignRecord.agency_id)
+        .join(ChannelRecord, ChannelRecord.id == CampaignLineRecord.channel_id)
+        .join(CampaignPeriodRecord, CampaignPeriodRecord.id == flight.campaign_period_id)
+    )
+
+
+def _flight_facts(row: Row[Any]) -> FlightFacts:
+    values = row._mapping
+    return FlightFacts(
+        flight_id=values["flight_id"], campaign_line_id=values["campaign_line_id"], campaign_id=values["campaign_id"],
+        flight_start=values["flight_start"], flight_end=values["flight_end"], group_id=values["group_id"],
+        agency_id=values["agency_id"], campaign_type_id=values["campaign_type_id"], channel=values["channel"],
+        channel_id=values["channel_id"], scope=values["scope"],
+        contracted_impressions=int(values["contracted_impressions"]), sale_cpm=values["sale_cpm"],
+        delivered_impressions=int(values["delivered_impressions"]), media_cost=Decimal(values["media_cost"]),
+        delivery_metric=values["delivery_metric"], delivered=Decimal(values["delivered"]),
+        volume_commitment=VolumeCommitment(values["volume_commitment"]),
+        reported_revenue=Decimal(values["reported_revenue"]), buyer_spend=Decimal(values["buyer_spend"]),
+        data_cost=Decimal(values["data_cost"]),
+    )
+
+
 class SqlAlchemyMarginFlightRepository(MarginFlightRepository):
     def __init__(self, session: Session) -> None:
         self._session = session
@@ -155,32 +235,8 @@ class SqlAlchemyMarginFlightRepository(MarginFlightRepository):
 
     def open_ended_flights(self, year: int, month: int, as_of: date) -> list[FlightFacts]:
         flight = CampaignLinePeriodRecord
-        window = (
-            DailyDeliveryRecord.campaign_line_id == flight.campaign_line_id,
-            DailyDeliveryRecord.delivery_date.between(flight.flight_start, flight.flight_end),
-        )
-        # Both aggregates run in the database over the indexed (line, date) pair: no delivery row is fetched.
-        delivered_impressions = (
-            select(func.coalesce(func.sum(DailyDeliveryRecord.impressions), 0)).where(*window).scalar_subquery()
-        )
-        # The delivery in the channel's own unit, as a four-decimal number (OTS has decimals, impressions do not).
-        delivered = select(
-            cast(func.coalesce(func.sum(delivered_in_channel_metric()), 0), Numeric(18, 4))
-        ).where(*window).scalar_subquery()
-        media_cost = select(func.coalesce(func.sum(DailyDeliveryRecord.media_cost), 0)).where(*window).scalar_subquery()
         rows = self._session.execute(
-            select(
-                flight.id, CampaignLineRecord.id, CampaignRecord.id, flight.flight_start, flight.flight_end,
-                AgencyRecord.holding_group_id, AgencyRecord.id, CampaignRecord.campaign_type_id,
-                ChannelRecord.name, ChannelRecord.id, CampaignLineRecord.scope, flight.contracted_impressions,
-                CampaignLineRecord.sale_cpm, delivered_impressions, media_cost, ChannelRecord.delivery_metric, delivered,
-            )
-            .select_from(flight)
-            .join(CampaignLineRecord, CampaignLineRecord.id == flight.campaign_line_id)
-            .join(CampaignRecord, CampaignRecord.id == CampaignLineRecord.campaign_id)
-            .join(AgencyRecord, AgencyRecord.id == CampaignRecord.agency_id)
-            .join(ChannelRecord, ChannelRecord.id == CampaignLineRecord.channel_id)
-            .join(CampaignPeriodRecord, CampaignPeriodRecord.id == flight.campaign_period_id)
+            _flight_facts_query()
             .where(
                 CampaignPeriodRecord.period_year == year,
                 CampaignPeriodRecord.period_month == month,
@@ -189,21 +245,7 @@ class SqlAlchemyMarginFlightRepository(MarginFlightRepository):
             )
             .order_by(flight.flight_start, flight.id)
         ).all()
-        return [
-            FlightFacts(
-                flight_id=row[0], campaign_line_id=row[1], campaign_id=row[2], flight_start=row[3], flight_end=row[4],
-                group_id=row[5], agency_id=row[6], campaign_type_id=row[7], channel=row[8], channel_id=row[9],
-                scope=row[10], contracted_impressions=int(row[11]), sale_cpm=row[12],
-                delivered_impressions=int(row[13]), media_cost=Decimal(row[14]),
-                delivery_metric=row[15], delivered=Decimal(row[16]),
-                # pendiente-10.3: the commitment and the reported amounts are not read yet, so every flight is
-                # priced as committed, as before target lines existed. Task 10.3 reads them from the line and
-                # its deliveries and removes this.
-                volume_commitment=VolumeCommitment.COMMITTED, reported_revenue=Decimal(0), buyer_spend=Decimal(0),
-                data_cost=Decimal(0),
-            )
-            for row in rows
-        ]
+        return [_flight_facts(row) for row in rows]
 
     def earliest_month_with_open_flights(self, year: int, before_month: int, as_of: date) -> int | None:
         flight = CampaignLinePeriodRecord
@@ -237,37 +279,24 @@ class SqlAlchemyMarginReadRepository(MarginReadRepository):
     ) -> list[ReadFlight]:
         flight = CampaignLinePeriodRecord
         applied = AppliedRateRecord
-        window = (
-            DailyDeliveryRecord.campaign_line_id == flight.campaign_line_id,
-            DailyDeliveryRecord.delivery_date.between(flight.flight_start, flight.flight_end),
-        )
-        # Both aggregates run in the database over the indexed (line, date) pair: no delivery row is fetched.
-        delivered_impressions = (
-            select(func.coalesce(func.sum(DailyDeliveryRecord.impressions), 0)).where(*window).scalar_subquery()
-        )
-        # The delivery in the channel's own unit, as a four-decimal number (OTS has decimals, impressions do not).
-        delivered = select(
-            cast(func.coalesce(func.sum(delivered_in_channel_metric()), 0), Numeric(18, 4))
-        ).where(*window).scalar_subquery()
-        media_cost = select(func.coalesce(func.sum(DailyDeliveryRecord.media_cost), 0)).where(*window).scalar_subquery()
         query = (
-            select(
-                flight.id, CampaignLineRecord.id, CampaignRecord.id, flight.flight_start, flight.flight_end,
-                AgencyRecord.holding_group_id, AgencyRecord.id, CampaignRecord.campaign_type_id,
-                ChannelRecord.name, ChannelRecord.id, CampaignLineRecord.scope, flight.contracted_impressions,
-                CampaignLineRecord.sale_cpm, delivered_impressions, media_cost,
-                CampaignRecord.name, CampaignRecord.status, CampaignLineRecord.line_number,
-                CampaignPeriodRecord.period_year, CampaignPeriodRecord.period_month,
-                applied.id, applied.rebate_amount, applied.platform_rate, applied.effective_rate, applied.ladder_step,
-                applied.agency_exception, applied.zero_reason, applied.source_year, applied.position_before,
-                applied.position_after, ChannelRecord.delivery_metric, delivered,
+            _flight_facts_query(
+                CampaignRecord.name.label("campaign_name"),
+                CampaignRecord.status.label("campaign_status"),
+                CampaignLineRecord.line_number.label("line_number"),
+                CampaignPeriodRecord.period_year.label("period_year"),
+                CampaignPeriodRecord.period_month.label("period_month"),
+                applied.id.label("applied_id"),
+                applied.rebate_amount.label("rebate_amount"),
+                applied.platform_rate.label("platform_rate"),
+                applied.effective_rate.label("effective_rate"),
+                applied.ladder_step.label("ladder_step"),
+                applied.agency_exception.label("agency_exception"),
+                applied.zero_reason.label("zero_reason"),
+                applied.source_year.label("source_year"),
+                applied.position_before.label("position_before"),
+                applied.position_after.label("position_after"),
             )
-            .select_from(flight)
-            .join(CampaignLineRecord, CampaignLineRecord.id == flight.campaign_line_id)
-            .join(CampaignRecord, CampaignRecord.id == CampaignLineRecord.campaign_id)
-            .join(AgencyRecord, AgencyRecord.id == CampaignRecord.agency_id)
-            .join(ChannelRecord, ChannelRecord.id == CampaignLineRecord.channel_id)
-            .join(CampaignPeriodRecord, CampaignPeriodRecord.id == flight.campaign_period_id)
             .outerjoin(applied, applied.campaign_line_period_id == flight.id)
             .where(flight.flight_start <= as_of)
             .order_by(flight.flight_start, flight.id)
@@ -282,24 +311,18 @@ class SqlAlchemyMarginReadRepository(MarginReadRepository):
             query = query.where(applied.id.is_(None))
         results: list[ReadFlight] = []
         for row in self._session.execute(query).all():
-            facts = FlightFacts(
-                flight_id=row[0], campaign_line_id=row[1], campaign_id=row[2], flight_start=row[3], flight_end=row[4],
-                group_id=row[5], agency_id=row[6], campaign_type_id=row[7], channel=row[8], channel_id=row[9],
-                scope=row[10], contracted_impressions=int(row[11]), sale_cpm=row[12],
-                delivered_impressions=int(row[13]), media_cost=Decimal(row[14]),
-                delivery_metric=row[30], delivered=Decimal(row[31]),
-                # pendiente-10.3: the commitment and the reported amounts are not read yet, so every flight is
-                # priced as committed, as before target lines existed. Task 10.3 reads them from the line and
-                # its deliveries and removes this.
-                volume_commitment=VolumeCommitment.COMMITTED, reported_revenue=Decimal(0), buyer_spend=Decimal(0),
-                data_cost=Decimal(0),
+            values = row._mapping
+            frozen = None if values["applied_id"] is None else FrozenRates(
+                rebate_amount=values["rebate_amount"], platform_rate=values["platform_rate"],
+                effective_rate=values["effective_rate"], ladder_step=int(values["ladder_step"]),
+                agency_exception=values["agency_exception"], zero_reason=values["zero_reason"],
+                source_year=values["source_year"], position_before=values["position_before"],
+                position_after=values["position_after"],
             )
-            frozen = None if row[20] is None else FrozenRates(
-                rebate_amount=row[21], platform_rate=row[22], effective_rate=row[23], ladder_step=int(row[24]),
-                agency_exception=row[25], zero_reason=row[26], source_year=row[27], position_before=row[28],
-                position_after=row[29],
-            )
-            results.append(ReadFlight(facts, row[15], row[16], row[17], row[18], row[19], frozen))
+            results.append(ReadFlight(
+                _flight_facts(row), values["campaign_name"], values["campaign_status"], values["line_number"],
+                values["period_year"], values["period_month"], frozen,
+            ))
         return results
 
 

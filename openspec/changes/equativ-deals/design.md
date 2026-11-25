@@ -123,6 +123,7 @@ As in the previous changes, the reports go to `docs/reports/`, not to `specs/<ch
 - [A `target` line on Adform would earn zero, because Adform reports no revenue] → Not restricted by this change (proposal, Non-goals); the form only proposes `target` for `Deal`.
 - [Restated platform cost of a closed target flight] → Platform cost still reads live delivery, as for every flight today; the revenue and the rebate base do not move.
 - [`POST /api/campaigns` becomes stricter] → The frontend form, the E2E helpers and every API test change in the same task as the schema.
+- [Known debt: `MarginTotals` has default values in the domain] → The convention keeps defaults out of the domain value objects and in the test builders (`tests/fixtures/flight_inputs.py`); `MarginTotals` already broke it before this change (`zero_sale_count`, `contracted_revenue`, `delivered_impressions`, `contracted_impressions`, `delivered`, `delivery_metric`). This change follows the existing shape and adds `gross_revenue`, `gross_differs_count`, `data_cost_count` and `volume_commitment` with defaults too, rather than mixing two styles in one class. Only `margin_totals.py` builds it, so removing every default is a contained change of its own. `FlightEconomics` and `FlightFacts` keep the convention: their new fields are required.
 
 ## Migration Plan
 

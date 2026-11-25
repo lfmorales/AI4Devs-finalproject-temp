@@ -80,9 +80,9 @@
 
 ## 10. Margin Repositories
 
-- [ ] 10.1 Merge the two flight queries of `sqlalchemy_margin_repositories.py` (`open_ended_flights` and `list_flights`) into one builder without changing behaviour; verify `test_margin_repositories.py`, `test_margin_query_delivery_metric.py` and `test_margin_closing_service.py` pass unchanged
-- [ ] 10.2 Write failing tests in `test_margin_repositories.py` that both methods return, for a target flight on Equativ, its commitment and the sums of reported revenue, buyer's spend and data costs inside its window, and zeros for an Adform flight
-- [ ] 10.3 Add the commitment and the sums to the builder, replacing the explicit `VolumeCommitment.COMMITTED` and zeros left by 7.4, and verify 10.2 with a test that reads from the database a target line with amounts and checks the repository returns `VolumeCommitment.TARGET` and its real reported revenue, not `COMMITTED` nor zeros; `git grep pendiente-10.3 -- backend` returns nothing (this file names the marker, so it is left out)
+- [x] 10.1 Merge the two flight queries of `sqlalchemy_margin_repositories.py` (`open_ended_flights` and `list_flights`) into one builder without changing behaviour; verify `test_margin_repositories.py`, `test_margin_query_delivery_metric.py` and `test_margin_closing_service.py` pass unchanged
+- [x] 10.2 Write failing tests in `test_margin_repositories.py` that both methods return, for a target flight on Equativ, its commitment and the sums of reported revenue, buyer's spend and data costs inside its window, and zeros for an Adform flight
+- [x] 10.3 Add the commitment and the sums to the builder, replacing the explicit `VolumeCommitment.COMMITTED` and zeros left by 7.4, and verify 10.2 with a test that reads from the database a target line with amounts and checks the repository returns `VolumeCommitment.TARGET` and its real reported revenue, not `COMMITTED` nor zeros; `git grep pendiente-10.3 -- backend` returns nothing (this file names the marker, so it is left out)
 
 ## 11. Closing (migration)
 
