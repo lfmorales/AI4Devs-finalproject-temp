@@ -83,6 +83,26 @@ test.describe("registering a campaign of three months", () => {
   });
 });
 
+test.describe("a Deal line", () => {
+  test("choosing Deal proposes «Objetivo» and the campaign registers with it", async ({ operationsSession: page, api }) => {
+    const masters = { ...(await readMasterChoices(api)), channel: "Deal" };
+    await openNewCampaign(page);
+    await fillCampaign(page, masters, { name: uniqueCampaignName(), ...WINDOW, impressions: TOTAL, cpm: "5.00" });
+
+    const commitment = page.getByRole("combobox", { name: "Tipo de volumen *", exact: true });
+    await expect(commitment).toHaveValue("target");
+    await expect(commitment.locator("option:checked")).toHaveText("Objetivo");
+    await calculateButton(page).click();
+    const responded = waitForRegistration(page);
+    await submitButton(page).click();
+    const response = await responded;
+
+    expect(response.status(), "the registration").toBe(201);
+    const registered = (await response.json()) as RegisteredCampaign;
+    expect(registered.lines.map((line) => line.volume_commitment)).toEqual(["target"]);
+  });
+});
+
 test.describe("what the form refuses before sending", () => {
   test("a manual split that does not add up blocks the submission, and the reset restores the proportional one", async ({ operationsSession: page, api }) => {
     const masters = await readMasterChoices(api);

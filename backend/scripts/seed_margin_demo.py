@@ -15,6 +15,13 @@ DEMO-MARGEN-DOOH, on that channel: same window as the running ones, its volume c
 carry OTS with decimals and fewer impressions than OTS. Without that channel it adds nothing and creates no channel:
 everything this script creates is named DEMO.
 
+When the Equativ DSP and the Deal channel exist (the masters file and the development seed create both) it adds a
+sixth, DEMO-MARGEN-DEAL: one target line on Equativ at 5.00 €, mapped by writing the invented package 900000001, whose
+flight of the previous month is the worked example (a target of 1,000,000, 1,100,000 served, 4,400.00 € reported and
+5,500.00 € of buyer's spend) and whose flight of this month delivers above its target. Its deliveries are written
+directly under a succeeded Equativ batch that covers the previous month's last day, so that month can be closed: nothing
+here ever calls Equativ. Without that DSP or that channel it adds nothing and creates neither.
+
 It also invents daily deliveries for each line up to yesterday and a flat example rebate schedule for a
 demonstration holding group. The campaigns go through the registration service, the deliveries through the delivery
 repository, the master data through the master loader and the schedule through the schedule service: no row is
@@ -44,6 +51,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.application.services.campaign_registration_service import CampaignRegistrationService
+from app.application.services.dsp_mapping_service import DspMappingService
 from app.application.services.margin_masters_service import MarginMastersService
 from app.domain.entities.ingestion_batch import BatchStatus, IngestionRoute
 from app.domain.services.local_calendar import local_today, utc_now
@@ -56,6 +64,7 @@ from app.infrastructure.persistence.models.campaign import (
     CampaignRecord,
 )
 from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord, IngestionBatchRecord
+from app.infrastructure.persistence.models.dsp_mapping import DSPMappingRecord
 from app.infrastructure.persistence.models.masters import (
     AdvertiserRecord,
     AgencyRecord,
@@ -76,6 +85,10 @@ from app.infrastructure.persistence.repositories.sqlalchemy_delivery_repository 
     SqlAlchemyDeliveryRepository,
     SqlAlchemyIngestionBatchRepository,
 )
+from app.infrastructure.persistence.repositories.sqlalchemy_dsp_catalog_query_repository import (
+    SqlAlchemyDspCatalogQueryRepository,
+)
+from app.infrastructure.persistence.repositories.sqlalchemy_dsp_mapping_repository import SqlAlchemyDspMappingRepository
 from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories import (
     SqlAlchemyMarginMastersTransaction,
     SqlAlchemyRebateScheduleRepository,
@@ -89,9 +102,26 @@ RUNNING_NAME = "DEMO-MARGEN-CURSO"
 NEGATIVE_NAME = "DEMO-MARGEN-NEGATIVO"
 NO_PRICE_NAME = "DEMO-MARGEN-SIN-PRECIO"
 DOOH_NAME = "DEMO-MARGEN-DOOH"
+DEAL_NAME = "DEMO-MARGEN-DEAL"
 
 DEMO_CHANNEL = "DEMO Channel"
 DOOH_CHANNEL = "DOOH"
+EQUATIV_DSP = "Equativ"
+DEAL_CHANNEL = "Deal"
+# An invented auction package: the worked example of design.md, never a real Deal.
+DEAL_PACKAGE = "900000001"
+DEAL_SALE_CPM = Decimal("5.00")
+DEAL_PREVIOUS_TARGET = 1_000_000
+DEAL_CURRENT_TARGET = 1_500_000
+# The worked example: what the flight of the previous month served, and what Equativ reported for it.
+DEAL_PREVIOUS_SERVED = 1_100_000
+DEAL_PREVIOUS_REPORTED_REVENUE = Decimal("4400.00")
+DEAL_PREVIOUS_BUYER_SPEND = Decimal("5500.00")
+# This month delivers 120 % of its target's pace, the buyer pays the CPM, and Equativ keeps a fifth of it.
+DEAL_CURRENT_PACE = Decimal("1.2")
+DEAL_REPORTED_SHARE = Decimal("0.8")
+# One day of this month reports an audience data cost, so «Coste de datos» shows on the running flight.
+DEAL_DATA_COST = Decimal("0.25")
 
 MADRID = "Europe/Madrid"
 BATCH_SOURCE = "demo-margin"
@@ -215,10 +245,16 @@ def seed(session: Session, today: date, started_at: datetime) -> dict[str, int]:
     created = _register_missing(session, campaigns)
     schedules_created = _ensure_rebate_schedule(session, today)
     _write_deliveries(session, campaigns, today - timedelta(days=1), started_at)
+    deal_campaigns = 0
+    if _deal_masters_exist(session):
+        deal_campaigns = 1
+        created += _register_deal(session, today)
+        _map_deal(session, started_at)
+        _write_deal_deliveries(session, today, started_at)
     return {
         "masters created": masters_created,
         "campaigns created": created,
-        "campaigns existing": len(campaigns) - created,
+        "campaigns existing": len(campaigns) + deal_campaigns - created,
         "rebate schedules created": schedules_created,
         **_stored_counts(session),
     }
@@ -287,12 +323,14 @@ def _ensure_rebate_schedule(session: Session, today: date) -> int:
     return 1
 
 
-def _batch(session: Session, window: DeliveryDateRange, started_at: datetime, source: str = BATCH_SOURCE) -> int:
+def _batch(
+    session: Session, window: DeliveryDateRange, started_at: datetime, source: str = BATCH_SOURCE, dsp: str = "DEMO DSP"
+) -> int:
     existing = session.scalar(select(IngestionBatchRecord.id).where(IngestionBatchRecord.source_file == source))
     if existing is not None:
         return existing
     batches = SqlAlchemyIngestionBatchRepository(session)
-    batch_id = batches.start(_id_of(session, DSPRecord, "DEMO DSP"), IngestionRoute.UPLOAD, source, started_at, window)
+    batch_id = batches.start(_id_of(session, DSPRecord, dsp), IngestionRoute.UPLOAD, source, started_at, window)
     batches.finish(batch_id, BatchStatus.SUCCEEDED, started_at, 0, 0, 0)
     return batch_id
 
@@ -340,6 +378,139 @@ def _write_deliveries(session: Session, campaigns: list[DemoCampaign], as_of: da
             replace(_invented_day(campaign, day), campaign_line_id=line_id, ingestion_batch_id=batch_id)
             for day in window.days()
         )
+
+
+# ---------------------------------------------------------------- the Deal campaign: a target line on Equativ
+
+def _deal_masters_exist(session: Session) -> bool:
+    dsp = session.scalar(select(DSPRecord.id).where(DSPRecord.name == EQUATIV_DSP))
+    channel = session.scalar(select(ChannelRecord.id).where(ChannelRecord.name == DEAL_CHANNEL))
+    return dsp is not None and channel is not None
+
+
+def _deal_months(today: date) -> tuple[date, date, date]:
+    """The first day of the previous month, the first day of this month and the last day of this month."""
+    current_first = today.replace(day=1)
+    previous_first = (current_first - timedelta(days=1)).replace(day=1)
+    return previous_first, current_first, current_first.replace(day=monthrange(today.year, today.month)[1])
+
+
+def _deal_line_id(session: Session) -> int:
+    return session.scalars(
+        select(CampaignLineRecord.id).join(CampaignRecord, CampaignRecord.id == CampaignLineRecord.campaign_id)
+        .where(CampaignRecord.name == DEAL_NAME)
+    ).one()
+
+
+def _register_deal(session: Session, today: date) -> int:
+    """Register the Deal campaign through the registration service, once: one target line, its volume by month."""
+    if session.scalar(select(CampaignRecord.id).where(CampaignRecord.name == DEAL_NAME)) is not None:
+        return 0
+    previous_first, current_first, current_last = _deal_months(today)
+    asyncio.run(CampaignRegistrationService(
+        campaign_repo=CampaignRepositoryImpl(session),
+        purchase_order_repo=PurchaseOrderRepositoryImpl(session),
+        master_repo=MasterRepositoryImpl(session),
+    ).register_campaign(
+        name=DEAL_NAME,
+        display_name=DEAL_NAME,
+        start_date=previous_first,
+        end_date=current_last,
+        order_reference="DEMO-MARGEN-PO-DEAL",
+        order_received_on=previous_first,
+        agency_id=_id_of(session, AgencyRecord, "DEMO Agency"),
+        advertiser_id=_id_of(session, AdvertiserRecord, "DEMO Advertiser"),
+        campaign_type_id=_id_of(session, CampaignTypeRecord, "DEMO Campaign Type"),
+        sector_id=_id_of(session, SectorRecord, "DEMO Sector"),
+        sales_rep_id=_id_of(session, SalesRepRecord, "DEMO Sales Rep"),
+        lines_data=[{
+            "dsp_id": _id_of(session, DSPRecord, EQUATIV_DSP),
+            "channel_id": _id_of(session, ChannelRecord, DEAL_CHANNEL),
+            "format_id": _id_of(session, FormatRecord, "DEMO Format"),
+            "scope": "national",
+            "market_description": "DEMO",
+            "contracted_impressions": DEAL_PREVIOUS_TARGET + DEAL_CURRENT_TARGET,
+            "sale_cpm": str(DEAL_SALE_CPM),
+            "volume_commitment": "target",
+            "monthly_volumes": [
+                {"year": previous_first.year, "month": previous_first.month, "volume": DEAL_PREVIOUS_TARGET},
+                {"year": current_first.year, "month": current_first.month, "volume": DEAL_CURRENT_TARGET},
+            ],
+        }],
+    ))
+    return 1
+
+
+def _map_deal(session: Session, started_at: datetime) -> None:
+    """Map the Deal line to its package as operations would, through the mapping service, once. Equativ is not asked."""
+    line_id = _deal_line_id(session)
+    if session.scalar(select(DSPMappingRecord.id).where(DSPMappingRecord.campaign_line_id == line_id)) is not None:
+        return
+    DspMappingService(
+        repository=SqlAlchemyDspMappingRepository(session),
+        client_for_dsp=lambda _: None,
+        clock=lambda: started_at,
+        catalog=SqlAlchemyDspCatalogQueryRepository(session),
+        user_validated_dsps=frozenset({EQUATIV_DSP}),
+    ).create_mapping(line_id, DEAL_PACKAGE, DEAL_PACKAGE)
+
+
+def _share(total: Decimal | int, days: int, index: int, unit: Decimal) -> Decimal:
+    """The part of `total` for day `index` of `days`, in whole `unit`s: equal parts, the remainder on the last day."""
+    units = int(Decimal(total) / unit)
+    part = units // days
+    return (part + (units - part * days if index == days - 1 else 0)) * unit
+
+
+def _deal_day(day: date, impressions: int, reported: Decimal, spend: Decimal, data_cost: Decimal) -> DailyDelivery:
+    return DailyDelivery(
+        campaign_line_id=0, ingestion_batch_id=0, delivery_date=day, impressions=impressions,
+        clicks=impressions // 500, media_cost=Decimal(0), measurable_impressions=impressions * 9 // 10,
+        viewable_impressions=impressions * 7 // 10, banner_size=None, screen=None, line_format=None,
+        ots=Decimal(0), video_completions=0, buyer_spend=spend, reported_revenue=reported,
+        third_party_data_cost=Decimal(0), audience_data_cost=data_cost,
+    )
+
+
+def _deal_deliveries(today: date) -> list[DailyDelivery]:
+    """The previous month adds up to the worked example exactly; this month runs at 120 % of its target's pace."""
+    previous_first, current_first, current_last = _deal_months(today)
+    as_of = today - timedelta(days=1)
+    cent, one = Decimal("0.01"), Decimal(1)
+    previous_days = (current_first - previous_first).days
+    days: list[DailyDelivery] = [
+        _deal_day(
+            previous_first + timedelta(days=index),
+            int(_share(DEAL_PREVIOUS_SERVED, previous_days, index, one)),
+            _share(DEAL_PREVIOUS_REPORTED_REVENUE, previous_days, index, cent),
+            _share(DEAL_PREVIOUS_BUYER_SPEND, previous_days, index, cent),
+            Decimal(0),
+        )
+        for index in range(previous_days)
+    ]
+    current_days = (current_last - current_first).days + 1
+    daily = int(DEAL_CURRENT_TARGET * DEAL_CURRENT_PACE) // current_days
+    spend = (Decimal(daily) / Decimal(1000) * DEAL_SALE_CPM).quantize(Decimal("0.000001"))
+    reported = (spend * DEAL_REPORTED_SHARE).quantize(Decimal("0.000001"))
+    day = current_first
+    while day <= as_of:
+        days.append(_deal_day(day, daily, reported, spend, DEAL_DATA_COST if day == current_first else Decimal(0)))
+        day += timedelta(days=1)
+    return days
+
+
+def _write_deal_deliveries(session: Session, today: date, started_at: datetime) -> None:
+    """Replace the Deal line's deliveries under a succeeded Equativ batch of its own, from the previous month to D-1."""
+    previous_first, _, _ = _deal_months(today)
+    as_of = today - timedelta(days=1)
+    window = DeliveryDateRange(previous_first, as_of)
+    batch_id = _batch(session, window, started_at, source=f"{BATCH_SOURCE}-equativ-{as_of.isoformat()}", dsp=EQUATIV_DSP)
+    line_id = _deal_line_id(session)
+    deliveries = SqlAlchemyDeliveryRepository(session)
+    deliveries.delete_range([line_id], window)
+    deliveries.add_all(
+        replace(delivery, campaign_line_id=line_id, ingestion_batch_id=batch_id) for delivery in _deal_deliveries(today)
+    )
 
 
 def _stored_counts(session: Session) -> dict[str, int]:

@@ -133,5 +133,5 @@ export interface RegisteredCampaign {
   name: string;
   start_date: string;
   end_date: string;
-  lines: { contracted_impressions: number; flights: RegisteredFlight[] }[];
+  lines: { contracted_impressions: number; volume_commitment: "committed" | "target"; flights: RegisteredFlight[] }[];
 }

@@ -9,7 +9,12 @@ interface StatusRow {
   delivered: string;
   missing_data_flag: boolean;
   pacing_flag: boolean;
+  volume_commitment: "committed" | "target";
+  pacing: { deviation: number | null; status: "on_pace" | "under_delivering" | "over_delivering" };
 }
+
+// The Deal demo of seed_margin_demo: a target line on Equativ that delivers above its target.
+const DEAL_DEMO = "DEMO-MARGEN-DEAL";
 
 /** Today in Madrid as YYYY-MM-DD, shifted by whole days. */
 function madridDate(offsetDays: number): string {
@@ -39,7 +44,10 @@ test.describe("the campaign status", () => {
   test("says OTS on the DOOH demo row with the volume of the API, and impresiones on the DEMO Channel ones", async ({ operationsSession: page, api }) => {
     const rows = (await (await api.get("campaign-status")).json()) as StatusRow[];
     const dooh = rows.filter((row) => row.delivery_metric === "ots");
-    const impressions = rows.filter((row) => row.delivery_metric === "impressions" && row.campaign.name.startsWith("DEMO-MARGEN-"));
+    // The DEMO Channel rows are committed; the Deal demo, a target, labels its volume «Objetivo» and is checked below.
+    const impressions = rows.filter(
+      (row) => row.delivery_metric === "impressions" && row.campaign.name.startsWith("DEMO-MARGEN-") && row.volume_commitment === "committed",
+    );
     expect(dooh.map((row) => row.campaign.name), "the DOOH demo row is in GET /api/campaign-status: run reset-data.sh").toContain("DEMO-MARGEN-DOOH");
     expect(impressions.length, "the DEMO Channel demo rows").toBeGreaterThan(0);
 
@@ -79,5 +87,24 @@ test.describe("the campaign status", () => {
 
     const flags = page.getByRole("table", { name: "Estado de las campañas" }).getByRole("row").filter({ hasText: name }).getByRole("listitem");
     await expect(flags).toHaveText(["Sin datos recibidos", "Desviación de ritmo"]);
+  });
+});
+
+
+test.describe("a target line in the campaign status", () => {
+  test("the Deal demo's row says «Objetivo» and shows no pacing tag, although it is above its target", async ({ operationsSession: page, api }) => {
+    const rows = (await (await api.get("campaign-status")).json()) as StatusRow[];
+    const deal = rows.find((row) => row.campaign.name === DEAL_DEMO);
+    expect(deal, `${DEAL_DEMO} in GET /api/campaign-status: run reset-data.sh`).toBeDefined();
+    const row = deal as StatusRow;
+    expect([row.volume_commitment, row.pacing_flag]).toEqual(["target", false]);
+    expect(row.pacing.deviation ?? 0, "the Deal demo delivers above its target").toBeGreaterThan(0);
+
+    await page.goto("/status");
+
+    const shown = page.getByRole("table", { name: "Estado de las campañas" }).getByRole("row").filter({ hasText: DEAL_DEMO });
+    await expect(shown).toHaveCount(1);
+    await expect(shown).toContainText(`Objetivo ${formatDecimalEsEs(String(row.contracted_impressions))}`);
+    await expect(shown).not.toContainText("Desviación de ritmo");
   });
 });

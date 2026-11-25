@@ -7,7 +7,15 @@ from typing import Any
 import pytest
 
 from app.presentation.dependencies import providers
-from scripts.seed_margin_demo import CLOSED_NAME, DOOH_NAME, NEGATIVE_NAME, NO_PRICE_NAME, RUNNING_NAME, main
+from scripts.seed_margin_demo import (
+    CLOSED_NAME,
+    DEAL_NAME,
+    DOOH_NAME,
+    NEGATIVE_NAME,
+    NO_PRICE_NAME,
+    RUNNING_NAME,
+    main,
+)
 
 TODAY = date(2026, 10, 28)  # as_of is 27 October
 
@@ -31,8 +39,10 @@ def _states(campaign: dict) -> list[str]:
 def test_before_closing_the_previous_month_is_pending_close_and_the_others_are_running(demo):
     campaigns = _by_campaign(demo.get("/margin").json())
 
-    # The masters of the test database hold the real DOOH channel, so the DOOH campaign is there too.
-    assert set(campaigns) == {CLOSED_NAME, RUNNING_NAME, NEGATIVE_NAME, NO_PRICE_NAME, DOOH_NAME}
+    # The masters of the test database hold the real DOOH channel, the Equativ DSP and the Deal channel, so the DOOH and
+    # the Deal campaigns are there too.
+    assert set(campaigns) == {CLOSED_NAME, RUNNING_NAME, NEGATIVE_NAME, NO_PRICE_NAME, DOOH_NAME, DEAL_NAME}
+    assert _states(campaigns[DEAL_NAME]) == ["pending_close", "running"]
     assert _states(campaigns[CLOSED_NAME]) == ["pending_close"]
     assert _states(campaigns[RUNNING_NAME]) == ["running"]  # the November flight has not started
     assert _states(campaigns[NEGATIVE_NAME]) == ["running"]
@@ -41,7 +51,8 @@ def test_before_closing_the_previous_month_is_pending_close_and_the_others_are_r
 
 
 def test_after_closing_the_previous_month_the_first_campaign_is_closed(demo):
-    assert demo.post("/margin/closings", json={"year": 2026, "month": 9}).json()["closed"] == 1
+    # The closed campaign's flight and the Deal's September flight: Equativ has loaded 30 September, so it closes too.
+    assert demo.post("/margin/closings", json={"year": 2026, "month": 9}).json()["closed"] == 2
 
     campaigns = _by_campaign(demo.get("/margin").json())
 
@@ -114,3 +125,46 @@ def test_the_dooh_campaign_reads_in_ots_with_decimals_and_fewer_impressions(demo
     assert Decimal(flight["delivered"]) != Decimal(flight["delivered"]).to_integral_value()
     assert {c["lines"][0]["flights"][0]["delivery_metric"] for n, c in campaigns.items() if n != DOOH_NAME} == {"impressions"}
     assert campaigns[DOOH_NAME]["totals"]["delivery_metric"] == "ots"
+
+
+# ---------------------------------------------------------------- the Deal campaign: the worked example and a target
+
+def _deal_flights(client: Any) -> list[dict[str, Any]]:
+    campaigns = _by_campaign(client.get("/margin").json())
+    return [flight for line in campaigns[DEAL_NAME]["lines"] for flight in line["flights"]]
+
+
+def _worked_example(flight: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        flight["volume_commitment"], flight["contracted_revenue"], flight["revenue"], flight["gross_revenue"],
+        flight["media_cost"], flight["rebate"], flight["platform_cost"], flight["margin"], flight["margin_pct"],
+        flight["gross_differs_from_buyer_spend"], flight["data_cost_reported"],
+    )
+
+
+WORKED_EXAMPLE = (
+    "target", "5000.00", "4400.00", "5500.00", "0.00", "550.00", "1100.00", "2750.00", "62.50", False, False,
+)
+
+
+def test_the_deal_september_flight_reproduces_the_worked_example_before_and_after_closing(demo: Any) -> None:
+    september, _ = _deal_flights(demo)
+    assert september["state"] == "pending_close"
+    assert _worked_example(september) == WORKED_EXAMPLE
+
+    demo.post("/margin/closings", json={"year": 2026, "month": 9})
+    closed, _ = _deal_flights(demo)
+
+    assert closed["state"] == "closed"
+    assert _worked_example(closed) == WORKED_EXAMPLE
+
+
+def test_the_deal_october_flight_runs_above_its_target_with_a_data_cost_and_no_pacing_warning(demo: Any) -> None:
+    _, october = _deal_flights(demo)
+    assert (october["state"], october["volume_commitment"], october["data_cost_reported"]) == ("running", "target", True)
+
+    rows = [row for row in demo.get("/campaign-status").json() if row["campaign"]["name"] == DEAL_NAME]
+
+    (row,) = rows
+    assert (row["volume_commitment"], row["pacing"]["status"], row["pacing_flag"]) == ("target", "over_delivering", False)
+    assert row["pacing"]["deviation"] > 0.1

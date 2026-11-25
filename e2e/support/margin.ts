@@ -25,12 +25,22 @@ export interface FlightMargin {
   platform_cost: string;
   margin: string;
   margin_pct: string | null;
+  volume_commitment: "committed" | "target";
+  /** A target flight's served impressions at the line's CPM; null for a committed flight. */
+  gross_revenue: string | null;
 }
 
 interface Totals {
   revenue: string;
   contracted_revenue: string;
+  /** The one commitment below; null when a campaign or the period mixes both. */
+  volume_commitment: "committed" | "target" | null;
+  gross_revenue: string | null;
 }
+
+/** The label of a sale on screen: the target's of a target level, the contract's otherwise. */
+export const saleLabel = (commitment: "committed" | "target" | null): string =>
+  commitment === "target" ? "Venta objetivo" : "Venta contratada";
 
 export interface LineMargin {
   line_number: number;

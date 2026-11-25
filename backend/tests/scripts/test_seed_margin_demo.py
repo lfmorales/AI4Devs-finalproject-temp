@@ -15,6 +15,7 @@ from app.infrastructure.persistence.models.campaign import (
     CampaignRecord,
 )
 from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord, IngestionBatchRecord
+from app.infrastructure.persistence.models.dsp_mapping import DSPMappingRecord
 from app.infrastructure.persistence.models.identity import RoleRecord, UserRecord
 from app.infrastructure.persistence.models.margin import (
     AppliedRateRecord,
@@ -36,6 +37,7 @@ from app.infrastructure.persistence.models.masters import (
 from app.infrastructure.persistence.models.purchase_order import PurchaseOrderRecord
 from scripts.seed_margin_demo import (
     CLOSED_NAME,
+    DEAL_NAME,
     EXIT_FAILED,
     EXIT_INVALID_ARGUMENTS,
     EXIT_NOT_CONFIGURED,
@@ -460,3 +462,137 @@ def test_the_dooh_campaign_registers_in_one_metric_and_keeps_its_name_and_order_
     campaign = _campaign(rolled_back_session, DOOH_NAME)
     order = rolled_back_session.get(PurchaseOrderRecord, campaign.purchase_order_id)
     assert order is not None and order.order_reference.startswith("DEMO-MARGEN-")
+
+
+# ---------------------------------------------------------------- the Deal campaign: a target line on Equativ
+#
+# Today is 2026-10-28: September (30 days) is the worked example and October is running. The flight of September has a
+# target of 1,000,000 at 5.00 €, served 1,100,000, with 4,400.00 € reported and 5,500.00 € of buyer's spend; the flight of
+# October has a target of 1,500,000 and delivers above it. No call reaches Equativ: the deliveries are written directly.
+
+SEPTEMBER = (date(2026, 9, 1), date(2026, 9, 30))
+OCTOBER_TO_YESTERDAY = (date(2026, 10, 1), date(2026, 10, 27))
+
+
+def _equativ_and_deal(session: Session) -> tuple[int, int]:
+    """The Equativ DSP and the Deal channel, as the masters file and the development seed create them."""
+    equativ = session.scalars(select(DSPRecord).where(DSPRecord.name == "Equativ")).first()
+    if equativ is None:
+        equativ = DSPRecord(name="Equativ", is_active=True)
+        session.add(equativ)
+    deal = session.scalars(select(ChannelRecord).where(ChannelRecord.name == "Deal")).first()
+    if deal is None:
+        deal = ChannelRecord(name="Deal", delivery_metric="impressions")
+        session.add(deal)
+    session.flush()
+    return equativ.id, deal.id
+
+
+def _sum_between(session: Session, line_id: int, window: tuple[date, date], column: object) -> object:
+    return session.scalar(
+        select(func.sum(column)).where(
+            DailyDeliveryRecord.campaign_line_id == line_id, DailyDeliveryRecord.delivery_date.between(*window)
+        )
+    )
+
+
+def test_it_adds_a_deal_campaign_with_one_target_line_on_equativ(rolled_back_session: Session) -> None:
+    equativ, deal = _equativ_and_deal(rolled_back_session)
+
+    assert _run(rolled_back_session)[0] == EXIT_OK
+
+    assert DEAL_NAME == "DEMO-MARGEN-DEAL"
+    line = _line(rolled_back_session, DEAL_NAME)
+    assert (line.dsp_id, line.channel_id, line.volume_commitment, line.sale_cpm) == (equativ, deal, "target", Decimal("5.00"))
+    flights = rolled_back_session.scalars(
+        select(CampaignLinePeriodRecord).where(CampaignLinePeriodRecord.campaign_line_id == line.id)
+        .order_by(CampaignLinePeriodRecord.flight_start)
+    ).all()
+    assert [(f.flight_start, f.flight_end, f.contracted_impressions) for f in flights] == [
+        (date(2026, 9, 1), date(2026, 9, 30), 1_000_000), (date(2026, 10, 1), date(2026, 10, 31), 1_500_000),
+    ]
+
+
+def test_the_deal_line_is_mapped_to_the_package_written_validated_by_the_user(rolled_back_session: Session) -> None:
+    equativ, _ = _equativ_and_deal(rolled_back_session)
+
+    _run(rolled_back_session)
+
+    (mapping,) = rolled_back_session.scalars(
+        select(DSPMappingRecord).where(DSPMappingRecord.campaign_line_id == _line(rolled_back_session, DEAL_NAME).id)
+    ).all()
+    assert (mapping.dsp_id, mapping.external_campaign_id, mapping.external_line_item_id) == (equativ, "900000001", "900000001")
+    assert mapping.validated_at is not None
+
+
+def test_september_holds_the_worked_example(rolled_back_session: Session) -> None:
+    _equativ_and_deal(rolled_back_session)
+
+    _run(rolled_back_session)
+
+    line = _line(rolled_back_session, DEAL_NAME).id
+    days = rolled_back_session.scalar(select(func.count()).select_from(DailyDeliveryRecord).where(
+        DailyDeliveryRecord.campaign_line_id == line, DailyDeliveryRecord.delivery_date.between(*SEPTEMBER)))
+    assert days == 30
+    assert _sum_between(rolled_back_session, line, SEPTEMBER, DailyDeliveryRecord.impressions) == 1_100_000
+    assert _sum_between(rolled_back_session, line, SEPTEMBER, DailyDeliveryRecord.reported_revenue) == Decimal("4400.00")
+    assert _sum_between(rolled_back_session, line, SEPTEMBER, DailyDeliveryRecord.buyer_spend) == Decimal("5500.00")
+    assert _sum_between(rolled_back_session, line, SEPTEMBER, DailyDeliveryRecord.media_cost) == 0
+    data = DailyDeliveryRecord.third_party_data_cost + DailyDeliveryRecord.audience_data_cost
+    assert _sum_between(rolled_back_session, line, SEPTEMBER, data) == 0
+
+
+def test_october_delivers_above_its_target_up_to_yesterday_with_a_data_cost(rolled_back_session: Session) -> None:
+    _equativ_and_deal(rolled_back_session)
+
+    _run(rolled_back_session)
+
+    line = _line(rolled_back_session, DEAL_NAME).id
+    dates = list(rolled_back_session.scalars(select(DailyDeliveryRecord.delivery_date).where(
+        DailyDeliveryRecord.campaign_line_id == line, DailyDeliveryRecord.delivery_date >= date(2026, 10, 1))))
+    assert (min(dates), max(dates), len(dates)) == (date(2026, 10, 1), date(2026, 10, 27), 27)
+    served = _sum_between(rolled_back_session, line, OCTOBER_TO_YESTERDAY, DailyDeliveryRecord.impressions)
+    # 27 of 31 days of a target of 1,500,000 expect 1,306,451.6: delivering more than 110 % of it is well above target.
+    assert Decimal(str(served)) * 31 > 1_500_000 * 27 * Decimal("1.1")
+    data = DailyDeliveryRecord.third_party_data_cost + DailyDeliveryRecord.audience_data_cost
+    assert _sum_between(rolled_back_session, line, OCTOBER_TO_YESTERDAY, data) == Decimal("0.25")
+
+
+def test_a_succeeded_equativ_batch_covers_the_last_day_of_september(rolled_back_session: Session) -> None:
+    equativ, _ = _equativ_and_deal(rolled_back_session)
+
+    _run(rolled_back_session)
+
+    (batch,) = rolled_back_session.scalars(select(IngestionBatchRecord).where(IngestionBatchRecord.dsp_id == equativ)).all()
+    assert batch.status == "succeeded"
+    assert batch.window_start is not None and batch.window_end is not None
+    assert batch.window_start <= date(2026, 9, 30) <= batch.window_end
+    assert batch.window_end == date(2026, 10, 27)
+    assert (batch.source_file or "").startswith("demo-margin")
+
+
+def test_a_second_run_with_the_deal_campaign_changes_no_count_and_keeps_its_deliveries(rolled_back_session: Session) -> None:
+    _equativ_and_deal(rolled_back_session)
+    _run(rolled_back_session)
+    before = _counts(rolled_back_session, (*SEEDED_TABLES, DSPMappingRecord))
+    line = _line(rolled_back_session, DEAL_NAME).id
+    amounts_before = _sum_between(rolled_back_session, line, SEPTEMBER, DailyDeliveryRecord.reported_revenue)
+
+    code, lines = _run(rolled_back_session)
+
+    assert code == EXIT_OK
+    assert _counts(rolled_back_session, (*SEEDED_TABLES, DSPMappingRecord)) == before
+    assert _sum_between(rolled_back_session, line, SEPTEMBER, DailyDeliveryRecord.reported_revenue) == amounts_before
+    assert "campaigns created: 0" in lines
+
+
+def test_without_equativ_or_deal_it_adds_no_deal_campaign_and_creates_neither(rolled_back_session: Session) -> None:
+    has_equativ = rolled_back_session.scalars(select(DSPRecord).where(DSPRecord.name == "Equativ")).first() is not None
+    has_deal = rolled_back_session.scalars(select(ChannelRecord).where(ChannelRecord.name == "Deal")).first() is not None
+    assert not (has_equativ and has_deal), "this test needs a database without the Equativ DSP or the Deal channel"
+
+    _run(rolled_back_session)
+
+    assert DEAL_NAME not in {c.name for c in rolled_back_session.scalars(select(CampaignRecord))}
+    assert (rolled_back_session.scalars(select(DSPRecord).where(DSPRecord.name == "Equativ")).first() is not None) == has_equativ
+    assert (rolled_back_session.scalars(select(ChannelRecord).where(ChannelRecord.name == "Deal")).first() is not None) == has_deal

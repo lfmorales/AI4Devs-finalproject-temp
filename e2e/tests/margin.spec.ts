@@ -4,8 +4,8 @@ import { expect, test } from "../support/fixtures";
 import {
   amountsByFlight, campaignCard, campaignField, chooseMonth, closedFlightsMessage, currentMonth, deliveryLegend, expectStates, flightCell, flightsOf,
   flightsTable, FRESH_DATABASE_SKIP_REASON, hasPendingClose, isoDate, lastDayOf, madridToday, money, monthName,
-  monthOfYear, NOTHING_TO_CLOSE, openAllCards, percent, previousMonth, readMargin, REMOVE_CAMPAIGN_FILTER,
-  type MarginResponse, type Month,
+  monthOfYear, NOTHING_TO_CLOSE, openAllCards, percent, previousMonth, readMargin, REMOVE_CAMPAIGN_FILTER, saleLabel,
+  type CampaignMargin, type LineMargin, type MarginResponse, type Month,
 } from "../support/margin";
 
 // The closings are irreversible and the specs share one database. They rely on the order of this file (one worker,
@@ -15,6 +15,8 @@ import {
 const previous = previousMonth();
 const current = currentMonth();
 const isFirstOfMonth = madridToday().day === 1;
+// The Deal demo of seed_margin_demo: a target line on Equativ whose previous month is the worked example.
+const DEAL_DEMO = "DEMO-MARGEN-DEAL";
 
 let closedAndKept: { before: MarginResponse; closedFlights: number } | null = null;
 
@@ -31,16 +33,46 @@ test.describe("the margin of the previous month, pending close", () => {
     expect(flightsOf(margin).some((flight) => flight.state === "pending_close")).toBe(true);
     for (const campaign of margin.campaigns) {
       const summary = campaignCard(page, campaign.name).locator(":scope > summary");
-      await expect(summary).toContainText(`Venta contratada ${money(campaign.totals.contracted_revenue)}`);
+      // A target campaign (the Deal demo) names its sale «Venta objetivo».
+      await expect(summary).toContainText(`${saleLabel(campaign.totals.volume_commitment)} ${money(campaign.totals.contracted_revenue)}`);
       await expect(summary).toContainText(`Devengado ${money(campaign.totals.revenue)}`);
       for (const line of campaign.lines) {
         const table = flightsTable(page, campaign, line);
         for (const [index, flight] of line.flights.entries()) {
-          await expect(await flightCell(table, index, "Venta contratada")).toHaveText(money(flight.contracted_revenue));
+          await expect(await flightCell(table, index, saleLabel(flight.volume_commitment))).toHaveText(money(flight.contracted_revenue));
           await expect(await flightCell(table, index, "Devengado")).toHaveText(money(flight.revenue));
         }
       }
     }
+  });
+});
+
+test.describe("the Deal demo of the previous month", () => {
+  test("its flight is the worked example: «Venta objetivo», «Bruto» and the margin of GET /api/margin", async ({ operationsSession: page, api }) => {
+    const margin = await readMargin(api, previous);
+    const deal = margin.campaigns.find((campaign) => campaign.name === DEAL_DEMO);
+    expect(deal, `${DEAL_DEMO} in GET /api/margin: run reset-data.sh`).toBeDefined();
+    const campaign = deal as CampaignMargin;
+    const [line] = campaign.lines;
+    const [flight] = line?.flights ?? [];
+    // The worked example of the change: a target of 1,000,000 at 5.00 €, 1,100,000 served, 4,400.00 € reported.
+    expect([flight?.volume_commitment, flight?.contracted_revenue, flight?.revenue, flight?.gross_revenue, flight?.margin]).toEqual(
+      ["target", "5000.00", "4400.00", "5500.00", "2750.00"],
+    );
+
+    await page.goto("/margin");
+    await chooseMonth(page, previous);
+    await openAllCards(page, { campaigns: [campaign] });
+
+    const summary = campaignCard(page, DEAL_DEMO).locator(":scope > summary");
+    await expect(summary).toContainText(`Venta objetivo ${money(campaign.totals.contracted_revenue)}`);
+    await expect(summary).toContainText(`Bruto ${money(campaign.totals.gross_revenue ?? "")}`);
+    const table = flightsTable(page, campaign, line as LineMargin);
+    await expect(await flightCell(table, 0, "Venta objetivo")).toHaveText(money("5000.00"));
+    await expect(await flightCell(table, 0, "Devengado")).toHaveText(money("4400.00"));
+    await expect(await flightCell(table, 0, "Bruto")).toHaveText(money("5500.00"));
+    await expect(await flightCell(table, 0, "Margen")).toHaveText(money("2750.00"));
+    await expect(await flightCell(table, 0, "% de margen")).toHaveText(percent("62.50"));
   });
 });
 

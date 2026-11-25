@@ -116,9 +116,9 @@
 
 ## 15. Demo Data and E2E
 
-- [ ] 15.1 (Brought forward to group 1 as task 1.8: nothing left to do here.) Update `e2e/support/campaigns.ts` and `campaign-form.ts` to send `volume_commitment`, with a check beside `campaigns.test.mjs`; verify the existing E2E helpers' checks pass
-- [ ] 15.2 Write failing tests in `backend/tests/scripts/test_seed_margin_demo.py` that the demo adds, idempotently, a Deal campaign with one target line on Equativ, a validated Equativ mapping on an invented package and invented deliveries with the four amounts, whose closed month reproduces the worked example and whose running month delivers above its target; implement in `scripts/seed_margin_demo.py` and verify with `test_seed_margin_demo_states.py`
-- [ ] 15.3 Write the E2E in `e2e/tests/campaign.spec.ts`, `status.spec.ts` and `margin.spec.ts`: choosing `Deal` proposes «Objetivo» and the campaign registers with it; the Deal demo's running row says «Objetivo» with no pacing tag although above target; its closed flight shows «Venta objetivo», «Bruto» and the margin of `GET /api/margin`
+- [x] 15.1 (Brought forward to group 1 as task 1.8: nothing left to do here.) Update `e2e/support/campaigns.ts` and `campaign-form.ts` to send `volume_commitment`, with a check beside `campaigns.test.mjs`; verify the existing E2E helpers' checks pass
+- [x] 15.2 Write failing tests in `backend/tests/scripts/test_seed_margin_demo.py` that the demo adds, idempotently, a Deal campaign with one target line on Equativ, a validated Equativ mapping on an invented package and invented deliveries with the four amounts, whose closed month reproduces the worked example and whose running month delivers above its target; implement in `scripts/seed_margin_demo.py` and verify with `test_seed_margin_demo_states.py`
+- [x] 15.3 Write the E2E in `e2e/tests/campaign.spec.ts`, `status.spec.ts` and `margin.spec.ts`: choosing `Deal` proposes «Objetivo» and the campaign registers with it; the Deal demo's running row says «Objetivo» with no pacing tag although above target; its closed flight shows «Venta objetivo», «Bruto» and the margin of `GET /api/margin`
 
 ## 16. Review and Update Existing Unit Tests (MANDATORY)
 
