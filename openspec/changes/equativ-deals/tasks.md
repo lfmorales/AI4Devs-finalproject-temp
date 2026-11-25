@@ -122,7 +122,7 @@
 
 ## 16. Review and Update Existing Unit Tests (MANDATORY)
 
-- [ ] 16.1 Review every backend and frontend test that builds a line, a delivery row, a flight, a margin response or a registration request (`tests/fixtures/*`, `frontend/tests/helpers/margin-data.ts`) so it carries the new fields; review the tests whose meaning changed (`test_margin_model_integrity.py:69`, `test_pacing.py` over-delivery cases, the margin-calculation scenario «Every platform type uses the same model»); verify with `git grep -n "volume_commitment" -- backend/tests frontend/tests e2e` that every registration path sends it
+- [x] 16.1 Review every backend and frontend test that builds a line, a delivery row, a flight, a margin response or a registration request (`tests/fixtures/*`, `frontend/tests/helpers/margin-data.ts`) so it carries the new fields; review the tests whose meaning changed (`test_margin_model_integrity.py:69`, `test_pacing.py` over-delivery cases, the margin-calculation scenario «Every platform type uses the same model»); verify with `git grep -n "volume_commitment" -- backend/tests frontend/tests e2e` that every registration path sends it
 
 ## 17. Run Unit Tests and Verify Database State (MANDATORY)
 
