@@ -10,12 +10,13 @@ from typing import Any
 
 import pytest
 
-from app.domain.exceptions import CarryoverError
+from app.domain.exceptions import CarryoverError, TargetLineNotAdjustableError
 from app.domain.services.carryover import (
     PreviousFlight,
     delivery_target,
     previous_flight_of,
     shortfall,
+    validate_billable,
     validate_carryover,
 )
 from app.domain.value_objects.flight import FlightWindow
@@ -195,3 +196,49 @@ def test_the_checks_run_in_the_order_of_the_specification() -> None:
     assert _code(1, previous=unstarted, month_closed=True, as_of=date(2026, 11, 5)) == "previous_flight_not_ended"
     assert _code(1, previous=_previous(delivered="500000"), month_closed=True) == "carryover_exceeds_shortfall"
     assert _code(-1, previous=None, month_closed=True) == "invalid_carryover"
+
+
+# ---------------------------------------------------------------- the billable flag
+
+
+def _billable(**overrides: Any) -> None:
+    values: dict[str, Any] = {"is_target_line": False, "billable": True, "carryover": 100_000, "month_closed": False}
+    values.update(overrides)
+    validate_billable(**values)
+
+
+def test_a_carry_over_may_be_set_billable_and_back() -> None:
+    _billable()
+    _billable(billable=False)
+
+
+def test_setting_the_flag_to_false_needs_no_carry_over() -> None:
+    _billable(billable=False, carryover=0)
+
+
+def test_setting_the_flag_to_true_needs_a_carry_over_to_bill() -> None:
+    with pytest.raises(CarryoverError) as raised:
+        _billable(carryover=0)
+
+    assert raised.value.code == "no_carryover"
+
+
+def test_a_target_line_has_no_billable_carry_over() -> None:
+    with pytest.raises(TargetLineNotAdjustableError):
+        _billable(is_target_line=True)
+
+
+def test_the_flag_of_a_closed_month_is_not_changed() -> None:
+    with pytest.raises(CarryoverError) as raised:
+        _billable(month_closed=True)
+
+    assert raised.value.code == "month_closed"
+
+
+def test_the_billable_checks_run_in_the_order_of_the_specification() -> None:
+    with pytest.raises(TargetLineNotAdjustableError):
+        _billable(is_target_line=True, carryover=0, month_closed=True)
+    with pytest.raises(CarryoverError) as raised:
+        _billable(carryover=0, month_closed=True)
+
+    assert raised.value.code == "no_carryover"

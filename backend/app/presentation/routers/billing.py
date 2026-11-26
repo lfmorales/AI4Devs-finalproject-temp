@@ -6,11 +6,14 @@ its task is implemented, a route answers 501 with a code and a message and no fi
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Path, status
 from fastapi.responses import JSONResponse
 
+from app.application.services.carryover_service import CarryoverService
 from app.domain.models.user import RoleName, User
 from app.presentation.dependencies.auth import require_roles
+from app.presentation.dependencies.providers import get_carryover_service
+from app.presentation.schemas.carryover import BillableRequest, BillableResponse
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -55,10 +58,16 @@ def withdraw_campaign_month_review(_user: OperationsOrFinance) -> JSONResponse:
     return not_implemented()
 
 
-@router.put("/flights/{flight_id}/carryover/billable")
-def set_carryover_billable(flight_id: int, _user: OperationsOrFinance) -> JSONResponse:
-    """Decide whether a flight's carry-over is billable. Requires: operations or finance role."""
-    return not_implemented()
+@router.put("/flights/{flight_id}/carryover/billable", response_model=BillableResponse)
+def set_carryover_billable(
+    body: BillableRequest,
+    user: OperationsOrFinance,
+    service: Annotated[CarryoverService, Depends(get_carryover_service)],
+    flight_id: Annotated[int, Path(ge=1)],
+) -> BillableResponse:
+    """Decide whether a flight's carry-over is billable: true raises the cap of its billing to contracted plus
+    carry-over. Does not change the volume. Requires: operations or finance role."""
+    return BillableResponse.from_result(service.set_billable(flight_id, body.billable, user.id))
 
 
 @router.get("/export")

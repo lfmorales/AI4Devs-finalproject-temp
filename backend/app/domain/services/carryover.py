@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from app.domain.exceptions import CarryoverError
+from app.domain.exceptions import CarryoverError, TargetLineNotAdjustableError
 from app.domain.value_objects.flight import FlightWindow
 
 
@@ -68,3 +68,14 @@ def validate_carryover(
         )
     if receiving_month_closed:
         raise CarryoverError("month_closed", "the month of the flight that receives the carry-over is closed")
+
+
+def validate_billable(*, is_target_line: bool, billable: bool, carryover: int, month_closed: bool) -> None:
+    """Refuse a change of the billable flag that breaks a rule, reporting the first rule broken: a target line has no
+    billable carry-over, true needs a carry-over to bill, and a closed month is not changed."""
+    if is_target_line:
+        raise TargetLineNotAdjustableError("a target line bills what its DSP reports: it has no billable carry-over")
+    if billable and carryover == 0:
+        raise CarryoverError("no_carryover", "the flight has no carry-over to bill")
+    if month_closed:
+        raise CarryoverError("month_closed", "the month of the flight is closed")

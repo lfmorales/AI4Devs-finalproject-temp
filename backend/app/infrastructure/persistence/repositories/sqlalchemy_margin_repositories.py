@@ -50,6 +50,8 @@ from app.infrastructure.persistence.repositories.delivered_volume import deliver
 
 # The first key of the advisory locks that serialise the closing of a month; the second is year * 100 + month.
 _CLOSING_LOCK_NAMESPACE = 4242
+# Public: the edits of a month (a carry-over, an adjustment, a review) take the same lock as its closing.
+CLOSING_LOCK_NAMESPACE = _CLOSING_LOCK_NAMESPACE
 
 
 _EXCLUSION_VIOLATION = "23P01"

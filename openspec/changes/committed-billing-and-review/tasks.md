@@ -44,10 +44,12 @@
 
 ## 6. Carry-over Routes
 
-- [ ] 6.1 Write failing tests in a new `backend/tests/api/test_carryover_endpoint.py` for `PUT /flights/{flight_id}/carryover` with every scenario of `campaign/carryover` («A carry-over is written on the flight that receives it»), as `trading` and as `operations`; 403 as `finance` and as `business`; 401 without a token; error bodies of only `code` and `message`; the response walked for `trading` has no amount, no billable flag and no adjustment field; nothing written on a refusal; the contracted volume of the flight and of the line unchanged
-- [ ] 6.2 Implement `CarryoverService` (month lock, previous flight, shortfall, write) and its repository, and the route and schema; add the carry-over path to the error-body patterns of `presentation/errors.py` without changing `/flights/preview`; verify 6.1 and `test_flight_preview_endpoint.py`
-- [ ] 6.3 Write failing tests for `PUT /billing/flights/{flight_id}/carryover/billable` with the scenarios of `campaign/carryover` («Operations and Finance decide whether a carry-over is billable»): set as `finance` and as `operations`, 403 as `trading` and `business`, 409 `target_line_not_adjustable`, `no_carryover` and `month_closed`; the flag kept when the volume changes
-- [ ] 6.4 Implement it; verify 6.3
+> `FlightNotFoundError` and `TargetLineNotAdjustableError` (404 `flight_not_found`, 409 `target_line_not_adjustable`) are shared with the adjustment routes of group 7. Tests that refuse a request commit their data first (`_on` in `test_carryover_endpoint.py`), because the service rolls back and the test session joins an outer transaction through a savepoint.
+
+- [x] 6.1 Write failing tests in a new `backend/tests/api/test_carryover_endpoint.py` for `PUT /flights/{flight_id}/carryover` with every scenario of `campaign/carryover` («A carry-over is written on the flight that receives it»), as `trading` and as `operations`; 403 as `finance` and as `business`; 401 without a token; error bodies of only `code` and `message`; the response walked for `trading` has no amount, no billable flag and no adjustment field; nothing written on a refusal; the contracted volume of the flight and of the line unchanged
+- [x] 6.2 Implement `CarryoverService` (month lock, previous flight, shortfall, write) and its repository, and the route and schema; add the carry-over path to the error-body patterns of `presentation/errors.py` without changing `/flights/preview`; verify 6.1 and `test_flight_preview_endpoint.py`
+- [x] 6.3 Write failing tests for `PUT /billing/flights/{flight_id}/carryover/billable` with the scenarios of `campaign/carryover` («Operations and Finance decide whether a carry-over is billable»): set as `finance` and as `operations`, 403 as `trading` and `business`, 409 `target_line_not_adjustable`, `no_carryover` and `month_closed`; the flag kept when the volume changes
+- [x] 6.4 Implement it; verify 6.3
 
 ## 7. Billing Adjustments
 

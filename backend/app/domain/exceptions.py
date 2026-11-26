@@ -206,8 +206,17 @@ class CampaignNotFoundError(DomainError):
 
 class CarryoverError(DomainError):
     """A carry-over broke a rule of campaign/carryover. Carries a stable code: `invalid_carryover`,
-    `no_previous_flight`, `previous_flight_not_ended`, `carryover_exceeds_shortfall` or `month_closed`."""
+    `no_previous_flight`, `previous_flight_not_ended`, `carryover_exceeds_shortfall`, `month_closed` or, for the
+    billable flag, `no_carryover`."""
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+class FlightNotFoundError(DomainError):
+    """The flight a request names does not exist."""
+
+
+class TargetLineNotAdjustableError(DomainError):
+    """The flight belongs to a target line, which bills what its DSP reports: no adjustment, no billable carry-over."""

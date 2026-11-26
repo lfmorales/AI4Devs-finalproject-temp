@@ -1,6 +1,7 @@
 """Maps domain exceptions to HTTP responses. The domain never knows about status codes."""
 
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
@@ -15,6 +16,9 @@ logger = logging.getLogger(__name__)
 from app.domain.exceptions import (
     AmbiguousMappingError,
     CampaignNotFoundError,
+    CarryoverError,
+    FlightNotFoundError,
+    TargetLineNotAdjustableError,
     MappingNotFoundError,
     CampaignLineNotFoundError,
     DomainError,
@@ -153,6 +157,10 @@ _ERROR_MAPPINGS: dict[type[DomainError], _ErrorMapping] = {
         502, "dsp_response_unsupported", "The DSP reported data that cannot be processed"
     ),
     CampaignNotFoundError: _ErrorMapping(404, "campaign_not_found", "The campaign does not exist"),
+    FlightNotFoundError: _ErrorMapping(404, "flight_not_found", "The flight does not exist"),
+    TargetLineNotAdjustableError: _ErrorMapping(
+        409, "target_line_not_adjustable", "A target line bills what its DSP reports: it cannot be adjusted"
+    ),
     SystemPlatformRateMissingError: _ErrorMapping(
         500, "platform_rate_not_configured", "No system platform rate is configured"
     ),
@@ -204,6 +212,26 @@ async def _month_delivery_not_loaded_handler(request: Request, error: Exception)
     return JSONResponse(status_code=409, content=body.model_dump())
 
 
+# Each carry-over rule has its own status and code. The message is fixed, except the shortfall, which is the volume the
+# user needs to try again and carries no amount of money.
+_CARRYOVER_ERRORS: dict[str, tuple[int, str]] = {
+    "invalid_carryover": (422, "A carry-over needs a whole volume of zero or more and a reason"),
+    "no_previous_flight": (409, "The first flight of a line has no previous flight to carry from"),
+    "previous_flight_not_ended": (409, "The previous flight of the line has not ended yet"),
+    "carryover_exceeds_shortfall": (409, "The carry-over is above what the previous flight fell short"),
+    "month_closed": (409, "The month of the flight is closed"),
+    "no_carryover": (409, "The flight has no carry-over to bill"),
+}
+
+
+async def _carryover_handler(request: Request, error: Exception) -> JSONResponse:
+    assert isinstance(error, CarryoverError)
+    status_code, message = _CARRYOVER_ERRORS.get(error.code, (422, "A carry-over rule was broken"))
+    if error.code == "carryover_exceeds_shortfall":
+        message = str(error)
+    return JSONResponse(status_code=status_code, content=ErrorResponse(code=error.code, message=message).model_dump())
+
+
 # Each rebate rule has its own status and message; the message never carries the detail of the failure.
 _REBATE_RULE_ERRORS: dict[str, tuple[int, str]] = {
     "bracket_table_empty": (422, "A bracket table needs at least one bracket"),
@@ -227,7 +255,9 @@ async def _rebate_rule_handler(request: Request, error: Exception) -> JSONRespon
 
 # Routes whose validation and routing errors answer {"code","message"}. For /users it also keeps the body the caller
 # sent, which holds an email, out of the response: FastAPI's default 422 would echo it.
-_FIXED_BODY_ROUTE_PREFIXES = ("/margin", "/users")
+_FIXED_BODY_ROUTE_PREFIXES = ("/margin", "/users", "/billing")
+# The carry-over of a flight lives under /flights, whose other route (the preview) keeps FastAPI's body.
+_FIXED_BODY_ROUTE_PATTERN = re.compile(r"^/flights/[^/]+/carryover$")
 
 
 def _is_margin_route(request: Request) -> bool:
@@ -236,7 +266,9 @@ def _is_margin_route(request: Request) -> bool:
     root_path = request.scope.get("root_path", "")
     if root_path and path.startswith(root_path):
         path = path[len(root_path):]
-    return any(path == prefix or path.startswith(prefix + "/") for prefix in _FIXED_BODY_ROUTE_PREFIXES)
+    return bool(_FIXED_BODY_ROUTE_PATTERN.match(path)) or any(
+        path == prefix or path.startswith(prefix + "/") for prefix in _FIXED_BODY_ROUTE_PREFIXES
+    )
 
 
 _HTTP_ERROR_CODES = {404: "not_found", 405: "method_not_allowed"}
@@ -267,6 +299,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(PreviousMonthOpenError, _previous_month_open_handler)
     app.add_exception_handler(MonthDeliveryNotLoadedError, _month_delivery_not_loaded_handler)
     app.add_exception_handler(RebateRuleError, _rebate_rule_handler)
+    app.add_exception_handler(CarryoverError, _carryover_handler)
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
     app.add_exception_handler(StarletteHTTPException, _http_error_handler)
     app.add_exception_handler(Exception, _generic_error_handler)
