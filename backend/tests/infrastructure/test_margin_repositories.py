@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.domain.services.closed_flight import snapshot_of
 from app.domain.services.platform_rate import resolve_platform_rate
 from app.domain.services.priced_flights import price_flights
-from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight
+from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight, ReadFlight
 from app.domain.value_objects.rebate import Bracket, CounterKey, RebateSchedule
 from app.domain.value_objects.volume_commitment import VolumeCommitment
 from app.infrastructure.persistence.models.campaign import CampaignLinePeriodRecord, CampaignLineRecord, CampaignRecord
@@ -621,3 +621,60 @@ def test_a_target_snapshot_agrees_with_its_applied_rates_row_and_a_committed_one
     committed_row, committed_snapshot = by_line[committed]
     assert (committed_snapshot.gross_revenue, committed_row.rebate_base_amount) == (None, None)
     assert committed_snapshot.volume_commitment == "committed"
+
+
+# ---------------------------------------------------------------- a closed flight is read with its snapshot
+
+def _read(session: Session, line_id: int) -> ReadFlight:
+    (read,) = [r for r in SqlAlchemyMarginReadRepository(session).list_flights(AS_OF) if r.facts.campaign_line_id == line_id]
+    return read
+
+
+def test_list_flights_returns_the_snapshot_of_a_frozen_flight_with_its_rates(rolled_back_session: Session) -> None:
+    committed = _adform_committed_august(rolled_back_session)
+    target = _equativ_target_august(rolled_back_session)
+    user_id = insert_user(rolled_back_session)
+    facts = SqlAlchemyMarginFlightRepository(rolled_back_session).open_ended_flights(2026, 8, AS_OF)
+    priced = {item.facts.campaign_line_id: item for item in _freeze(rolled_back_session, facts, [], user_id)}
+    rolled_back_session.expire_all()
+
+    for line_id in (committed, target):
+        frozen = _read(rolled_back_session, line_id).frozen
+        assert frozen is not None
+        assert frozen.snapshot == snapshot_of(priced[line_id])
+        assert frozen.platform_rate == priced[line_id].platform.rate
+        assert frozen.rebate_amount == priced[line_id].rebate.rebate
+
+
+def test_a_flight_not_frozen_has_no_snapshot(rolled_back_session: Session) -> None:
+    line_id = _adform_committed_august(rolled_back_session)
+
+    assert _read(rolled_back_session, line_id).frozen is None
+
+
+def test_the_current_delivery_of_a_closed_flight_is_summed_in_its_frozen_metric_after_its_channel_changes(
+    rolled_back_session: Session,
+) -> None:
+    closed = _dooh_august(rolled_back_session)
+    user_id = insert_user(rolled_back_session)
+    (facts,) = SqlAlchemyMarginFlightRepository(rolled_back_session).open_ended_flights(2026, 8, AS_OF)
+    _freeze(rolled_back_session, [facts], [], user_id)
+    closed_line = rolled_back_session.get(CampaignLineRecord, closed)
+    assert closed_line is not None
+    channel_id = closed_line.channel_id
+    still_open = add_line_to_campaign(rolled_back_session, closed, 2)  # same channel, not frozen
+    insert_delivery(rolled_back_session, still_open, date(2026, 8, 10), 3_000, insert_ingestion_batch(rolled_back_session),
+                    ots=Decimal("60000.0000"))
+    insert_delivery(rolled_back_session, closed, date(2026, 8, 25), 1_000, insert_ingestion_batch(rolled_back_session),
+                    ots=Decimal("20000.0000"))  # restated after closing
+
+    rolled_back_session.execute(update(ChannelRecord).where(ChannelRecord.id == channel_id).values(delivery_metric="impressions"))
+    rolled_back_session.flush()
+
+    read = _read(rolled_back_session, closed)
+    assert read.frozen is not None and read.frozen.snapshot.delivery_metric == "ots"
+    assert (read.facts.delivery_metric, read.facts.delivered, read.facts.delivered_impressions) == (
+        "ots", Decimal("300000.5000"), 13_000,
+    )
+    other = _read(rolled_back_session, still_open)
+    assert (other.facts.delivery_metric, other.facts.delivered) == ("impressions", Decimal("3000.0000"))

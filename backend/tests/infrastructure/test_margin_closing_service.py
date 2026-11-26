@@ -1,6 +1,7 @@
 """Closing a month: it freezes the rates of the flights that ended in it, once, in order, and all or nothing."""
 
 import dataclasses
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
@@ -10,13 +11,17 @@ from sqlalchemy.orm import Session
 
 from app.application.services import margin_closing_service
 from app.application.services.margin_query_service import MarginQueryService
+from app.application.services.delivery_ingestion_service import DeliveryIngestionService
+from app.application.services.line_mapping_removal_service import LineMappingRemovalService
 from app.application.services.margin_closing_service import MarginClosingService
 from app.domain.exceptions import MonthDeliveryNotLoadedError, PreviousMonthOpenError
 from app.domain.services.closed_flight import margin_from_snapshot, snapshot_of
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.priced_flights import price_flights
-from app.domain.value_objects.closed_flight import ClosedFlightSnapshot
+from app.domain.value_objects.closed_flight import ClosedDeliveryCheck, ClosedFlightSnapshot
+from app.domain.value_objects.delivery import DeliveryDateRange, DspDeliveryRow, ExternalLineKey
 from app.domain.value_objects.margin import FlightMargin
+from app.domain.value_objects.margin_report import FlightReport, FlightState, MarginReport
 from app.domain.value_objects.volume_commitment import VolumeCommitment
 from app.infrastructure.dsp.equativ_delivery_client import EquativDeliveryClient
 from app.infrastructure.persistence.models.campaign import CampaignLinePeriodRecord, CampaignLineRecord, CampaignRecord
@@ -40,6 +45,10 @@ from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories 
     SqlAlchemyPlatformRateRepository,
     SqlAlchemyRebateScheduleRepository,
 )
+from app.infrastructure.persistence.repositories.sqlalchemy_line_mapping_removal_repository import (
+    SqlAlchemyLineMappingRemovalRepository,
+)
+from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from scripts.run_ingestion import main as run_ingestion
 from tests.fixtures.delivery_data import (
     add_line_to_campaign,
@@ -50,7 +59,10 @@ from tests.fixtures.delivery_data import (
     insert_other_dsp,
     insert_user,
     replace_flights,
+    seeded_dsp_id,
 )
+from tests.fixtures.delivery_rows import dsp_row
+from tests.fixtures.dsp_delivery_client import InMemoryDspDeliveryClient
 from tests.fixtures.fake_equativ import FakeEquativ, package_row
 from tests.fixtures.flight_inputs import flight_economics
 
@@ -96,6 +108,20 @@ def _snapshots(session: Session) -> list[ClosedFlightSnapshotRecord]:
 def _snapshot_of_record(record: ClosedFlightSnapshotRecord) -> ClosedFlightSnapshot:
     columns = {field.name: getattr(record, field.name) for field in dataclasses.fields(ClosedFlightSnapshot)}
     return ClosedFlightSnapshot(**{**columns, "volume_commitment": VolumeCommitment(record.volume_commitment)})
+
+
+def _read_margin(session: Session, today: date) -> MarginReport:
+    return MarginQueryService(
+        SqlAlchemyMarginReadRepository(session), SqlAlchemyRebateScheduleRepository(session),
+        SqlAlchemyPlatformRateRepository(session), SqlAlchemyAppliedRateRepository(session), today=lambda: today,
+    ).get_margin()
+
+
+def _flight_reports(report: MarginReport, line_id: int) -> list[FlightReport]:
+    return [
+        flight for campaign in report.campaigns for line in campaign.lines for flight in line.flights
+        if line.campaign_line_id == line_id
+    ]
 
 
 def _august_lines(session, count: int = 3) -> list[int]:
@@ -535,18 +561,12 @@ class _November:
             ).where(CampaignLinePeriodRecord.campaign_line_id == line_id)
         ).one()
 
+    def target_report(self) -> FlightReport:
+        (flight,) = _flight_reports(_read_margin(self.session, DECEMBER_FIRST), self.target)
+        return flight
+
     def target_margin(self) -> FlightMargin:
-        service = MarginQueryService(
-            SqlAlchemyMarginReadRepository(self.session), SqlAlchemyRebateScheduleRepository(self.session),
-            SqlAlchemyPlatformRateRepository(self.session), SqlAlchemyAppliedRateRepository(self.session),
-            today=lambda: DECEMBER_FIRST,
-        )
-        flights = [
-            flight for campaign in service.get_margin().campaigns for line in campaign.lines for flight in line.flights
-            if line.campaign_line_id == self.target
-        ]
-        (flight,) = flights
-        return flight.margin
+        return self.target_report().margin
 
 
 @pytest.fixture
@@ -581,30 +601,34 @@ def test_closing_the_worked_examples_month_freezes_its_revenue_and_its_gross_and
     assert (committed.position_before, committed.position_after) == (Decimal(0), Decimal("5000.00"))
 
 
-def test_a_restatement_after_closing_moves_neither_the_revenue_nor_the_gross_nor_the_rebate_of_the_closed_month(
+def test_a_restatement_after_closing_moves_no_figure_of_the_closed_month_and_flags_the_change(
     november: _November, user_id: int
 ) -> None:
     november.ingest_the_month()
     _service(november.session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
-    closed = november.target_margin()
+    closed = november.target_report()
 
     # Equativ restates 30 November: more impressions, more reported revenue and more spend. The run replaces the day.
     november.ingest(
         "2026-11-30", "2026-11-30",
         package_row(day="2026-11-30T00:00:00", impressions="700000", spend="3500.00", revenue="2600.00"),
     )
-    restated = november.target_margin()
+    restated = november.target_report()
 
-    assert (closed.revenue, closed.gross_revenue, closed.rebate) == (
+    assert (closed.margin.revenue, closed.margin.gross_revenue, closed.margin.rebate) == (
         Decimal("4400.00"), Decimal("5500.00"), Decimal("550.00"),
     )
-    assert (restated.revenue, restated.gross_revenue, restated.rebate) == (
-        closed.revenue, closed.gross_revenue, closed.rebate,
+    # The closed flight is read from its snapshot: nothing moves, not even the platform cost or the gross flag.
+    assert replace(restated.margin, delivery_changed=False) == closed.margin
+    assert (restated.margin.platform_cost, restated.margin.gross_differs_from_buyer_spend) == (Decimal("1100.00"), False)
+    assert (closed.margin.delivery_changed, restated.margin.delivery_changed) == (False, True)
+    # 1,300,000 served, 5,000.00 € reported and 6,500.00 € spent now: 5,000.00 − 0.00 − 550.00 − 1,300.00 = 3,150.00 €.
+    assert restated.delivery_change == ClosedDeliveryCheck(
+        delivered_difference=Decimal("200000.0000"), delivered_impressions_difference=200_000,
+        media_cost_difference=Decimal("0.00"), reported_revenue_difference=Decimal("600.00"),
+        buyer_spend_difference=Decimal("1000.00"), current_margin=Decimal("3150.00"),
+        margin_difference=Decimal("400.00"), changed=True,
     )
-    # The platform cost reads the delivery as stored now, as for every flight (decision 9).
-    assert (closed.platform_cost, restated.platform_cost) == (Decimal("1100.00"), Decimal("1300.00"))
-    # The flag compares the frozen gross with the spend as stored now: 5,500.00 against 6,500.00 is beyond 1 %.
-    assert (closed.gross_differs_from_buyer_spend, restated.gross_differs_from_buyer_spend) == (False, True)
 
 
 def test_closing_a_month_with_target_flights_twice_neither_adds_nor_changes_a_row(
@@ -681,3 +705,149 @@ def test_an_earlier_open_month_is_still_reported_before_a_month_not_loaded(novem
 
     assert (blocked.value.year, blocked.value.month) == (2026, 10)
     assert _rows(november.session) == []
+
+
+
+# --- A closed month is read from its snapshots; the delivery stored afterwards only raises the warning ---------------
+#
+# The committed Adform flight of finance/rebate-accrual: November, 1,000,000 contracted at 5.00 €, a flat rebate of
+# 25 % and a platform rate of 1.00 €. Closed on 1 December with 700,000 delivered impressions and 1,200.00 € of media
+# cost: 5,000.00 − 1,200.00 − 1,250.00 − 700.00 = 1,850.00 €. The run of 3 December restates 28 November with 500,000
+# more impressions and 1,800.00 € more media cost: its current margin would be 5,000.00 − 3,000.00 − 1,250.00 −
+# 1,200.00 = −450.00 €.
+
+ADFORM_KEY = ExternalLineKey("1001", "2001")
+
+
+def _adform_november(session: Session) -> int:
+    line_id = insert_campaign_line(session, "Adform committed", *NOVEMBER)
+    replace_flights(session, line_id, [NOVEMBER])
+    insert_mapping(session, line_id, seeded_dsp_id(session), "1001", "2001")
+    _schedule(session, _group_of(session, line_id), ("0", None, "0.25"))
+    return line_id
+
+
+def _adform_run(session: Session, today: date, rows: list[DspDeliveryRow], window: DeliveryDateRange | None = None) -> None:
+    service = DeliveryIngestionService(
+        InMemoryDspDeliveryClient(rows), lambda: SqlAlchemyUnitOfWork(lambda: session),
+        lambda: datetime.combine(today, datetime.min.time()).replace(hour=2),
+    )
+    result = service.run(seeded_dsp_id(session), today, window=window)
+    assert result.stored_row_count == len(rows)
+
+
+def _closed_adform_november(session: Session, user_id: int) -> int:
+    line_id = _adform_november(session)
+    _adform_run(session, DECEMBER_FIRST, [
+        dsp_row(date(2026, 11, 10), ADFORM_KEY, impressions=400_000, media_cost=Decimal("600.000000")),
+        dsp_row(date(2026, 11, 28), ADFORM_KEY, impressions=300_000, media_cost=Decimal("600.000000")),
+    ], window=DeliveryDateRange(date(2026, 11, 1), date(2026, 11, 30)))
+    result = _service(session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
+    assert result.closed == 1
+    return line_id
+
+
+def test_the_committed_example_keeps_its_closed_margin_after_the_restatement_and_flags_it(
+    rolled_back_session: Session, user_id: int
+) -> None:
+    line_id = _closed_adform_november(rolled_back_session, user_id)
+    (before,) = _flight_reports(_read_margin(rolled_back_session, date(2026, 12, 2)), line_id)
+
+    # The nightly run of 3 December replaces its window, 26 November to 2 December, through the ingestion service.
+    _adform_run(rolled_back_session, date(2026, 12, 3), [
+        dsp_row(date(2026, 11, 28), ADFORM_KEY, impressions=800_000, media_cost=Decimal("2400.000000")),
+    ])
+    report = _read_margin(rolled_back_session, date(2026, 12, 4))
+    (after,) = _flight_reports(report, line_id)
+
+    assert (before.margin.margin, before.margin.delivery_changed) == (Decimal("1850.00"), False)
+    assert after.state is FlightState.CLOSED
+    assert (after.margin.media_cost, after.margin.platform_cost, after.margin.margin) == (
+        Decimal("1200.00"), Decimal("700.00"), Decimal("1850.00"),
+    )
+    assert after.margin.delivered_impressions == 700_000
+    assert replace(after.margin, delivery_changed=False) == before.margin
+    assert after.margin.delivery_changed is True
+    assert after.delivery_change == ClosedDeliveryCheck(
+        delivered_difference=Decimal("500000.0000"), delivered_impressions_difference=500_000,
+        media_cost_difference=Decimal("1800.00"), reported_revenue_difference=None, buyer_spend_difference=None,
+        current_margin=Decimal("-450.00"), margin_difference=Decimal("-2300.00"), changed=True,
+    )
+    (campaign,) = [c for c in report.campaigns if any(line.campaign_line_id == line_id for line in c.lines)]
+    for totals in (campaign.lines[0].totals, campaign.totals):
+        assert (totals.margin, totals.media_cost, totals.delivery_changed_count) == (
+            Decimal("1850.00"), Decimal("1200.00"), 1,
+        )
+    assert report.totals.delivery_changed_count == 1
+
+
+def test_a_closed_flight_read_with_no_change_to_its_delivery_equals_its_pending_close_read(
+    rolled_back_session: Session, user_id: int
+) -> None:
+    line_id = _adform_november(rolled_back_session)
+    _adform_run(rolled_back_session, DECEMBER_FIRST, [
+        dsp_row(date(2026, 11, 28), ADFORM_KEY, impressions=700_000, media_cost=Decimal("1200.004")),
+    ], window=DeliveryDateRange(date(2026, 11, 1), date(2026, 11, 30)))
+    (pending,) = _flight_reports(_read_margin(rolled_back_session, DECEMBER_FIRST), line_id)
+
+    _service(rolled_back_session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
+    (closed,) = _flight_reports(_read_margin(rolled_back_session, DECEMBER_FIRST), line_id)
+
+    assert pending.state is FlightState.PENDING_CLOSE and closed.state is FlightState.CLOSED
+    assert closed.margin == replace(pending.margin, provisional=False)
+    assert closed.delivery_change is not None and closed.delivery_change.changed is False
+    assert closed.delivery_change.current_margin == closed.margin.margin == Decimal("1850.00")
+
+
+def test_unlinking_a_line_with_a_closed_flight_keeps_its_closed_figures(rolled_back_session: Session, user_id: int) -> None:
+    line_id = _closed_adform_november(rolled_back_session, user_id)
+    (before,) = _flight_reports(_read_margin(rolled_back_session, date(2026, 12, 2)), line_id)
+
+    removed = LineMappingRemovalService(SqlAlchemyLineMappingRemovalRepository(rolled_back_session)).unlink(line_id)
+    (after,) = _flight_reports(_read_margin(rolled_back_session, date(2026, 12, 2)), line_id)
+
+    assert removed == 2
+    assert replace(after.margin, delivery_changed=False) == before.margin
+    assert after.margin.delivery_changed is True
+    assert after.delivery_change is not None
+    assert (after.delivery_change.delivered_impressions_difference, after.delivery_change.current_margin) == (
+        -700_000, Decimal("3750.00"),
+    )
+
+
+def test_a_change_of_the_channel_s_metric_after_closing_does_not_move_a_closed_flight(
+    rolled_back_session: Session, user_id: int
+) -> None:
+    line_id = insert_campaign_line(rolled_back_session, "DOOH", *NOVEMBER, delivery_metric="ots")
+    replace_flights(rolled_back_session, line_id, [NOVEMBER])
+    insert_delivery(rolled_back_session, line_id, date(2026, 11, 10), 12_000, insert_ingestion_batch(rolled_back_session),
+                    ots=Decimal("280000.5000"))
+    _service(rolled_back_session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
+    (before,) = _flight_reports(_read_margin(rolled_back_session, DECEMBER_FIRST), line_id)
+    channel_id = rolled_back_session.get(CampaignLineRecord, line_id).channel_id  # type: ignore[union-attr]
+
+    rolled_back_session.execute(
+        update(ChannelRecord).where(ChannelRecord.id == channel_id).values(delivery_metric="impressions")
+    )
+    (after,) = _flight_reports(_read_margin(rolled_back_session, DECEMBER_FIRST), line_id)
+
+    assert after.margin == before.margin
+    assert (after.margin.delivery_metric, after.margin.contracted_impressions, after.margin.delivered) == (
+        "ots", 1_000_000, Decimal("280000.5000"),
+    )
+    assert after.delivery_change is not None and after.delivery_change.changed is False
+
+
+def test_a_running_or_pending_close_flight_carries_no_check(rolled_back_session: Session) -> None:
+    running = insert_campaign_line(rolled_back_session, "Running", date(2026, 11, 1), date(2026, 12, 31))
+    replace_flights(rolled_back_session, running, [(date(2026, 12, 1), date(2026, 12, 31))])
+    pending = insert_campaign_line(rolled_back_session, "Pending close", *NOVEMBER)
+    replace_flights(rolled_back_session, pending, [NOVEMBER])
+
+    report = _read_margin(rolled_back_session, date(2026, 12, 10))
+
+    for line_id, state in ((running, FlightState.RUNNING), (pending, FlightState.PENDING_CLOSE)):
+        (flight,) = _flight_reports(report, line_id)
+        assert flight.state is state
+        assert (flight.delivery_change, flight.margin.delivery_changed) == (None, False)
+    assert report.totals.delivery_changed_count == 0

@@ -2,7 +2,6 @@ from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import date, timedelta
-from decimal import Decimal
 
 from app.domain.exceptions import CampaignNotFoundError
 from app.domain.repositories.margin_repositories import (
@@ -11,16 +10,15 @@ from app.domain.repositories.margin_repositories import (
     PlatformRateRepository,
     RebateScheduleRepository,
 )
-from app.domain.services.flight_margin import calculate_flight_margin
+from app.domain.services.closed_flight import check_closed_delivery, margin_from_snapshot
 from app.domain.services.margin_totals import total_flights, total_lines
 from app.domain.services.priced_flights import price_flights
-from app.domain.value_objects.margin import FlightEconomics, FlightMargin, FlightStatus
+from app.domain.value_objects.margin import FlightStatus, WindowDelivery
 from app.domain.value_objects.margin_report import (
     AppliedRates,
     CampaignReport,
     FlightReport,
     FlightState,
-    FrozenRates,
     LineReport,
     MarginReport,
 )
@@ -31,9 +29,9 @@ from app.domain.value_objects.rebate import CounterKey
 class MarginQueryService:
     """Reads the margin per campaign, line and flight. Writes nothing.
 
-    A closed flight is read from the rates frozen for it. Every other flight that has started is priced by the
-    same domain function the closing uses, from the same opening positions, so what it shows is what closing
-    the month will freeze.
+    A closed flight is read from the snapshot its closing stored, and checked against the delivery stored now, which
+    only raises its warning. Every other flight that has started is priced by the same domain function the closing
+    uses, from the same opening positions, so what it shows is what closing the month will freeze.
     """
 
     def __init__(
@@ -59,7 +57,7 @@ class MarginQueryService:
         requested = self._flights.list_flights(as_of, year, month, campaign_id)
         priced = self._price_unfrozen(requested, as_of)
 
-        reports = [self._report(flight, priced.get(flight.facts.flight_id), as_of) for flight in requested]
+        reports = [self._report(flight, priced.get(flight.facts.flight_id)) for flight in requested]
         return self._assemble(requested, reports, as_of)
 
     def _price_unfrozen(self, requested: list[ReadFlight], as_of: date) -> dict[int, PricedFlight]:
@@ -79,17 +77,28 @@ class MarginQueryService:
         return priced
 
     @staticmethod
-    def _report(flight: ReadFlight, priced: PricedFlight | None, as_of: date) -> FlightReport:
+    def _report(flight: ReadFlight, priced: PricedFlight | None) -> FlightReport:
         facts = flight.facts
-        if flight.frozen is not None:
-            margin = _margin_from_frozen(flight, flight.frozen, as_of)
+        frozen = flight.frozen
+        if frozen is not None:
+            # The window sums of the read are the delivery stored now, in the metric the flight was closed in.
+            current = WindowDelivery(
+                impressions=facts.delivered_impressions, media_cost=facts.media_cost, delivered=facts.delivered,
+                reported_revenue=facts.reported_revenue, buyer_spend=facts.buyer_spend, data_cost=facts.data_cost,
+            )
+            check = check_closed_delivery(frozen.snapshot, frozen.platform_rate, current)
+            margin = replace(
+                margin_from_snapshot(frozen.snapshot, facts.flight_start, facts.flight_end),
+                delivery_changed=check.changed,
+            )
             return FlightReport(
                 facts.flight_id, flight.period_year, flight.period_month, facts.flight_start, facts.flight_end,
                 FlightState.CLOSED, margin,
                 AppliedRates(
-                    flight.frozen.platform_rate, flight.frozen.effective_rate, flight.frozen.ladder_step,
-                    flight.frozen.agency_exception, flight.frozen.zero_reason, flight.frozen.source_year,
+                    frozen.platform_rate, frozen.effective_rate, frozen.ladder_step,
+                    frozen.agency_exception, frozen.zero_reason, frozen.source_year,
                 ),
+                delivery_change=check,
             )
         assert priced is not None
         state = FlightState.PENDING_CLOSE if priced.margin.status is FlightStatus.CLOSED else FlightState.RUNNING
@@ -133,24 +142,3 @@ class MarginQueryService:
         ordered_campaigns = tuple(sorted(campaigns, key=lambda campaign: (campaign.name, campaign.campaign_id)))
         return MarginReport(as_of, ordered_campaigns, total_lines(campaign.totals for campaign in ordered_campaigns))
 
-
-def _margin_from_frozen(flight: ReadFlight, frozen: FrozenRates, as_of: date) -> FlightMargin:
-    """A closed flight from what its closing froze: the rebate and the platform rate, and for a target flight its
-    revenue and its gross, so that a restatement of its DSP does not move them. Media cost and platform cost still
-    read the delivery as stored now (design.md decision 9)."""
-    facts = flight.facts
-    frozen_target = frozen.revenue_amount is not None
-    return calculate_flight_margin(
-        FlightEconomics(
-            flight_start=facts.flight_start, flight_end=facts.flight_end,
-            contracted_impressions=facts.contracted_impressions, sale_cpm=facts.sale_cpm,
-            delivered_impressions=facts.delivered_impressions, media_cost=facts.media_cost,
-            rebate_amount=frozen.rebate_amount, platform_rate=Decimal(frozen.platform_rate),
-            delivery_metric=facts.delivery_metric, delivered=facts.delivered,
-            volume_commitment=facts.volume_commitment,
-            reported_revenue=frozen.revenue_amount if frozen.revenue_amount is not None else facts.reported_revenue,
-            buyer_spend=facts.buyer_spend, data_cost=facts.data_cost,
-            gross_revenue=frozen.rebate_base_amount if frozen_target else None,
-        ),
-        as_of,
-    )

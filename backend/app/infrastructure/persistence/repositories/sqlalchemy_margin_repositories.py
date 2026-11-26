@@ -1,10 +1,11 @@
+import dataclasses
 from calendar import monthrange
 from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import ColumnElement, Numeric, Row, Select, cast, exists, func, select, text
+from sqlalchemy import ColumnElement, Numeric, Row, RowMapping, Select, cast, exists, func, select, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -21,6 +22,7 @@ from app.domain.repositories.margin_repositories import (
     RebateScheduleRepository,
 )
 from app.domain.services.closed_flight import snapshot_of
+from app.domain.value_objects.closed_flight import ClosedFlightSnapshot
 from app.domain.value_objects.margin_report import FrozenRates
 from app.domain.value_objects.platform_rate import NewPlatformRateSetting, PlatformRateLevel, PlatformRateSetting
 from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight, ReadFlight
@@ -152,13 +154,17 @@ class SqlAlchemyPlatformRateRepository(PlatformRateRepository):
         )
 
 
-def _flight_facts_query(*extra: ColumnElement[Any]) -> Select[*tuple[Any, ...]]:
+def _flight_facts_query(
+    *extra: ColumnElement[Any], metric: ColumnElement[str] | None = None
+) -> Select[*tuple[Any, ...]]:
     """Every flight with the facts its margin is computed from, joined to its line, campaign, agency, channel and period.
 
     The one query behind the closing (`open_ended_flights`) and the reads (`list_flights`): each adds its own filters,
     order and `extra` columns. The delivery is summed in the database over the indexed (line, date) pair, inside the
-    flight's own window: no delivery row is fetched.
+    flight's own window: no delivery row is fetched. The delivery metric is the channel's, unless `metric` gives
+    another, which the delivered volume is then summed in.
     """
+    unit = ChannelRecord.delivery_metric if metric is None else metric
     flight = CampaignLinePeriodRecord
     window = (
         DailyDeliveryRecord.campaign_line_id == flight.campaign_line_id,
@@ -169,7 +175,7 @@ def _flight_facts_query(*extra: ColumnElement[Any]) -> Select[*tuple[Any, ...]]:
     )
     # The delivery in the channel's own unit, as a four-decimal number (OTS has decimals, impressions do not).
     delivered = select(
-        cast(func.coalesce(func.sum(delivered_in_channel_metric()), 0), Numeric(18, 4))
+        cast(func.coalesce(func.sum(delivered_in_channel_metric(metric)), 0), Numeric(18, 4))
     ).where(*window).scalar_subquery()
     media_cost = select(func.coalesce(func.sum(DailyDeliveryRecord.media_cost), 0)).where(*window).scalar_subquery()
     # What the DSP reported besides its cost: the revenue a target flight earns, the buyer's spend its gross is
@@ -198,7 +204,7 @@ def _flight_facts_query(*extra: ColumnElement[Any]) -> Select[*tuple[Any, ...]]:
             CampaignLineRecord.sale_cpm.label("sale_cpm"),
             delivered_impressions.label("delivered_impressions"),
             media_cost.label("media_cost"),
-            ChannelRecord.delivery_metric.label("delivery_metric"),
+            unit.label("delivery_metric"),
             delivered.label("delivered"),
             CampaignLineRecord.volume_commitment.label("volume_commitment"),
             reported_revenue.label("reported_revenue"),
@@ -295,6 +301,16 @@ class SqlAlchemyMarginFlightRepository(MarginFlightRepository):
         )
 
 
+_SNAPSHOT_FIELDS = tuple(field.name for field in dataclasses.fields(ClosedFlightSnapshot))
+
+
+def _snapshot(values: RowMapping) -> ClosedFlightSnapshot:
+    """The snapshot of a frozen flight as stored, column for field."""
+    stored = {name: values[f"snapshot_{name}"] for name in _SNAPSHOT_FIELDS}
+    stored["volume_commitment"] = VolumeCommitment(stored["volume_commitment"])
+    return ClosedFlightSnapshot(**stored)
+
+
 class SqlAlchemyMarginReadRepository(MarginReadRepository):
     def __init__(self, session: Session) -> None:
         self._session = session
@@ -312,6 +328,7 @@ class SqlAlchemyMarginReadRepository(MarginReadRepository):
     ) -> list[ReadFlight]:
         flight = CampaignLinePeriodRecord
         applied = AppliedRateRecord
+        snapshot = ClosedFlightSnapshotRecord
         query = (
             _flight_facts_query(
                 CampaignRecord.name.label("campaign_name"),
@@ -331,8 +348,13 @@ class SqlAlchemyMarginReadRepository(MarginReadRepository):
                 applied.position_after.label("position_after"),
                 applied.revenue_amount.label("frozen_revenue_amount"),
                 applied.rebate_base_amount.label("frozen_rebate_base_amount"),
+                *(getattr(snapshot, name).label(f"snapshot_{name}") for name in _SNAPSHOT_FIELDS),
+                # A closed flight's current delivery is summed in the metric it was closed in, whatever its channel
+                # counts in now, so that the check never compares OTS with impressions.
+                metric=func.coalesce(snapshot.delivery_metric, ChannelRecord.delivery_metric),
             )
             .outerjoin(applied, applied.campaign_line_period_id == flight.id)
+            .outerjoin(snapshot, snapshot.applied_rate_id == applied.id)
             .where(flight.flight_start <= as_of)
             .order_by(flight.flight_start, flight.id)
         )
@@ -353,7 +375,7 @@ class SqlAlchemyMarginReadRepository(MarginReadRepository):
                 agency_exception=values["agency_exception"], zero_reason=values["zero_reason"],
                 source_year=values["source_year"], position_before=values["position_before"],
                 position_after=values["position_after"], revenue_amount=values["frozen_revenue_amount"],
-                rebate_base_amount=values["frozen_rebate_base_amount"],
+                rebate_base_amount=values["frozen_rebate_base_amount"], snapshot=_snapshot(values),
             )
             results.append(ReadFlight(
                 _flight_facts(row), values["campaign_name"], values["campaign_status"], values["line_number"],

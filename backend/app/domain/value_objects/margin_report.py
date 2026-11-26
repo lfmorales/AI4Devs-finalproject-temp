@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
+from app.domain.value_objects.closed_flight import ClosedDeliveryCheck, ClosedFlightSnapshot
 from app.domain.value_objects.margin import FlightMargin, MarginTotals
 
 
@@ -16,7 +17,8 @@ class FlightState(StrEnum):
 
 @dataclass(frozen=True)
 class FrozenRates:
-    """What closing froze for a flight; a closed flight is read from these and never priced again."""
+    """What closing froze for a flight: its rates and its snapshot. A closed flight is read from these and never
+    priced again."""
 
     rebate_amount: Decimal
     platform_rate: Decimal
@@ -30,6 +32,8 @@ class FrozenRates:
     # Only a target flight's: the revenue its DSP reported and the gross its rebate was priced on, as of closing.
     revenue_amount: Decimal | None
     rebate_base_amount: Decimal | None
+    # Every figure the flight's closing computed, and the delivery it computed them on.
+    snapshot: ClosedFlightSnapshot
 
 
 @dataclass(frozen=True)
@@ -54,6 +58,8 @@ class FlightReport:
     state: FlightState
     margin: FlightMargin
     rates: AppliedRates
+    # A closed flight compared with the delivery stored now: informative, no figure adds it. None until closed.
+    delivery_change: ClosedDeliveryCheck | None = None
 
 
 @dataclass(frozen=True)
