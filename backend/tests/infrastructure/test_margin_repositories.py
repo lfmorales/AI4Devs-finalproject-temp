@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.domain.services.closed_flight import snapshot_of
 from app.domain.services.platform_rate import resolve_platform_rate
 from app.domain.services.priced_flights import price_flights
+from app.domain.value_objects.billing import BillingAdjustment, BillingBasis
 from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight, ReadFlight
 from app.domain.value_objects.rebate import Bracket, CounterKey, RebateSchedule
 from app.domain.value_objects.volume_commitment import VolumeCommitment
@@ -21,6 +22,7 @@ from app.infrastructure.persistence.models.margin import (
     AppliedRateBracketRecord,
     AppliedRateRecord,
     ClosedFlightSnapshotRecord,
+    FlightBillingAdjustmentRecord,
     MonthClosingBatchRecord,
     MonthClosingRecord,
     PlatformRateSettingRecord,
@@ -689,3 +691,104 @@ def test_the_current_delivery_of_a_closed_flight_is_summed_in_its_frozen_metric_
     )
     other = _read(rolled_back_session, still_open)
     assert (other.facts.delivery_metric, other.facts.delivered) == ("impressions", Decimal("3000.0000"))
+
+
+# ---------------------------------------------------------------- the carry-over and the adjustment of a flight
+
+
+def _flight_id(session: Session, line_id: int, index: int = 0) -> int:
+    return session.scalars(
+        select(CampaignLinePeriodRecord.id).where(CampaignLinePeriodRecord.campaign_line_id == line_id)
+        .order_by(CampaignLinePeriodRecord.flight_start)
+    ).all()[index]
+
+
+def _adjust(session: Session, flight_id: int, user_id: int, basis: str, amount: str | None = None) -> None:
+    session.add(FlightBillingAdjustmentRecord(
+        campaign_line_period_id=flight_id, basis=basis, amount=None if amount is None else Decimal(amount),
+        reason="Acuerdo con la agencia", created_by=user_id,
+    ))
+    session.flush()
+
+
+def _both_read(session: Session) -> dict[str, FlightFacts]:
+    """The facts of the only flight as the closing reads them and as the margin read does."""
+    (closing,) = SqlAlchemyMarginFlightRepository(session).open_ended_flights(2026, 8, AS_OF)
+    (read,) = SqlAlchemyMarginReadRepository(session).list_flights(AS_OF)
+    return {"closing": closing, "read": read.facts}
+
+
+def test_a_flight_without_a_carry_over_or_an_adjustment_carries_none(rolled_back_session: Session) -> None:
+    _line(rolled_back_session)
+
+    for facts in _both_read(rolled_back_session).values():
+        assert (facts.carryover, facts.carryover_billable, facts.adjustment) == (0, False, None)
+
+
+def test_a_flight_carries_its_carry_over_and_whether_it_is_billable(rolled_back_session: Session) -> None:
+    line_id = _line(rolled_back_session)
+    user_id = insert_user(rolled_back_session)
+    rolled_back_session.execute(update(CampaignLinePeriodRecord).values(
+        carryover=100_000, carryover_reason="Recuperar", carryover_set_by=user_id, carryover_set_at=datetime(2026, 8, 2),
+        carryover_billable=True, carryover_billable_set_by=user_id, carryover_billable_set_at=datetime(2026, 8, 3),
+    ))
+    assert line_id
+
+    for facts in _both_read(rolled_back_session).values():
+        assert (facts.carryover, facts.carryover_billable) == (100_000, True)
+
+
+def test_a_flight_carries_the_adjustment_in_force(rolled_back_session: Session) -> None:
+    line_id = _line(rolled_back_session)
+    user_id = insert_user(rolled_back_session)
+    _adjust(rolled_back_session, _flight_id(rolled_back_session, line_id), user_id, "contracted")
+
+    for facts in _both_read(rolled_back_session).values():
+        assert facts.adjustment == BillingAdjustment(BillingBasis.CONTRACTED, None)
+
+
+def test_the_latest_adjustment_by_id_is_the_one_in_force(rolled_back_session: Session) -> None:
+    line_id = _line(rolled_back_session)
+    flight_id = _flight_id(rolled_back_session, line_id)
+    user_id = insert_user(rolled_back_session)
+    _adjust(rolled_back_session, flight_id, user_id, "contracted")
+    _adjust(rolled_back_session, flight_id, user_id, "custom", "4200.00")
+
+    for facts in _both_read(rolled_back_session).values():
+        assert facts.adjustment == BillingAdjustment(BillingBasis.CUSTOM, Decimal("4200.00"))
+
+
+def test_an_adjustment_to_the_minimum_returns_the_flight_to_the_rule_and_is_read_as_such(rolled_back_session: Session) -> None:
+    line_id = _line(rolled_back_session)
+    flight_id = _flight_id(rolled_back_session, line_id)
+    user_id = insert_user(rolled_back_session)
+    _adjust(rolled_back_session, flight_id, user_id, "contracted")
+    _adjust(rolled_back_session, flight_id, user_id, "minimum")
+
+    for facts in _both_read(rolled_back_session).values():
+        assert facts.adjustment == BillingAdjustment(BillingBasis.MINIMUM, None)
+
+
+def test_the_adjustment_of_one_flight_does_not_reach_another(rolled_back_session: Session) -> None:
+    first = _line(rolled_back_session, campaign_name="Adjusted")
+    second = add_line_to_campaign(rolled_back_session, first, 2)
+    user_id = insert_user(rolled_back_session)
+    _adjust(rolled_back_session, _flight_id(rolled_back_session, first), user_id, "delivered")
+
+    by_line = _by_line(SqlAlchemyMarginFlightRepository(rolled_back_session).open_ended_flights(2026, 8, AS_OF))
+
+    assert by_line[first].adjustment == BillingAdjustment(BillingBasis.DELIVERED, None)
+    assert by_line[second].adjustment is None
+
+
+def test_the_facts_of_a_frozen_flight_are_still_read_with_their_adjustment(rolled_back_session: Session) -> None:
+    line_id = _line(rolled_back_session)
+    user_id = insert_user(rolled_back_session)
+    _adjust(rolled_back_session, _flight_id(rolled_back_session, line_id), user_id, "contracted")
+    (facts,) = SqlAlchemyMarginFlightRepository(rolled_back_session).open_ended_flights(2026, 8, AS_OF)
+    _freeze(rolled_back_session, [facts], [], user_id)
+
+    (read,) = SqlAlchemyMarginReadRepository(rolled_back_session).list_flights(AS_OF)
+
+    assert read.frozen is not None
+    assert read.facts.adjustment == BillingAdjustment(BillingBasis.CONTRACTED, None)

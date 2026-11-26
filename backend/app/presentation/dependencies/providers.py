@@ -21,6 +21,7 @@ from app.application.services.dsp_mapping_service import DspMappingService
 from app.application.services.exception_linking_service import ExceptionLinkingService
 from app.application.services.ingestion_exception_service import IngestionExceptionService
 from app.application.services.line_mapping_removal_service import LineMappingRemovalService
+from app.application.services.billing_adjustment_service import BillingAdjustmentService
 from app.application.services.carryover_service import CarryoverService
 from app.application.services.margin_closing_service import MarginClosingService
 from app.application.services.margin_masters_service import MarginMastersService
@@ -57,6 +58,9 @@ from app.infrastructure.persistence.repositories.sqlalchemy_dsp_mapping_reposito
 )
 from app.infrastructure.persistence.repositories.sqlalchemy_line_mapping_removal_repository import (
     SqlAlchemyLineMappingRemovalRepository,
+)
+from app.infrastructure.persistence.repositories.sqlalchemy_billing_adjustment_repository import (
+    SqlAlchemyBillingAdjustmentTransaction,
 )
 from app.infrastructure.persistence.repositories.sqlalchemy_carryover_repository import SqlAlchemyCarryoverTransaction
 from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories import (
@@ -226,6 +230,17 @@ def get_margin_closing_service(
 ) -> MarginClosingService:
     return MarginClosingService(
         SqlAlchemyMarginClosingTransaction(session),
+        today=lambda: today,
+        now=lambda: datetime.now(UTC).replace(tzinfo=None),
+    )
+
+
+def get_billing_adjustment_service(
+    session: Annotated[Session, Depends(get_db_session)],
+    today: Annotated[date, Depends(get_today)],
+) -> BillingAdjustmentService:
+    return BillingAdjustmentService(
+        SqlAlchemyBillingAdjustmentTransaction(session),
         today=lambda: today,
         now=lambda: datetime.now(UTC).replace(tzinfo=None),
     )

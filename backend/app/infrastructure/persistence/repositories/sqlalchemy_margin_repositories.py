@@ -22,6 +22,7 @@ from app.domain.repositories.margin_repositories import (
     RebateScheduleRepository,
 )
 from app.domain.services.closed_flight import snapshot_of
+from app.domain.value_objects.billing import BillingAdjustment, BillingBasis
 from app.domain.value_objects.closed_flight import ClosedFlightSnapshot
 from app.domain.value_objects.margin_report import FrozenRates
 from app.domain.value_objects.platform_rate import NewPlatformRateSetting, PlatformRateLevel, PlatformRateSetting
@@ -39,6 +40,7 @@ from app.infrastructure.persistence.models.margin import (
     AppliedRateBracketRecord,
     AppliedRateRecord,
     ClosedFlightSnapshotRecord,
+    FlightBillingAdjustmentRecord,
     MonthClosingBatchRecord,
     MonthClosingRecord,
     PlatformRateSettingRecord,
@@ -189,6 +191,16 @@ def _flight_facts_query(
     data_cost = select(
         func.coalesce(func.sum(DailyDeliveryRecord.third_party_data_cost + DailyDeliveryRecord.audience_data_cost), 0)
     ).where(*window).scalar_subquery()
+    # The adjustment in force is the latest row of the flight, by id (the table is append-only). Its basis and amount are
+    # read by correlated subqueries ordered by id, over the (flight, id) index.
+    latest = (
+        select(FlightBillingAdjustmentRecord.basis, FlightBillingAdjustmentRecord.amount)
+        .where(FlightBillingAdjustmentRecord.campaign_line_period_id == flight.id)
+        .order_by(FlightBillingAdjustmentRecord.id.desc())
+        .limit(1)
+    )
+    adjustment_basis = latest.with_only_columns(FlightBillingAdjustmentRecord.basis).scalar_subquery()
+    adjustment_amount = latest.with_only_columns(FlightBillingAdjustmentRecord.amount).scalar_subquery()
     return (
         select(
             flight.id.label("flight_id"),
@@ -212,6 +224,10 @@ def _flight_facts_query(
             reported_revenue.label("reported_revenue"),
             buyer_spend.label("buyer_spend"),
             data_cost.label("data_cost"),
+            flight.carryover.label("carryover"),
+            flight.carryover_billable.label("carryover_billable"),
+            adjustment_basis.label("adjustment_basis"),
+            adjustment_amount.label("adjustment_amount"),
             *extra,
         )
         .select_from(flight)
@@ -221,6 +237,10 @@ def _flight_facts_query(
         .join(ChannelRecord, ChannelRecord.id == CampaignLineRecord.channel_id)
         .join(CampaignPeriodRecord, CampaignPeriodRecord.id == flight.campaign_period_id)
     )
+
+
+# Public: the adjustments of a flight price it with the very facts the closing and the reads use.
+flight_facts_query = _flight_facts_query
 
 
 def _flight_facts(row: Row[Any]) -> FlightFacts:
@@ -236,9 +256,11 @@ def _flight_facts(row: Row[Any]) -> FlightFacts:
         volume_commitment=VolumeCommitment(values["volume_commitment"]),
         reported_revenue=Decimal(values["reported_revenue"]), buyer_spend=Decimal(values["buyer_spend"]),
         data_cost=Decimal(values["data_cost"]),
-        # No flight has a carry-over or an adjustment until their columns and table exist (tasks 4 and 7 of
-        # committed-billing-and-review), so every flight follows the rule of the lesser with its contracted volume.
-        carryover=0, carryover_billable=False, adjustment=None,
+        carryover=int(values["carryover"]), carryover_billable=bool(values["carryover_billable"]),
+        adjustment=(
+            None if values["adjustment_basis"] is None
+            else BillingAdjustment(BillingBasis(values["adjustment_basis"]), values["adjustment_amount"])
+        ),
     )
 
 

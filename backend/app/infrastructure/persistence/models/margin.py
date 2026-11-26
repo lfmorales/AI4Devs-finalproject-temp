@@ -16,6 +16,7 @@ from sqlalchemy import (
     Numeric,
     SmallInteger,
     String,
+    Text,
     UniqueConstraint,
     func,
     text,
@@ -235,6 +236,34 @@ class ClosedFlightSnapshotRecord(Base):
     sale_cpm: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     contracted_impressions: Mapped[int] = mapped_column(BigInteger, nullable=False)
     volume_commitment: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class FlightBillingAdjustmentRecord(Base):
+    """A manual adjustment of a committed flight's billing. Rows are only added; the latest of a flight is in force.
+
+    The first three bases are recomputed from the delivery until the month is closed; `custom` carries its amount.
+    """
+
+    __tablename__ = "flight_billing_adjustments"
+    __table_args__ = (
+        CheckConstraint(
+            "basis IN ('minimum', 'delivered', 'contracted', 'custom')", name="ck_flight_billing_adjustments_basis"
+        ),
+        CheckConstraint(
+            "(basis = 'custom') = (amount IS NOT NULL)", name="ck_flight_billing_adjustments_amount_with_custom"
+        ),
+        CheckConstraint("amount IS NULL OR amount >= 0", name="ck_flight_billing_adjustments_amount_not_negative"),
+        CheckConstraint("length(btrim(reason)) > 0", name="ck_flight_billing_adjustments_reason_not_blank"),
+        Index("ix_flight_billing_adjustments_flight", "campaign_line_period_id", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    campaign_line_period_id: Mapped[int] = mapped_column(ForeignKey("campaign_line_periods.id"), nullable=False)
+    basis: Mapped[str] = mapped_column(String(16), nullable=False)
+    amount: Mapped[Decimal | None] = mapped_column(_ROUNDED, nullable=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
 
 
 class AppliedRateBracketRecord(Base):

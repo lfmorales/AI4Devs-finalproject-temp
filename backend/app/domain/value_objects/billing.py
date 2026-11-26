@@ -1,6 +1,7 @@
 """The billing of a flight: how much GeoQ invoices for it, on what volume and by which rule."""
 
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
@@ -54,3 +55,15 @@ class Billing:
     billable: Decimal | None
     amount: Decimal
     basis: BillingBasis
+
+
+@dataclass(frozen=True)
+class AdjustmentEntry:
+    """One stored adjustment of a flight, with its reason, its author and its moment. The latest of a flight is in force."""
+
+    entry_id: int
+    flight_id: int
+    adjustment: BillingAdjustment
+    reason: str
+    created_by: int
+    created_at: datetime

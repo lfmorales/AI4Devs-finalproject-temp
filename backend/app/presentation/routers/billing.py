@@ -9,10 +9,17 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, status
 from fastapi.responses import JSONResponse
 
+from app.application.services.billing_adjustment_service import BillingAdjustmentService
 from app.application.services.carryover_service import CarryoverService
 from app.domain.models.user import RoleName, User
+from app.domain.value_objects.billing import BillingBasis
 from app.presentation.dependencies.auth import require_roles
-from app.presentation.dependencies.providers import get_carryover_service
+from app.presentation.dependencies.providers import get_billing_adjustment_service, get_carryover_service
+from app.presentation.schemas.billing_adjustments import (
+    AdjustmentHistoryResponse,
+    AdjustmentRequest,
+    AdjustmentResponse,
+)
 from app.presentation.schemas.carryover import BillableRequest, BillableResponse
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -34,16 +41,27 @@ def get_billing(_user: OperationsOrFinance) -> JSONResponse:
     return not_implemented()
 
 
-@router.post("/flights/{flight_id}/adjustments")
-def adjust_flight_billing(flight_id: int, _user: OperationsOrFinance) -> JSONResponse:
-    """Adjust the billing of an ended, unfrozen committed flight. Requires: operations or finance role."""
-    return not_implemented()
+@router.post("/flights/{flight_id}/adjustments", response_model=AdjustmentResponse, status_code=status.HTTP_201_CREATED)
+def adjust_flight_billing(
+    body: AdjustmentRequest,
+    user: OperationsOrFinance,
+    service: Annotated[BillingAdjustmentService, Depends(get_billing_adjustment_service)],
+    flight_id: Annotated[int, Path(ge=1)],
+) -> AdjustmentResponse:
+    """Adjust the billing of an ended, unfrozen committed flight, with a mandatory reason. Adjustments are only added
+    and the latest is in force. Requires: operations or finance role."""
+    result = service.adjust(flight_id, BillingBasis(body.basis), body.amount, body.reason, user.id)
+    return AdjustmentResponse.from_result(result)
 
 
-@router.get("/flights/{flight_id}/adjustments")
-def list_flight_adjustments(flight_id: int, _user: OperationsOrFinance) -> JSONResponse:
-    """The adjustments of a flight, latest first. Requires: operations or finance role."""
-    return not_implemented()
+@router.get("/flights/{flight_id}/adjustments", response_model=AdjustmentHistoryResponse)
+def list_flight_adjustments(
+    _user: OperationsOrFinance,
+    service: Annotated[BillingAdjustmentService, Depends(get_billing_adjustment_service)],
+    flight_id: Annotated[int, Path(ge=1)],
+) -> AdjustmentHistoryResponse:
+    """The adjustments of a flight, latest first, and which one is in force. Requires: operations or finance role."""
+    return AdjustmentHistoryResponse.from_entries(service.history(flight_id))
 
 
 @router.post("/reviews")

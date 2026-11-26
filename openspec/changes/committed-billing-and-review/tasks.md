@@ -53,12 +53,14 @@
 
 ## 7. Billing Adjustments
 
-- [ ] 7.1 Write failing migration tests in a new `backend/tests/infrastructure/test_billing_adjustments_migration.py`: the table, its checks (basis values, amount with `custom` only, amount not negative, blank reason refused), its foreign keys, the append-only trigger refusing an update and a delete, no floating-point column, `downgrade -1`
-- [ ] 7.2 Add the model and the migration, review it; verify 7.1 and `test_migration_schema_sync.py`
-- [ ] 7.3 Write failing repository tests in `backend/tests/infrastructure/test_margin_repositories.py`: `open_ended_flights` and `list_flights` carry the carry-over, its flag and the latest adjustment of each flight (by highest id), and a flight without adjustment carries none
-- [ ] 7.4 Add them to `_flight_facts_query` with a lateral subquery; verify 7.3 and the repository suite
-- [ ] 7.5 Write failing tests in a new `backend/tests/api/test_billing_adjustments_endpoint.py` with every scenario of `finance/billing-adjustment`: the worked flight adjusted to `contracted` (5,000.00 €, rebate 1,250.00 €, margin 1,850.00 € in `GET /margin`), to `custom` 4,200.00 € fixed after a reingestion, to `delivered` following a reingestion to 720,000 (3,600.00 €), to 0.00; the 422 cases; 409 `target_line_not_adjustable`, `flight_not_ended`, `flight_closed`; 404 `flight_not_found`; the history latest first with the one in force; 403 as `trading` and `business`, 401 without a token; no body of `trading` carries an amount
-- [ ] 7.6 Implement `BillingAdjustmentService` (month lock, checks, insert) and the two routes; verify 7.5
+> The migration is `d7e2a9f41b36`. Task 7.4 also made the facts of a flight read its carry-over and its billable flag (the repository returned zeros until then), so a billable carry-over now raises the cap of the billing in the margin read and in the closing. The service takes the same month lock as the carry-over (tests spy the order: lock, then write).
+
+- [x] 7.1 Write failing migration tests in a new `backend/tests/infrastructure/test_billing_adjustments_migration.py`: the table, its checks (basis values, amount with `custom` only, amount not negative, blank reason refused), its foreign keys, the append-only trigger refusing an update and a delete, no floating-point column, `downgrade -1`
+- [x] 7.2 Add the model and the migration, review it; verify 7.1 and `test_migration_schema_sync.py`
+- [x] 7.3 Write failing repository tests in `backend/tests/infrastructure/test_margin_repositories.py`: `open_ended_flights` and `list_flights` carry the carry-over, its flag and the latest adjustment of each flight (by highest id), and a flight without adjustment carries none
+- [x] 7.4 Add them to `_flight_facts_query` with a lateral subquery; verify 7.3 and the repository suite
+- [x] 7.5 Write failing tests in a new `backend/tests/api/test_billing_adjustments_endpoint.py` with every scenario of `finance/billing-adjustment`: the worked flight adjusted to `contracted` (5,000.00 €, rebate 1,250.00 €, margin 1,850.00 € in `GET /margin`), to `custom` 4,200.00 € fixed after a reingestion, to `delivered` following a reingestion to 720,000 (3,600.00 €), to 0.00; the 422 cases; 409 `target_line_not_adjustable`, `flight_not_ended`, `flight_closed`; 404 `flight_not_found`; the history latest first with the one in force; 403 as `trading` and `business`, 401 without a token; no body of `trading` carries an amount
+- [x] 7.6 Implement `BillingAdjustmentService` (month lock, checks, insert) and the two routes; verify 7.5
 
 ## 8. Monthly Review
 

@@ -220,3 +220,12 @@ class FlightNotFoundError(DomainError):
 
 class TargetLineNotAdjustableError(DomainError):
     """The flight belongs to a target line, which bills what its DSP reports: no adjustment, no billable carry-over."""
+
+
+class BillingAdjustmentError(DomainError):
+    """A billing adjustment broke a rule of finance/billing-adjustment. Carries a stable code: `invalid_adjustment`,
+    `flight_not_ended` or `flight_closed`."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code

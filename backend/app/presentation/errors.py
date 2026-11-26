@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 from app.domain.exceptions import (
     AmbiguousMappingError,
     CampaignNotFoundError,
+    BillingAdjustmentError,
     CarryoverError,
     FlightNotFoundError,
     TargetLineNotAdjustableError,
@@ -232,6 +233,21 @@ async def _carryover_handler(request: Request, error: Exception) -> JSONResponse
     return JSONResponse(status_code=status_code, content=ErrorResponse(code=error.code, message=message).model_dump())
 
 
+_BILLING_ADJUSTMENT_ERRORS: dict[str, tuple[int, str]] = {
+    "invalid_adjustment": (
+        422, "An adjustment needs a reason, and an amount of zero or more, with two decimals at most, only with the custom basis"
+    ),
+    "flight_not_ended": (409, "Only a flight that has ended can be adjusted"),
+    "flight_closed": (409, "A flight frozen by a closing cannot be adjusted"),
+}
+
+
+async def _billing_adjustment_handler(request: Request, error: Exception) -> JSONResponse:
+    assert isinstance(error, BillingAdjustmentError)
+    status_code, message = _BILLING_ADJUSTMENT_ERRORS.get(error.code, (422, "A billing adjustment rule was broken"))
+    return JSONResponse(status_code=status_code, content=ErrorResponse(code=error.code, message=message).model_dump())
+
+
 # Each rebate rule has its own status and message; the message never carries the detail of the failure.
 _REBATE_RULE_ERRORS: dict[str, tuple[int, str]] = {
     "bracket_table_empty": (422, "A bracket table needs at least one bracket"),
@@ -300,6 +316,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(MonthDeliveryNotLoadedError, _month_delivery_not_loaded_handler)
     app.add_exception_handler(RebateRuleError, _rebate_rule_handler)
     app.add_exception_handler(CarryoverError, _carryover_handler)
+    app.add_exception_handler(BillingAdjustmentError, _billing_adjustment_handler)
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
     app.add_exception_handler(StarletteHTTPException, _http_error_handler)
     app.add_exception_handler(Exception, _generic_error_handler)
