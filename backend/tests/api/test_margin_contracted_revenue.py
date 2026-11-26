@@ -1,8 +1,10 @@
 """GET /margin returns the sale of the whole flight and the days behind a running figure, at every level."""
 
+from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
 
+from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.domain.services.flight_margin import round_amount
@@ -79,6 +81,33 @@ def test_a_closed_flight_accrues_all_of_it_and_closing_changes_none_of_the_three
     assert after["accrued_days"] == after["window_days"] == 31
     for field in ("contracted_revenue", "accrued_days", "window_days", "revenue"):
         assert after[field] == before[field]
+
+
+def test_a_closed_flight_that_under_delivered_bills_less_than_it_contracted(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session
+) -> None:
+    # 700,000 of 1,000,000 contracted at 5.00 €: it bills the lesser, 3,500.00 €, on a billable volume of 700,000.
+    _bill(test_db_session, insert_campaign_line(test_db_session), 700_000)
+    client = _client(client_for_roles, SEPTEMBER_FIRST)
+    make_month_closable(test_db_session, 2026, 8, None, SEPTEMBER_FIRST)
+    assert client.post("/margin/closings", json={"year": 2026, "month": 8}).status_code == 200
+
+    (flight,) = _flights(_get(client))
+
+    assert (flight["state"], flight["revenue"], flight["contracted_revenue"]) == ("closed", "3500.00", "5000.00")
+    assert (flight["billable"], flight["billing_basis"]) == ("700000.0000", "minimum")
+
+
+def test_a_running_flight_reports_the_billable_volume_its_billing_to_date_was_computed_on(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session
+) -> None:
+    _bill(test_db_session, insert_campaign_line(test_db_session), 180_000)
+
+    (flight,) = _flights(_get(_client(client_for_roles, AUGUST_11)))
+
+    assert (flight["state"], flight["revenue"], flight["billable"], flight["billing_basis"]) == (
+        "running", "900.00", "180000.0000", "minimum",
+    )
 
 
 def test_a_line_without_a_price_has_a_contracted_revenue_of_zero(client_for_roles, test_db_session):

@@ -226,6 +226,15 @@ class MonthNotReviewedError(DomainError):
         self.campaigns = campaigns
 
 
+class MonthNotClosedError(DomainError):
+    """A month that holds no closing header has no frozen billing, so it has no CSV."""
+
+    def __init__(self, year: int, month: int) -> None:
+        super().__init__(f"{year}-{month:02d} is not closed")
+        self.year = year
+        self.month = month
+
+
 class CarryoverError(DomainError):
     """A carry-over broke a rule of campaign/carryover. Carries a stable code: `invalid_carryover`,
     `no_previous_flight`, `previous_flight_not_ended`, `carryover_exceeds_shortfall`, `month_closed` or, for the

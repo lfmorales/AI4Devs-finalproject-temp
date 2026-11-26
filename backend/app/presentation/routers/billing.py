@@ -1,15 +1,13 @@
-"""The billing routes of committed-billing-and-review, guarded for operations and finance.
-
-Each route declares its roles now, ahead of its behaviour, so that the access matrix holds from the start; until
-its task is implemented, a route answers 501 with a code and a message and no figure.
-"""
+"""The billing routes of committed-billing-and-review, guarded for operations and finance: the read of a month, the
+adjustments, the reviews, the billable flag of a carry-over and the CSV of a closed month."""
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, Response, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Path, Query, Response, status
 
 from app.application.services.billing_adjustment_service import BillingAdjustmentService
+from app.application.services.billing_export_service import BillingExportService
+from app.application.services.billing_query_service import BillingQueryService
 from app.application.services.carryover_service import CarryoverService
 from app.application.services.monthly_review_service import MonthlyReviewService
 from app.domain.models.user import RoleName, User
@@ -17,6 +15,8 @@ from app.domain.value_objects.billing import BillingBasis
 from app.presentation.dependencies.auth import require_roles
 from app.presentation.dependencies.providers import (
     get_billing_adjustment_service,
+    get_billing_export_service,
+    get_billing_query_service,
     get_carryover_service,
     get_monthly_review_service,
 )
@@ -25,6 +25,7 @@ from app.presentation.schemas.billing_adjustments import (
     AdjustmentRequest,
     AdjustmentResponse,
 )
+from app.presentation.schemas.billing_report import BillingResponse
 from app.presentation.schemas.carryover import BillableRequest, BillableResponse
 from app.presentation.schemas.monthly_review import ReviewRequest, ReviewResponse
 
@@ -33,18 +34,17 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 OperationsOrFinance = Annotated[User, Depends(require_roles(RoleName.OPERATIONS, RoleName.FINANCE))]
 
 
-def not_implemented() -> JSONResponse:
-    """The body of a route whose behaviour is not implemented yet: a code and a message, never an amount."""
-    return JSONResponse(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        content={"code": "not_implemented", "message": "This route is declared but not implemented yet."},
-    )
-
-
-@router.get("")
-def get_billing(_user: OperationsOrFinance) -> JSONResponse:
-    """The billing of a month per campaign, line and flight. Requires: operations or finance role."""
-    return not_implemented()
+@router.get("", response_model=BillingResponse)
+def get_billing(
+    _user: OperationsOrFinance,
+    service: Annotated[BillingQueryService, Depends(get_billing_query_service)],
+    year: Annotated[int, Query(ge=2000, le=2100)],
+    month: Annotated[int, Query(ge=1, le=12)],
+    campaign_id: Annotated[int | None, Query(ge=1)] = None,
+) -> BillingResponse:
+    """The billing of a month per campaign, line and flight, with each campaign's review state. Its billing, billable
+    volume and basis are `GET /margin`'s. Writes nothing. Requires: operations or finance role."""
+    return BillingResponse.from_report(service.get_billing(year, month, campaign_id))
 
 
 @router.post("/flights/{flight_id}/adjustments", response_model=AdjustmentResponse, status_code=status.HTTP_201_CREATED)
@@ -108,7 +108,18 @@ def set_carryover_billable(
     return BillableResponse.from_result(service.set_billable(flight_id, body.billable, user.id))
 
 
-@router.get("/export")
-def export_closed_month_billing(_user: OperationsOrFinance) -> JSONResponse:
-    """The CSV of a closed month's billing. Requires: operations or finance role."""
-    return not_implemented()
+@router.get("/export", response_class=Response, responses={200: {"content": {"text/csv": {}}}})
+def export_closed_month_billing(
+    _user: OperationsOrFinance,
+    service: Annotated[BillingExportService, Depends(get_billing_export_service)],
+    year: Annotated[int, Query(ge=2000, le=2100)],
+    month: Annotated[int, Query(ge=1, le=12)],
+) -> Response:
+    """The CSV of a closed month's billing, `facturacion-YYYY-MM.csv`, built only from its closings' snapshots: UTF-8
+    with a byte order mark, `;`, a decimal comma. A month not closed is 409 `month_not_closed`. Writes nothing.
+    Requires: operations or finance role."""
+    name, content = service.export(year, month)
+    return Response(
+        content=content, media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )

@@ -7,10 +7,11 @@ from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.domain.services.flight_margin import round_amount
+from app.infrastructure.persistence.models.campaign import CampaignLinePeriodRecord, CampaignLineRecord
 from app.infrastructure.persistence.models.margin import (
     AppliedRateBracketRecord,
     AppliedRateRecord,
@@ -410,3 +411,105 @@ def test_reading_and_closing_agree_on_the_volumes_of_a_dooh_flight(
     after = [{name: f[name] for name in fields} for f in _flights(_get(client))]
 
     assert before == after and before[0]["delivered"] == "280000.5000"
+
+
+# ---------------------------------------------------------------- the billable volume and the billing basis
+
+
+def _flight_id(session: Session, line_id: int, month: int = 8) -> int:
+    return int(session.scalars(
+        select(CampaignLinePeriodRecord.id).where(
+            CampaignLinePeriodRecord.campaign_line_id == line_id,
+            func.extract("month", CampaignLinePeriodRecord.flight_start) == month,
+        )
+    ).one())
+
+
+def _adjust(client: TestClient, flight_id: int, basis: str, amount: str | None = None) -> None:
+    response = client.post(
+        f"/billing/flights/{flight_id}/adjustments", json={"basis": basis, "amount": amount, "reason": "Acuerdo"},
+    )
+    assert response.status_code == 201, response.text
+
+
+def test_a_flight_adjusted_to_its_contracted_volume_names_its_basis_and_bills_its_cap(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session
+) -> None:
+    line_id = insert_campaign_line(test_db_session)
+    _deliver(test_db_session, line_id, 700_000)
+    client = _client(client_for_roles, SEPTEMBER_FIRST)
+    _adjust(client, _flight_id(test_db_session, line_id), "contracted")
+
+    (flight,) = _flights(_get(client))
+
+    assert (flight["state"], flight["billing_basis"], flight["billable"], flight["revenue"]) == (
+        "pending_close", "contracted", "1000000.0000", "5000.00",
+    )
+
+
+def test_the_cap_of_a_contracted_adjustment_includes_a_billable_carry_over(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session
+) -> None:
+    # July delivered 900,000 of its million: its 100,000 short are carried to August and made billable.
+    line_id = insert_campaign_line(test_db_session, start_date=date(2026, 7, 1), end_date=date(2026, 8, 31))
+    replace_flights(test_db_session, line_id, [(date(2026, 7, 1), date(2026, 7, 31)), (date(2026, 8, 1), date(2026, 8, 31))])
+    _deliver(test_db_session, line_id, 900_000, date(2026, 7, 10))
+    _deliver(test_db_session, line_id, 700_000)
+    august = _flight_id(test_db_session, line_id)
+    operations = _client(client_for_roles, SEPTEMBER_FIRST, roles=("operations",))
+    carried = operations.put(f"/flights/{august}/carryover", json={"volume": 100_000, "reason": "Falta de julio"})
+    assert carried.status_code == 200, carried.text
+    assert operations.put(f"/billing/flights/{august}/carryover/billable", json={"billable": True}).status_code == 200
+    _adjust(operations, august, "contracted")
+
+    flights = {f["flight_id"]: f for f in _flights(_get(operations))}
+
+    assert (flights[august]["billing_basis"], flights[august]["billable"], flights[august]["revenue"]) == (
+        "contracted", "1100000.0000", "5500.00",
+    )
+
+
+def test_a_custom_billing_has_no_billable_volume(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session
+) -> None:
+    line_id = insert_campaign_line(test_db_session)
+    _deliver(test_db_session, line_id, 700_000)
+    client = _client(client_for_roles, SEPTEMBER_FIRST)
+    _adjust(client, _flight_id(test_db_session, line_id), "custom", "4200.00")
+
+    (flight,) = _flights(_get(client))
+
+    assert (flight["billing_basis"], flight["billable"], flight["revenue"]) == ("custom", None, "4200.00")
+
+
+def test_a_closed_target_flight_bills_what_was_reported_with_no_billable_volume(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session
+) -> None:
+    line_id = insert_campaign_line(test_db_session)
+    test_db_session.execute(
+        update(CampaignLineRecord).where(CampaignLineRecord.id == line_id).values(volume_commitment="target")
+    )
+    insert_delivery(test_db_session, line_id, date(2026, 8, 30), 1_100_000, insert_ingestion_batch(test_db_session),
+                    reported_revenue=Decimal("4400.00"), buyer_spend=Decimal("5500.00"))
+    client = _client(client_for_roles, SEPTEMBER_FIRST)
+    make_month_closable(test_db_session, 2026, 8, None, SEPTEMBER_FIRST)
+    assert client.post("/margin/closings", json={"year": 2026, "month": 8}).status_code == 200
+
+    (flight,) = _flights(_get(client))
+
+    assert (flight["state"], flight["revenue"], flight["billable"], flight["billing_basis"]) == (
+        "closed", "4400.00", None, "reported",
+    )
+
+
+def test_no_level_above_the_flight_sums_the_billable_volume(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session
+) -> None:
+    first = insert_campaign_line(test_db_session)
+    _deliver(test_db_session, first, 700_000)
+
+    body = _get(_client(client_for_roles, SEPTEMBER_FIRST))
+
+    (campaign,) = body["campaigns"]
+    for totals in (campaign["lines"][0]["totals"], campaign["totals"], body["totals"]):
+        assert "billable" not in totals and "billing_basis" not in totals

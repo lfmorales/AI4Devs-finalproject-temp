@@ -22,6 +22,8 @@ from app.application.services.exception_linking_service import ExceptionLinkingS
 from app.application.services.ingestion_exception_service import IngestionExceptionService
 from app.application.services.line_mapping_removal_service import LineMappingRemovalService
 from app.application.services.billing_adjustment_service import BillingAdjustmentService
+from app.application.services.billing_export_service import BillingExportService
+from app.application.services.billing_query_service import BillingQueryService
 from app.application.services.carryover_service import CarryoverService
 from app.application.services.margin_closing_service import MarginClosingService
 from app.application.services.margin_masters_service import MarginMastersService
@@ -60,6 +62,10 @@ from app.infrastructure.persistence.repositories.sqlalchemy_dsp_mapping_reposito
 from app.infrastructure.persistence.repositories.sqlalchemy_line_mapping_removal_repository import (
     SqlAlchemyLineMappingRemovalRepository,
 )
+from app.infrastructure.persistence.repositories.sqlalchemy_billing_export_repository import (
+    SqlAlchemyBillingExportRepository,
+)
+from app.infrastructure.persistence.repositories.sqlalchemy_billing_read_repository import SqlAlchemyBillingReadRepository
 from app.infrastructure.persistence.repositories.sqlalchemy_billing_adjustment_repository import (
     SqlAlchemyBillingAdjustmentTransaction,
 )
@@ -281,6 +287,19 @@ def get_margin_query_service(
         applied_rates=SqlAlchemyAppliedRateRepository(session),
         today=lambda: today,
     )
+
+
+def get_billing_query_service(
+    session: Annotated[Session, Depends(get_db_session)],
+    today: Annotated[date, Depends(get_today)],
+) -> BillingQueryService:
+    return BillingQueryService(
+        get_margin_query_service(session, today), SqlAlchemyBillingReadRepository(session), today=lambda: today,
+    )
+
+
+def get_billing_export_service(session: Annotated[Session, Depends(get_db_session)]) -> BillingExportService:
+    return BillingExportService(SqlAlchemyBillingExportRepository(session))
 
 
 def get_margin_masters_service(session: Annotated[Session, Depends(get_db_session)]) -> MarginMastersService:

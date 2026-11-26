@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, Field, PlainSerializer, model_validator
 
+from app.domain.value_objects.billing import BillingBasis
 from app.domain.value_objects.closed_flight import ClosedDeliveryCheck
 from app.domain.value_objects.margin import MarginTotals
 from app.domain.value_objects.margin_report import FlightReport, FlightState, MarginReport
@@ -86,8 +87,8 @@ class TotalsResponse(BaseModel):
 
 
 _INFORMATIVE = (
-    "Informative: the current margin uses the closing's rebate and rates with today's delivery; only the delivery "
-    "changes, and no amount or total adds it."
+    "Informative: the current margin uses the closing's rebate and rates, and its cap and billing basis, with today's "
+    "delivery; only the delivery changes, and no amount or total adds it."
 )
 
 
@@ -109,6 +110,18 @@ class DeliveryChangeResponse(BaseModel):
         description=f"The margin the flight would have with the delivery stored now. {_INFORMATIVE}"
     )
     margin_difference: DecimalString = Field(description="`current_margin` less the frozen `margin`.")
+    billable_difference: QuantityString | None = Field(
+        description=(
+            f"The billable volume, {IN_DELIVERY_METRIC}, four decimals: today's delivery under the frozen cap and basis. "
+            "Null for a target flight, a custom billing and a flight closed before the billing was frozen."
+        )
+    )
+    billing_difference: DecimalString | None = Field(
+        description=(
+            "The billing, two decimals: today's delivery under the frozen cap and basis. Null for a target flight and "
+            "a flight closed before the billing was frozen."
+        )
+    )
 
     @classmethod
     def from_check(cls, check: ClosedDeliveryCheck) -> "DeliveryChangeResponse":
@@ -120,6 +133,8 @@ class DeliveryChangeResponse(BaseModel):
             buyer_spend_difference=check.buyer_spend_difference,
             current_margin=check.current_margin,
             margin_difference=check.margin_difference,
+            billable_difference=check.billable_difference,
+            billing_difference=check.billing_difference,
         )
 
 
@@ -185,6 +200,20 @@ class FlightMarginResponse(BaseModel):
     delivery_change: DeliveryChangeResponse | None = Field(
         description=f"A closed flight's differences and current margin. Null until closed. {_INFORMATIVE}"
     )
+    billable: QuantityString | None = Field(
+        description=(
+            f"The volume `revenue` bills, {IN_DELIVERY_METRIC}, four decimals: the lesser of the delivered volume and "
+            "the cap, or what an adjustment sets; to date while the flight runs. Null for a target flight, a custom "
+            "billing and a flight closed before the billing was frozen. No level above the flight sums it."
+        )
+    )
+    billing_basis: BillingBasis | None = Field(
+        description=(
+            "How `revenue` was reached: `minimum` (the lesser of delivered and cap), `delivered`, `contracted` or "
+            "`custom` (an adjustment in force), `reported` (a target flight). Null for a flight closed before the "
+            "billing was frozen."
+        )
+    )
 
     @classmethod
     def from_report(cls, report: FlightReport) -> "FlightMarginResponse":
@@ -217,6 +246,8 @@ class FlightMarginResponse(BaseModel):
             delivery_change=(
                 None if report.delivery_change is None else DeliveryChangeResponse.from_check(report.delivery_change)
             ),
+            billable=margin.billable,
+            billing_basis=margin.billing_basis,
         )
 
 

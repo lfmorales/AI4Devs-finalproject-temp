@@ -36,6 +36,7 @@ def test_the_current_margin_is_described_as_informative(schema: type[BaseModel],
 
     assert description is not None
     assert "closing's rebate and rates" in description
+    assert "cap and billing basis" in description
     assert "today's delivery" in description
     assert "no amount or total adds it" in description
 
@@ -44,6 +45,10 @@ def test_the_current_margin_is_described_as_informative(schema: type[BaseModel],
     (FlightMarginResponse, "delivery_changed", ("closed", "delivery")),
     (TotalsResponse, "delivery_changed_count", ("delivery_changed",)),
     (ClosingResponse, "closings", ("closing", "month")),
+    (FlightMarginResponse, "billable", ("delivery_metric", "four decimals", "target", "custom", "closed before")),
+    (FlightMarginResponse, "billing_basis", ("minimum", "delivered", "contracted", "custom", "reported")),
+    (DeliveryChangeResponse, "billable_difference", ("four decimals", "target", "closed before")),
+    (DeliveryChangeResponse, "billing_difference", ("two decimals", "target", "closed before")),
 ])
 def test_the_new_fields_are_described(schema: type[BaseModel], field: str, words: tuple[str, ...]) -> None:
     description = schema.model_fields[field].description

@@ -57,6 +57,7 @@ from app.domain.exceptions import (
     LastActiveOperationsUserError,
     MissingRoleError,
     MonthDeliveryNotLoadedError,
+    MonthNotClosedError,
     MonthNotReviewedError,
     PreviousMonthOpenError,
     RebateRuleError,
@@ -216,6 +217,16 @@ async def _month_delivery_not_loaded_handler(request: Request, error: Exception)
     return JSONResponse(status_code=409, content=body.model_dump())
 
 
+async def _month_not_closed_handler(request: Request, error: Exception) -> JSONResponse:
+    """Names the month, which is not sensitive."""
+    assert isinstance(error, MonthNotClosedError)
+    body = ErrorResponse(
+        code="month_not_closed",
+        message=f"{error.year}-{error.month:02d} is not closed: its billing has no CSV until it is.",
+    )
+    return JSONResponse(status_code=409, content=body.model_dump())
+
+
 _REVIEW_STATE_LABELS = {ReviewState.IN_PROGRESS: "in progress", ReviewState.PENDING_REVIEW: "pending review"}
 
 
@@ -347,6 +358,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(PreviousMonthOpenError, _previous_month_open_handler)
     app.add_exception_handler(MonthDeliveryNotLoadedError, _month_delivery_not_loaded_handler)
     app.add_exception_handler(MonthNotReviewedError, _month_not_reviewed_handler)
+    app.add_exception_handler(MonthNotClosedError, _month_not_closed_handler)
     app.add_exception_handler(RebateRuleError, _rebate_rule_handler)
     app.add_exception_handler(CarryoverError, _carryover_handler)
     app.add_exception_handler(BillingAdjustmentError, _billing_adjustment_handler)

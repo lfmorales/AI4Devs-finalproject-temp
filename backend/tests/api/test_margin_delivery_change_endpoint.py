@@ -36,6 +36,7 @@ DECEMBER_FOURTH = date(2026, 12, 4)  # as_of is 3 December
 DELIVERY_CHANGE_FIELDS = {
     "delivered_difference", "delivered_impressions_difference", "media_cost_difference",
     "reported_revenue_difference", "buyer_spend_difference", "current_margin", "margin_difference",
+    "billable_difference", "billing_difference",
 }
 
 
@@ -135,6 +136,7 @@ def test_the_restated_committed_flight_reports_its_change_and_keeps_its_frozen_f
         # The check compares with the current billing: 1,200,000 delivered bills the cap, 5,000.00 €, so
         # 5,000.00 - 3,000.00 - 875.00 - 1,200.00 = -75.00 €.
         "current_margin": "-75.00", "margin_difference": "-800.00",
+        "billable_difference": "300000.0000", "billing_difference": "1500.00",
     }
     for totals in (line["totals"], campaign["totals"]):
         assert (totals["delivery_changed_count"], totals["margin"]) == (1, "725.00")
@@ -155,6 +157,7 @@ def test_the_restated_target_flight_reports_its_revenue_and_spend_differences(
         "delivered_difference": "200000.0000", "delivered_impressions_difference": 200_000,
         "media_cost_difference": "0.00", "reported_revenue_difference": "800.00", "buyer_spend_difference": "1000.00",
         "current_margin": "3350.00", "margin_difference": "600.00",
+        "billable_difference": None, "billing_difference": None,
     }
 
 
@@ -182,6 +185,7 @@ def test_a_closed_flight_whose_delivery_did_not_change_reports_zeros(
         "delivered_difference": "0.0000", "delivered_impressions_difference": 0, "media_cost_difference": "0.00",
         "reported_revenue_difference": None, "buyer_spend_difference": None,
         "current_margin": flight["margin"], "margin_difference": "0.00",
+        "billable_difference": "0.0000", "billing_difference": "0.00",
     }
     assert line["totals"]["delivery_changed_count"] == 0
 
