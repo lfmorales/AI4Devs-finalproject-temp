@@ -131,7 +131,7 @@ def test_the_restated_committed_flight_reports_its_change_and_keeps_its_frozen_f
     assert flight["delivery_change"] == {
         "delivered_difference": "500000.0000", "delivered_impressions_difference": 500_000,
         "media_cost_difference": "1800.00", "reported_revenue_difference": None, "buyer_spend_difference": None,
-        # Until task 9.4 the check keeps the frozen revenue of a committed flight: 3,500.00 - 3,000.00 - 875.00 -
+        # pending-9.4: margin and motive. The check keeps the frozen revenue of a committed flight: 3,500.00 - 3,000.00 - 875.00 -
         # 1,200.00. Task 9.4 compares with the current billing instead (5,000.00, a current margin of -75.00).
         "current_margin": "-1575.00", "margin_difference": "-2300.00",
     }

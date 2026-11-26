@@ -455,7 +455,7 @@ def test_pending_close_figures_are_the_figures_closing_freezes(rolled_back_sessi
     for item in pending:
         stored = _snapshot_of_record(snapshots[frozen[item.facts.flight_id].id])
         assert stored == snapshot_of(item)
-        # The snapshot does not hold the billable volume and the billing basis until task 9.3 of
+        # pending-9.4: comparison without billable or billing_basis. The snapshot does not hold them until task 9.3 of
         # committed-billing-and-review; every other field must be the pending-close one.
         assert margin_from_snapshot(stored, item.facts.flight_start, item.facts.flight_end) == replace(
             item.margin, billable=None, billing_basis=None
@@ -793,7 +793,7 @@ def test_the_committed_example_keeps_its_closed_margin_after_the_restatement_and
     assert after.delivery_change == ClosedDeliveryCheck(
         delivered_difference=Decimal("500000.0000"), delivered_impressions_difference=500_000,
         media_cost_difference=Decimal("1800.00"), reported_revenue_difference=None, buyer_spend_difference=None,
-        # Until task 9.4 the check keeps the frozen revenue: 3,500.00 - 3,000.00 - 875.00 - 1,200.00. Task 9.4 compares
+        # pending-9.4: margin and motive. The check keeps the frozen revenue: 3,500.00 - 3,000.00 - 875.00 - 1,200.00. Task 9.4 compares
         # with the current billing, 5,000.00, for a current margin of -75.00.
         current_margin=Decimal("-1575.00"), margin_difference=Decimal("-2300.00"), changed=True,
     )
@@ -818,7 +818,7 @@ def test_a_closed_flight_read_with_no_change_to_its_delivery_equals_its_pending_
     (closed,) = _flight_reports(_read_margin(rolled_back_session, DECEMBER_FIRST), line_id)
 
     assert pending.state is FlightState.PENDING_CLOSE and closed.state is FlightState.CLOSED
-    # The snapshot does not hold the billable volume and the billing basis until task 9.3 of committed-billing-and-review.
+    # pending-9.4: comparison without billable or billing_basis (the snapshot does not hold them until task 9.3).
     assert closed.margin == replace(pending.margin, provisional=False, billable=None, billing_basis=None)
     assert closed.delivery_change is not None and closed.delivery_change.changed is False
     assert closed.delivery_change.current_margin == closed.margin.margin == Decimal("725.00")
@@ -835,7 +835,7 @@ def test_unlinking_a_line_with_a_closed_flight_keeps_its_closed_figures(rolled_b
     assert replace(after.margin, delivery_changed=False) == before.margin
     assert after.margin.delivery_changed is True
     assert after.delivery_change is not None
-    # Until task 9.4 the current margin keeps the frozen revenue: 3,500.00 - 0.00 - 875.00 - 0.00. Task 9.4 compares
+    # pending-9.4: margin and motive. The current margin keeps the frozen revenue: 3,500.00 - 0.00 - 875.00 - 0.00. Task 9.4 compares
     # with the current billing, nothing once the delivery is gone, for a current margin of -875.00.
     assert (after.delivery_change.delivered_impressions_difference, after.delivery_change.current_margin) == (
         -700_000, Decimal("2625.00"),

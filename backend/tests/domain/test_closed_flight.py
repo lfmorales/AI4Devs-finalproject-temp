@@ -262,20 +262,21 @@ def test_the_flags_of_a_target_flight_come_from_the_snapshot() -> None:
     assert (margin.accrued_days, margin.window_days) == (30, 30)
 
 
-def _without_billing(margin: FlightMargin) -> FlightMargin:
+def _without_billing(margin: FlightMargin) -> FlightMargin:  # pending-9.4: helper, remove in task 9.3/9.4
     """The margin without its billable volume and billing basis.
 
     The snapshot does not hold them until task 9.3 of committed-billing-and-review adds them to it, so a margin read
     from a snapshot carries neither; every other field must still be the closing's. Task 9.3 removes this helper and
     compares whole margins again.
     """
-    return dataclasses.replace(margin, billable=None, billing_basis=None)
+    return dataclasses.replace(margin, billable=None, billing_basis=None)  # pending-9.4: comparison without billing
 
 
 @pytest.mark.parametrize("priced", [committed_flight(), target_flight(), zero_sale_flight(), dooh_flight()])
 def test_a_flight_read_from_its_snapshot_is_the_flight_its_closing_priced(priced: PricedFlight) -> None:
     snapshot = snapshot_of(priced)
 
+    # pending-9.4: comparison without billable or billing_basis
     assert margin_from_snapshot(snapshot, priced.facts.flight_start, priced.facts.flight_end) == _without_billing(
         priced.margin
     )
@@ -323,7 +324,7 @@ def test_the_margin_read_from_a_snapshot_is_the_margin_calculate_flight_margin_g
     )
 
     assert at_closing.status is FlightStatus.CLOSED
-    assert read == _without_billing(at_closing)
+    assert read == _without_billing(at_closing)  # pending-9.4: comparison without billable or billing_basis
     assert read.margin_pct == at_closing.margin_pct
     if commitment is VolumeCommitment.TARGET:
         assert (read.gross_differs_from_buyer_spend, read.data_cost_reported) == (True, True)
