@@ -20,11 +20,12 @@ class ReviewResponse(BaseModel):
     month: int
     state: ReviewState = Field(description="`reviewed` after a review, `pending_review` after a withdrawal.")
     set_by: int = Field(description="The user who wrote the event that put the campaign in this state.")
+    set_by_name: str = Field(description="The name of that user, or the email when the name is blank.")
     set_at: datetime = Field(description="When that event was written.")
 
     @classmethod
-    def from_result(cls, result: ReviewResult) -> "ReviewResponse":
+    def from_result(cls, result: ReviewResult, names: dict[int, str]) -> "ReviewResponse":
         return cls(
             campaign_id=result.campaign_id, year=result.year, month=result.month, state=result.state,
-            set_by=result.set_by, set_at=result.set_at,
+            set_by=result.set_by, set_by_name=names.get(result.set_by, ""), set_at=result.set_at,
         )

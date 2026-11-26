@@ -31,9 +31,10 @@ NOVEMBER = (date(2026, 11, 1), date(2026, 11, 30))
 D_PLUS_1 = date(2026, 11, 6)  # D-1 is 5 November: October has ended, November runs
 REASON = "Recuperar lo no entregado en octubre"
 RESPONSE_FIELDS = {
-    "flight_id", "delivery_metric", "contracted_impressions", "carryover", "delivery_target", "reason", "set_by", "set_at",
+    "flight_id", "delivery_metric", "contracted_impressions", "carryover", "delivery_target", "reason", "set_by",
+    "set_by_name", "set_at",
 }
-BILLABLE_FIELDS = {"flight_id", "carryover", "billable", "set_by", "set_at"}
+BILLABLE_FIELDS = {"flight_id", "carryover", "billable", "set_by", "set_by_name", "set_at"}
 FORBIDDEN_WORDS = ("billable", "amount", "revenue", "cost", "margin", "rebate", "price", "cpm", "adjust")
 
 

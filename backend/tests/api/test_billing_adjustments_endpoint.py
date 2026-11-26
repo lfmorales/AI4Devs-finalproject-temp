@@ -33,7 +33,7 @@ AUGUST = (date(2026, 8, 1), date(2026, 8, 31))
 PENDING_CLOSE = date(2026, 9, 1)  # D-1 is 31 August: August has ended and is not closed
 RUNNING = date(2026, 8, 11)  # D-1 is 10 August: August runs
 REASON = "Acuerdo con la agencia: se factura la OC completa"
-POST_FIELDS = {"id", "flight_id", "basis", "amount", "reason", "created_by", "created_at", "billing"}
+POST_FIELDS = {"id", "flight_id", "basis", "amount", "reason", "created_by", "created_by_name", "created_at", "billing"}
 MONEY_WORDS = ("revenue", "cost", "margin", "rebate", "cpm", "price")
 
 

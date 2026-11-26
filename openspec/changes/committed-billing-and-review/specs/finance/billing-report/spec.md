@@ -90,9 +90,33 @@ The system SHALL answer every error of a route under `/billing`, including a val
 - **WHEN** `GET /billing` receives a month of 13
 - **THEN** the body has only `code` and `message`
 
+### Requirement: The author of every billing event is named
+
+Wherever a response of a route under `/billing`, or of `PUT /flights/{flight_id}/carryover`, names the user who wrote an event (a review or a withdrawal, an adjustment, a carry-over or its billable flag), the system SHALL return the user's id and, beside it, the user's name as stored, or the user's email when the name is blank. The billing screen SHALL show that name and never the bare id. Naming the author SHALL add no amount, no billable flag and no adjustment to the response of `PUT /flights/{flight_id}/carryover`, which `trading` may call.
+
+#### Scenario: A review names its author
+- **WHEN** «Ana Pérez» reviews a campaign for October 2026
+- **THEN** the response carries her id in `set_by` and «Ana Pérez» in `set_by_name`, and `GET /billing` carries the same in `review_set_by` and `review_set_by_name`
+
+#### Scenario: An adjustment names its author in the read and in the history
+- **WHEN** a flight is adjusted by a user and read with `GET /billing` and with its history
+- **THEN** its adjustment in force and each item of the history carry `created_by` and `created_by_name`
+
+#### Scenario: A user with a blank name is named by the email
+- **WHEN** a user whose name is blank sets the billable flag of a carry-over
+- **THEN** the response carries the user's email in `set_by_name`
+
+#### Scenario: The carry-over names its author and still carries no amount
+- **WHEN** a user holding only `trading` writes a carry-over
+- **THEN** the response carries `set_by` and `set_by_name`, and no amount, no billable flag, no adjustment and no adjustment reason
+
+#### Scenario: The screen shows who reviewed and who adjusted
+- **WHEN** the billing screen shows a campaign reviewed and a flight adjusted by «Ana Pérez»
+- **THEN** it names «Ana Pérez» for both, and no «usuario» followed by a number
+
 ### Requirement: The billing screen shows a month's billing
 
-The system SHALL offer, to users holding `operations` or `finance`, a billing screen for a month that shows each campaign with its review state, and each flight with its contracted volume, carry-over, delivery target, delivered volume, billable volume, sale CPM, billing labelled «Facturable» or «Facturable a la fecha» as in the margin screen, and the adjustment in force with its reason, author and moment. It SHALL let them adjust an ended, unfrozen committed flight (basis, amount when custom, mandatory reason), set the billable flag of a carry-over, mark and withdraw the review, and download the CSV of a closed month. It SHALL show the response's error in Spanish when an action is refused, and SHALL compute no figure. The screen and its entry in the navigation SHALL be hidden from a user holding neither role.
+The system SHALL offer, to users holding `operations` or `finance`, a billing screen for a month that shows each campaign with its review state, and each flight with its contracted volume, carry-over, delivery target, delivered volume, billable volume, sale CPM, billing labelled «Facturable» or «Facturable a la fecha» as in the margin screen, and the adjustment in force with its reason, the name of its author and its moment, as each campaign's review shows the name of whoever reviewed it. It SHALL let them adjust an ended, unfrozen committed flight (basis, amount when custom, mandatory reason), set the billable flag of a carry-over, mark and withdraw the review, and download the CSV of a closed month. It SHALL show the response's error in Spanish when an action is refused, and SHALL compute no figure. The screen and its entry in the navigation SHALL be hidden from a user holding neither role.
 
 #### Scenario: Finance adjusts a flight from the billing screen
 - **WHEN** a user holding `finance` adjusts a pending-close flight to its contracted volume with a reason

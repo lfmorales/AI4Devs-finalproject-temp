@@ -29,7 +29,7 @@ function AdjustmentCell({ flight }: { flight: BillingFlight }) {
   return (
     <>
       <span className="tag tag-info">Ajustado</span>
-      {`: ${BASIS_LABEL[adjustment.basis].toLowerCase()} · ${adjustment.reason} · usuario ${adjustment.created_by} · `}
+      {`: ${BASIS_LABEL[adjustment.basis].toLowerCase()} · ${adjustment.reason} · ${adjustment.created_by_name} · `}
       {formatMoment(adjustment.created_at)}
     </>
   );
@@ -110,14 +110,14 @@ function LineTable({ campaign, line, actions }: { campaign: BillingCampaign; lin
 }
 
 function CampaignSection({ campaign, actions }: { campaign: BillingCampaign; actions: BillingActions }) {
-  const reviewed = campaign.review_state === "reviewed" && campaign.review_set_by !== null && campaign.review_set_at !== null;
+  const reviewed = campaign.review_state === "reviewed" && campaign.review_set_by_name !== null && campaign.review_set_at !== null;
   return (
     <section aria-label={`Campaña ${campaign.name}`} className="billing-campaign">
       <h2>{campaign.name}</h2>
       <p>{campaign.agency} · {campaign.advertiser}</p>
       <p>
         <span className={REVIEW_STATE_CLASS[campaign.review_state]}>{REVIEW_STATE_LABEL[campaign.review_state]}</span>
-        {reviewed && ` ${byUserAt(campaign.review_set_by ?? 0, formatMoment(campaign.review_set_at ?? ""))}`}
+        {reviewed && ` ${byUserAt(campaign.review_set_by_name ?? "", formatMoment(campaign.review_set_at ?? ""))}`}
       </p>
       {campaign.review_state === "pending_review" && (
         <button type="button" className="btn-primary" disabled={actions.busy} onClick={() => actions.review(campaign)}>

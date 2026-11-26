@@ -36,9 +36,9 @@ export const CHOOSE_MONTH = "Elige año y mes para ver la facturación";
 export const CSV_NEEDS_A_CLOSED_MONTH = "El CSV está disponible cuando el mes está cerrado";
 export const NO_ADJUSTMENTS = "Este flight no tiene ajustes";
 
-/** «por el usuario 7 el 02/11/2026 10:15»: who and when, as the server sent them. */
-export function byUserAt(userId: number, moment: string): string {
-  return `por el usuario ${userId} el ${moment}`;
+/** «por Ana Pérez el 02/11/2026 10:15»: who and when, as the server sent them. */
+export function byUserAt(author: string, moment: string): string {
+  return `por ${author} el ${moment}`;
 }
 
 export const GENERIC_ERROR = "No se pudo completar la acción. Inténtalo de nuevo más tarde.";

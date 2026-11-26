@@ -10,7 +10,7 @@ import { BASIS_LABEL, NO_ADJUSTMENTS } from "./messages";
 function historyLine(item: HistoryItem): string {
   const amount = item.amount === null ? "" : ` ${formatMoney(item.amount)}`;
   const inForce = item.in_force ? " · En vigor" : "";
-  return `${BASIS_LABEL[item.basis]}${amount} · ${item.reason} · usuario ${item.created_by} · ${formatMoment(item.created_at)}${inForce}`;
+  return `${BASIS_LABEL[item.basis]}${amount} · ${item.reason} · ${item.created_by_name} · ${formatMoment(item.created_at)}${inForce}`;
 }
 
 /** Every adjustment of a flight, latest first, as the server lists them. */

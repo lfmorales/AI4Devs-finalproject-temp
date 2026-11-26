@@ -38,14 +38,15 @@ class AdjustmentItem(BaseModel):
     amount: MoneyString | None
     reason: str
     created_by: int = Field(description="The user who made it.")
+    created_by_name: str = Field(description="The name of that user, or the email when the name is blank.")
     created_at: datetime
 
     @classmethod
-    def from_entry(cls, entry: AdjustmentEntry) -> "AdjustmentItem":
+    def from_entry(cls, entry: AdjustmentEntry, names: dict[int, str]) -> "AdjustmentItem":
         return cls(
             id=entry.entry_id, flight_id=entry.flight_id, basis=entry.adjustment.basis.value,
             amount=entry.adjustment.amount, reason=entry.reason, created_by=entry.created_by,
-            created_at=entry.created_at,
+            created_by_name=names.get(entry.created_by, ""), created_at=entry.created_at,
         )
 
 
@@ -53,8 +54,8 @@ class AdjustmentResponse(AdjustmentItem):
     billing: MoneyString = Field(description="What the flight bills after this adjustment, two decimals.")
 
     @classmethod
-    def from_result(cls, result: AdjustmentResult) -> "AdjustmentResponse":
-        return cls(**AdjustmentItem.from_entry(result.entry).model_dump(), billing=result.billing)
+    def from_result(cls, result: AdjustmentResult, names: dict[int, str]) -> "AdjustmentResponse":
+        return cls(**AdjustmentItem.from_entry(result.entry, names).model_dump(), billing=result.billing)
 
 
 class HistoryItem(AdjustmentItem):
@@ -65,8 +66,8 @@ class AdjustmentHistoryResponse(BaseModel):
     adjustments: list[HistoryItem] = Field(description="Every adjustment of the flight, latest first.")
 
     @classmethod
-    def from_entries(cls, entries: list[AdjustmentEntry]) -> "AdjustmentHistoryResponse":
+    def from_entries(cls, entries: list[AdjustmentEntry], names: dict[int, str]) -> "AdjustmentHistoryResponse":
         return cls(adjustments=[
-            HistoryItem(**AdjustmentItem.from_entry(entry).model_dump(), in_force=index == 0)
+            HistoryItem(**AdjustmentItem.from_entry(entry, names).model_dump(), in_force=index == 0)
             for index, entry in enumerate(entries)
         ])

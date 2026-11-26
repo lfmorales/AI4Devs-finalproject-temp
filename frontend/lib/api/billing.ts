@@ -18,6 +18,8 @@ export interface AdjustmentInForce {
   amount: DecimalString | null;
   reason: string;
   created_by: number;
+  /** The author's name, or the email when the name is blank. */
+  created_by_name: string;
   created_at: string;
 }
 
@@ -58,6 +60,8 @@ export interface BillingCampaign {
   review_state: ReviewState;
   /** Who wrote the latest review event of the month, and when; null when there is none. */
   review_set_by: number | null;
+  /** That author's name, or the email when the name is blank. */
+  review_set_by_name: string | null;
   review_set_at: string | null;
   lines: BillingLine[];
 }
@@ -91,6 +95,7 @@ export interface ReviewRequest {
 export interface ReviewResponse extends ReviewRequest {
   state: "reviewed" | "pending_review";
   set_by: number;
+  set_by_name: string;
   set_at: string;
 }
 
@@ -120,6 +125,7 @@ export interface AdjustmentItem {
   amount: DecimalString | null;
   reason: string;
   created_by: number;
+  created_by_name: string;
   created_at: string;
 }
 
@@ -146,6 +152,7 @@ export interface BillableResponse {
   carryover: number;
   billable: boolean;
   set_by: number;
+  set_by_name: string;
   set_at: string;
 }
 

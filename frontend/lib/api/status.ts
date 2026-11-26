@@ -80,6 +80,8 @@ export interface CarryoverResponse {
   delivery_target: number;
   reason: string;
   set_by: number;
+  /** The author's name, or the email when the name is blank. */
+  set_by_name: string;
   set_at: string;
 }
 

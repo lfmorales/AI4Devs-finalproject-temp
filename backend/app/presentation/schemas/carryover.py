@@ -23,14 +23,16 @@ class CarryoverResponse(BaseModel):
     delivery_target: int = Field(description=f"The contracted volume plus the carry-over, {IN_DELIVERY_METRIC}.")
     reason: str
     set_by: int = Field(description="The user who wrote it.")
+    set_by_name: str = Field(description="The name of that user, or the email when the name is blank.")
     set_at: datetime = Field(description="When it was written.")
 
     @classmethod
-    def from_result(cls, result: CarryoverResult) -> "CarryoverResponse":
+    def from_result(cls, result: CarryoverResult, names: dict[int, str]) -> "CarryoverResponse":
         return cls(
             flight_id=result.flight_id, delivery_metric=result.delivery_metric,
             contracted_impressions=result.contracted_impressions, carryover=result.carryover,
-            delivery_target=result.delivery_target, reason=result.reason, set_by=result.set_by, set_at=result.set_at,
+            delivery_target=result.delivery_target, reason=result.reason, set_by=result.set_by,
+            set_by_name=names.get(result.set_by, ""), set_at=result.set_at,
         )
 
 
@@ -45,11 +47,12 @@ class BillableResponse(BaseModel):
     carryover: int = Field(description="The flight's carry-over, which this request does not change.")
     billable: bool
     set_by: int = Field(description="The user who set the flag.")
+    set_by_name: str = Field(description="The name of that user, or the email when the name is blank.")
     set_at: datetime = Field(description="When the flag was set.")
 
     @classmethod
-    def from_result(cls, result: BillableResult) -> "BillableResponse":
+    def from_result(cls, result: BillableResult, names: dict[int, str]) -> "BillableResponse":
         return cls(
             flight_id=result.flight_id, carryover=result.carryover, billable=result.billable, set_by=result.set_by,
-            set_at=result.set_at,
+            set_by_name=names.get(result.set_by, ""), set_at=result.set_at,
         )

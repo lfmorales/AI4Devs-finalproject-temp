@@ -96,6 +96,8 @@
 - [x] 10.4 Implement `BillingQueryService` and the route; verify 10.3
 - [x] 10.5 Write failing tests in a new `backend/tests/api/test_billing_export_endpoint.py` with every scenario of «A closed month's billing is exported as a CSV»: the byte order mark, `;` separator, decimal comma and quoted reason of «The file opens in columns in Excel set to Spanish», header row, values and order, the adjusted and the target rows, a legacy row, identical files after a reingestion, `Content-Type` and file name, 409 `month_not_closed`; 403 as `trading` and `business`
 - [x] 10.6 Implement `BillingExportService` and the route; verify 10.5
+- [x] 10.7 Write failing API tests for «The author of every billing event is named»: `set_by_name` in the responses of the review, the withdrawal, the carry-over and the billable flag; `created_by_name` in the adjustment response, its history and the adjustment in force of `GET /billing`; `review_set_by_name` in `GET /billing`; the email for a blank name; the carry-over response to `trading` still without an amount, a billable flag or an adjustment
+- [x] 10.8 Return the names from the services' reads of `users` and add them to the schemas; verify 10.7 and the whole backend suite
 
 ## 11. Database Acceptance
 
@@ -116,6 +118,8 @@
 - [x] 12.4 Implement `frontend/lib/api/billing.ts`, the feature module and the route, with its role guard and its navigation entry; verify 12.3
 - [x] 12.5 Write failing Vitest tests for the status screen: «Arrastre» and «Objetivo de entrega» on every row; the carry-over form for `operations` and `trading` with the shortfall of a refusal; no form for `business` and `finance`; no billable flag for anyone
 - [x] 12.6 Implement them in the status feature and `frontend/lib/api/campaign-status.ts`; verify 12.5 and the frontend suite
+- [x] 12.7 Write failing Vitest tests: the billing screen names the author of a review, of the adjustment in force and of each item of the history by `*_name`, and shows no «usuario» followed by a number
+- [x] 12.8 Show the names in `frontend/features/billing/` and add the fields to `frontend/lib/api/billing.ts`; verify 12.7, the frontend suite and Playwright
 
 ## 13. Review and Update Existing Unit Tests (MANDATORY)
 

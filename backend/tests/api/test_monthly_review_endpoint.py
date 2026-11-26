@@ -126,7 +126,7 @@ def test_finance_and_operations_review_a_campaign_whose_flights_have_ended(
 
     assert response.status_code == 201, response.text
     body = response.json()
-    assert set(body) == {"campaign_id", "year", "month", "state", "set_by", "set_at"}
+    assert set(body) == {"campaign_id", "year", "month", "state", "set_by", "set_by_name", "set_at"}
     assert (body["campaign_id"], body["year"], body["month"], body["state"]) == (campaign, 2026, 8, "reviewed")
     assert body["set_by"] == _user(test_db_session, role) and datetime.fromisoformat(body["set_at"])
     (event,) = _events(test_db_session)

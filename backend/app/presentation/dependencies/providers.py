@@ -21,6 +21,7 @@ from app.application.services.dsp_mapping_service import DspMappingService
 from app.application.services.exception_linking_service import ExceptionLinkingService
 from app.application.services.ingestion_exception_service import IngestionExceptionService
 from app.application.services.line_mapping_removal_service import LineMappingRemovalService
+from app.application.services.author_names import AuthorNames
 from app.application.services.billing_adjustment_service import BillingAdjustmentService
 from app.application.services.billing_export_service import BillingExportService
 from app.application.services.billing_query_service import BillingQueryService
@@ -62,6 +63,7 @@ from app.infrastructure.persistence.repositories.sqlalchemy_dsp_mapping_reposito
 from app.infrastructure.persistence.repositories.sqlalchemy_line_mapping_removal_repository import (
     SqlAlchemyLineMappingRemovalRepository,
 )
+from app.infrastructure.persistence.repositories.sqlalchemy_user_name_repository import SqlAlchemyUserNameRepository
 from app.infrastructure.persistence.repositories.sqlalchemy_billing_export_repository import (
     SqlAlchemyBillingExportRepository,
 )
@@ -296,6 +298,10 @@ def get_billing_query_service(
     return BillingQueryService(
         get_margin_query_service(session, today), SqlAlchemyBillingReadRepository(session), today=lambda: today,
     )
+
+
+def get_author_names(session: Annotated[Session, Depends(get_db_session)]) -> AuthorNames:
+    return AuthorNames(SqlAlchemyUserNameRepository(session))
 
 
 def get_billing_export_service(session: Annotated[Session, Depends(get_db_session)]) -> BillingExportService:

@@ -35,6 +35,7 @@ export function adjustmentInForce(overrides: Partial<AdjustmentInForce> = {}): A
     amount: "4200.00",
     reason: "Acuerdo con la agencia",
     created_by: 7,
+    created_by_name: "Ana Pérez",
     created_at: "2026-11-02T10:15:30.123456",
     ...overrides,
   };
@@ -52,6 +53,7 @@ export function billingCampaign(overrides: Partial<BillingCampaign> = {}): Billi
     advertiser: "Anunciante Uno",
     review_state: "pending_review",
     review_set_by: null,
+    review_set_by_name: null,
     review_set_at: null,
     lines: [billingLine()],
     ...overrides,

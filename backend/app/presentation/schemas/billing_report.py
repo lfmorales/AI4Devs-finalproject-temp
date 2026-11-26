@@ -23,13 +23,14 @@ class BillingAdjustmentInForce(BaseModel):
     amount: MoneyString | None = Field(description="Only with `custom`, two decimals.")
     reason: str
     created_by: int = Field(description="The user who made it.")
+    created_by_name: str = Field(description="The name of that user, or the email when the name is blank.")
     created_at: datetime
 
     @classmethod
-    def from_entry(cls, entry: AdjustmentEntry) -> "BillingAdjustmentInForce":
+    def from_entry(cls, entry: AdjustmentEntry, names: dict[int, str]) -> "BillingAdjustmentInForce":
         return cls(
             basis=entry.adjustment.basis, amount=entry.adjustment.amount, reason=entry.reason,
-            created_by=entry.created_by, created_at=entry.created_at,
+            created_by=entry.created_by, created_by_name=names.get(entry.created_by, ""), created_at=entry.created_at,
         )
 
 
@@ -63,7 +64,7 @@ class BillingFlightResponse(BaseModel):
     adjustment: BillingAdjustmentInForce | None
 
     @classmethod
-    def from_flight(cls, flight: BillingFlight) -> "BillingFlightResponse":
+    def from_flight(cls, flight: BillingFlight, names: dict[int, str]) -> "BillingFlightResponse":
         return cls(
             flight_id=flight.flight_id, flight_start=flight.flight_start, flight_end=flight.flight_end,
             state=flight.state, delivery_metric=flight.delivery_metric,
@@ -71,7 +72,7 @@ class BillingFlightResponse(BaseModel):
             carryover_billable=flight.carryover_billable, delivery_target=flight.delivery_target,
             delivered=flight.delivered, billable=flight.billable, billing=flight.billing,
             billing_basis=flight.billing_basis, sale_cpm=flight.sale_cpm,
-            adjustment=None if flight.adjustment is None else BillingAdjustmentInForce.from_entry(flight.adjustment),
+            adjustment=None if flight.adjustment is None else BillingAdjustmentInForce.from_entry(flight.adjustment, names),
         )
 
 
@@ -81,10 +82,10 @@ class BillingLineResponse(BaseModel):
     flights: list[BillingFlightResponse]
 
     @classmethod
-    def from_line(cls, line: BillingLine) -> "BillingLineResponse":
+    def from_line(cls, line: BillingLine, names: dict[int, str]) -> "BillingLineResponse":
         return cls(
             campaign_line_id=line.campaign_line_id, line_number=line.line_number,
-            flights=[BillingFlightResponse.from_flight(flight) for flight in line.flights],
+            flights=[BillingFlightResponse.from_flight(flight, names) for flight in line.flights],
         )
 
 
@@ -95,16 +96,19 @@ class BillingCampaignResponse(BaseModel):
     advertiser: str
     review_state: ReviewState = Field(description="As of D-1: `in_progress`, `pending_review`, `reviewed` or `closed`.")
     review_set_by: int | None = Field(description="Who wrote the campaign's latest review event in the month.")
+    review_set_by_name: str | None = Field(description="The name of that user, or the email when the name is blank. Null when there is no event.")
     review_set_at: datetime | None = Field(description="When that event was written.")
     lines: list[BillingLineResponse]
 
     @classmethod
-    def from_campaign(cls, campaign: BillingCampaign) -> "BillingCampaignResponse":
+    def from_campaign(cls, campaign: BillingCampaign, names: dict[int, str]) -> "BillingCampaignResponse":
         return cls(
             campaign_id=campaign.campaign_id, name=campaign.name, agency=campaign.agency,
             advertiser=campaign.advertiser, review_state=campaign.review_state,
-            review_set_by=campaign.review_set_by, review_set_at=campaign.review_set_at,
-            lines=[BillingLineResponse.from_line(line) for line in campaign.lines],
+            review_set_by=campaign.review_set_by,
+            review_set_by_name=None if campaign.review_set_by is None else names.get(campaign.review_set_by, ""),
+            review_set_at=campaign.review_set_at,
+            lines=[BillingLineResponse.from_line(line, names) for line in campaign.lines],
         )
 
 
@@ -117,8 +121,18 @@ class BillingResponse(BaseModel):
     campaigns: list[BillingCampaignResponse]
 
     @classmethod
-    def from_report(cls, report: BillingReport) -> "BillingResponse":
+    def from_report(cls, report: BillingReport, names: dict[int, str]) -> "BillingResponse":
         return cls(
             year=report.year, month=report.month, as_of=report.as_of,
-            campaigns=[BillingCampaignResponse.from_campaign(campaign) for campaign in report.campaigns],
+            campaigns=[BillingCampaignResponse.from_campaign(campaign, names) for campaign in report.campaigns],
         )
+
+
+def report_authors(report: BillingReport) -> list[int | None]:
+    """Every user the billing of a month names: who reviewed each campaign and who made each adjustment in force."""
+    authors: list[int | None] = []
+    for campaign in report.campaigns:
+        authors.append(campaign.review_set_by)
+        for line in campaign.lines:
+            authors.extend(flight.adjustment.created_by for flight in line.flights if flight.adjustment is not None)
+    return authors

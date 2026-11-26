@@ -68,7 +68,7 @@ describe("the billing screen", () => {
       [OCTOBER]: () => reply(200, billing({ campaigns: [
         billingCampaign({ campaign_id: 1, name: "Alfa", review_state: "in_progress" }),
         billingCampaign({ campaign_id: 2, name: "Beta", review_state: "pending_review" }),
-        billingCampaign({ campaign_id: 3, name: "Gamma", review_state: "reviewed", review_set_by: 7, review_set_at: "2026-11-02T10:15:30.123456" }),
+        billingCampaign({ campaign_id: 3, name: "Gamma", review_state: "reviewed", review_set_by: 7, review_set_by_name: "Ana Pérez", review_set_at: "2026-11-02T10:15:30.123456" }),
         billingCampaign({ campaign_id: 4, name: "Delta", review_state: "closed" }),
       ] })),
     });
@@ -79,7 +79,8 @@ describe("the billing screen", () => {
     expect(within(campaignSection("Beta")).getByText("Pendiente de revisión")).toBeInTheDocument();
     expect(within(campaignSection("Gamma")).getByText("Revisada")).toBeInTheDocument();
     expect(within(campaignSection("Delta")).getByText("Cerrada")).toBeInTheDocument();
-    expect(plain(campaignSection("Gamma"))).toContain("por el usuario 7 el 02/11/2026 10:15");
+    expect(plain(campaignSection("Gamma"))).toContain("por Ana Pérez el 02/11/2026 10:15");
+    expect(plain(document.body)).not.toMatch(/usuario \d/);
   });
 
   it("shows each flight's volumes and billing as the server sent them", async () => {
@@ -133,7 +134,7 @@ describe("the billing screen", () => {
 
     const table = await screen.findByRole("table", { name: "Flights de la línea 1 de Alfa" });
     expect(plain(cellOf(table, "Ajuste"))).toBe(
-      "Ajustado: importe fijo · Acuerdo con la agencia · usuario 7 · 02/11/2026 10:15",
+      "Ajustado: importe fijo · Acuerdo con la agencia · Ana Pérez · 02/11/2026 10:15",
     );
     expect(plain(cellOf(table, "Volumen facturable"))).toBe("—");
   });
@@ -161,7 +162,7 @@ describe("the review of a campaign", () => {
 
   it("withdraws the review of a reviewed campaign", async () => {
     const { requests, user } = await renderOctober({
-      [OCTOBER]: () => reply(200, billing({ campaigns: [billingCampaign({ campaign_id: 5, review_state: "reviewed", review_set_by: 7, review_set_at: "2026-11-02T10:15:00" })] })),
+      [OCTOBER]: () => reply(200, billing({ campaigns: [billingCampaign({ campaign_id: 5, review_state: "reviewed", review_set_by: 7, review_set_by_name: "Ana Pérez", review_set_at: "2026-11-02T10:15:00" })] })),
       "POST /billing/reviews/withdrawals": () => reply(201, { campaign_id: 5, year: 2026, month: 10, state: "pending_review", set_by: 7, set_at: "2026-11-02T11:00:00" }),
     });
 
@@ -302,8 +303,10 @@ describe("the adjustment of a flight", () => {
     const { user } = await renderOctober({
       ...MONTH,
       "GET /billing/flights/31/adjustments": () => reply(200, { adjustments: [
-        { id: 2, flight_id: 31, basis: "custom", amount: "4200.00", reason: "Acuerdo", created_by: 7, created_at: "2026-11-02T11:00:00", in_force: true },
-        { id: 1, flight_id: 31, basis: "delivered", amount: null, reason: "Primero", created_by: 8, created_at: "2026-11-02T10:00:00", in_force: false },
+        { id: 2, flight_id: 31, basis: "custom", amount: "4200.00", reason: "Acuerdo", created_by: 7, created_by_name: "Ana Pérez",
+          created_at: "2026-11-02T11:00:00", in_force: true },
+        { id: 1, flight_id: 31, basis: "delivered", amount: null, reason: "Primero", created_by: 8,
+          created_by_name: "luis@example.com", created_at: "2026-11-02T10:00:00", in_force: false },
       ] }),
     });
 
@@ -312,8 +315,8 @@ describe("the adjustment of a flight", () => {
     const dialog = await screen.findByRole("dialog", { name: "Historial de ajustes" });
     const items = within(dialog).getAllByRole("listitem").map((item) => plain(item));
     expect(items).toEqual([
-      `Importe fijo 4.200,00${SPACE}€ · Acuerdo · usuario 7 · 02/11/2026 11:00 · En vigor`,
-      "Todo lo entregado · Primero · usuario 8 · 02/11/2026 10:00",
+      `Importe fijo 4.200,00${SPACE}€ · Acuerdo · Ana Pérez · 02/11/2026 11:00 · En vigor`,
+      "Todo lo entregado · Primero · luis@example.com · 02/11/2026 10:00",
     ]);
   });
 });
