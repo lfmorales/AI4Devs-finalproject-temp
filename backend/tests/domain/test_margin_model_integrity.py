@@ -8,15 +8,18 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.services import flight_delivery, flight_margin, margin_totals, platform_rate, priced_flights
+from app.domain.services import closed_flight, flight_delivery, flight_margin, margin_totals, platform_rate, priced_flights
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.margin_totals import total_flights, total_lines
+from app.domain.value_objects import closed_flight as closed_flight_snapshot
 from app.domain.value_objects import margin
 from app.domain.value_objects.margin import FlightEconomics
 from app.domain.value_objects.volume_commitment import VolumeCommitment
 from tests.fixtures.flight_inputs import flight_economics
 
-MARGIN_MODULES = (margin, flight_margin, margin_totals, flight_delivery, platform_rate)
+MARGIN_MODULES = (
+    margin, flight_margin, margin_totals, flight_delivery, platform_rate, closed_flight_snapshot, closed_flight,
+)
 # The pricing function carries the channel as data for the rebate rules; it never branches on it.
 FLOAT_FREE_MODULES = (*MARGIN_MODULES, priced_flights)
 AS_OF = date(2026, 9, 10)
