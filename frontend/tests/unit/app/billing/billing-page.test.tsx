@@ -16,19 +16,24 @@ vi.mock("@/lib/auth/user-manager", () => ({
 const SPACE = " "; // plain() turns the no-break space of the euro amounts into a plain one
 const OCTOBER = "GET /billing?year=2026&month=10";
 
-beforeEach(() => vi.clearAllMocks());
-afterEach(() => vi.unstubAllGlobals());
+// Today is 26 November 2026 in Madrid: the screen opens on October 2026. Only the clock is faked, not the timers.
+const TODAY = new Date("2026-11-26T10:00:00+01:00");
 
-async function chooseOctober(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(await screen.findByLabelText("Año"), "2026");
-  await user.selectOptions(screen.getByLabelText("Mes"), "octubre");
-}
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(TODAY);
+});
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
+/** The screen as it opens on 26 November 2026: on October, read with these routes. */
 async function renderOctober(routes: Record<string, Route>) {
   const requests = installRoutes(routes);
   const user = userEvent.setup();
   renderAuthenticated(<BillingPage />);
-  await chooseOctober(user);
   return { requests, user };
 }
 
@@ -53,14 +58,55 @@ function cellOf(table: HTMLElement, header: string, row = 0): HTMLElement {
 // ---------------------------------------------------------------- the month and its campaigns
 
 describe("the billing screen", () => {
-  it("asks for a year and a month before it reads anything", async () => {
-    const requests = installRoutes({});
+  it("opens on the month before today's and reads it", async () => {
+    const requests = installRoutes({ [OCTOBER]: () => reply(200, billing()) });
 
     renderAuthenticated(<BillingPage />);
 
     expect(await screen.findByRole("heading", { level: 1, name: "Facturación" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Año")).toHaveValue("2026");
+    expect(screen.getByLabelText("Mes")).toHaveDisplayValue("octubre");
+    await screen.findByRole("region", { name: "Campaña Alfa" });
+    expect(requests.map((request) => `${request.method} ${request.path}`)).toEqual([OCTOBER]);
+  });
+
+  it("opens on December of the year before in January", async () => {
+    vi.setSystemTime(new Date("2027-01-10T10:00:00+01:00"));
+    const requests = installRoutes({ "GET /billing?year=2026&month=12": () => reply(200, billing({ month: 12 })) });
+
+    renderAuthenticated(<BillingPage />);
+
+    await screen.findByRole("region", { name: "Campaña Alfa" });
+    expect(screen.getByLabelText("Año")).toHaveValue("2026");
+    expect(screen.getByLabelText("Mes")).toHaveDisplayValue("diciembre");
+    expect(requests.map((request) => request.path)).toEqual(["/billing?year=2026&month=12"]);
+  });
+
+  it("reads another month once it is chosen", async () => {
+    const requests = installRoutes({
+      [OCTOBER]: () => reply(200, billing()),
+      "GET /billing?year=2026&month=9": () => reply(200, billing({ month: 9, campaigns: [billingCampaign({ name: "Septiembre" })] })),
+    });
+    const user = userEvent.setup();
+    renderAuthenticated(<BillingPage />);
+    await screen.findByRole("region", { name: "Campaña Alfa" });
+
+    await user.selectOptions(screen.getByLabelText("Mes"), "septiembre");
+
+    expect(await screen.findByRole("region", { name: "Campaña Septiembre" })).toBeInTheDocument();
+    expect(requests.map((request) => request.path)).toEqual(["/billing?year=2026&month=10", "/billing?year=2026&month=9"]);
+  });
+
+  it("asks for a year and a month again when the year is cleared, and reads nothing more", async () => {
+    const requests = installRoutes({ [OCTOBER]: () => reply(200, billing()) });
+    const user = userEvent.setup();
+    renderAuthenticated(<BillingPage />);
+    await screen.findByRole("region", { name: "Campaña Alfa" });
+
+    await user.clear(screen.getByLabelText("Año"));
+
     expect(screen.getByText("Elige año y mes para ver la facturación")).toBeInTheDocument();
-    expect(requests).toHaveLength(0);
+    expect(requests).toHaveLength(1);
   });
 
   it("shows each campaign with its agency, its advertiser and its review state", async () => {

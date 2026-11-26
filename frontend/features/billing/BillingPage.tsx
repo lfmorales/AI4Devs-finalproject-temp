@@ -25,7 +25,7 @@ import { AccessDeniedPage } from "@/lib/components/AccessDeniedPage";
 import { SessionExpiredPage } from "@/lib/components/SessionExpiredPage";
 import { AdjustmentDialog } from "./AdjustmentDialog";
 import { BillingCampaigns, type BillingActions } from "./BillingCampaigns";
-import { NO_MONTH, toMonth, type MonthFields } from "./filters";
+import { previousMonthFields, toMonth, type MonthFields } from "./filters";
 import { HistoryDialog } from "./HistoryDialog";
 import { CHOOSE_MONTH, CSV_NEEDS_A_CLOSED_MONTH, billingErrorMessage } from "./messages";
 
@@ -49,7 +49,7 @@ function save(blob: Blob, fileName: string) {
 
 /** The billing of a month per campaign, line and flight: the review, the adjustments, the billable flag and the CSV. */
 export function BillingPage() {
-  const [fields, setFields] = useState<MonthFields>(NO_MONTH);
+  const [fields, setFields] = useState<MonthFields>(() => previousMonthFields(new Date()));
   const [reloads, setReloads] = useState(0);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [busy, setBusy] = useState(false);

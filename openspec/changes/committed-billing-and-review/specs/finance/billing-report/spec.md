@@ -116,7 +116,15 @@ Wherever a response of a route under `/billing`, or of `PUT /flights/{flight_id}
 
 ### Requirement: The billing screen shows a month's billing
 
-The system SHALL offer, to users holding `operations` or `finance`, a billing screen for a month that shows each campaign with its review state, and each flight with its contracted volume, carry-over, delivery target, delivered volume, billable volume, sale CPM, billing labelled «Facturable» or «Facturable a la fecha» as in the margin screen, and the adjustment in force with its reason, the name of its author and its moment, as each campaign's review shows the name of whoever reviewed it. It SHALL let them adjust an ended, unfrozen committed flight (basis, amount when custom, mandatory reason), set the billable flag of a carry-over, mark and withdraw the review, and download the CSV of a closed month. It SHALL show the response's error in Spanish when an action is refused, and SHALL compute no figure. The screen and its entry in the navigation SHALL be hidden from a user holding neither role.
+The system SHALL offer, to users holding `operations` or `finance`, a billing screen for a month that shows each campaign with its review state, and each flight with its contracted volume, carry-over, delivery target, delivered volume, billable volume, sale CPM, billing labelled «Facturable» or «Facturable a la fecha» as in the margin screen, and the adjustment in force with its reason, the name of its author and its moment, as each campaign's review shows the name of whoever reviewed it. It SHALL let them adjust an ended, unfrozen committed flight (basis, amount when custom, mandatory reason), set the billable flag of a carry-over, mark and withdraw the review, and download the CSV of a closed month. It SHALL show the response's error in Spanish when an action is refused, and SHALL compute no figure. The screen and its entry in the navigation SHALL be hidden from a user holding neither role. The screen SHALL open on the month before today's in Madrid, the month Finance reviews most often, and SHALL let the user choose any other.
+
+#### Scenario: The screen proposes the previous month
+- **WHEN** a user holding `finance` opens the billing screen on 26 November 2026
+- **THEN** it shows October 2026 and reads its billing, and choosing September reads September's
+
+#### Scenario: In January the previous month is December of the year before
+- **WHEN** the billing screen is opened on 10 January 2027
+- **THEN** it shows December 2026
 
 #### Scenario: Finance adjusts a flight from the billing screen
 - **WHEN** a user holding `finance` adjusts a pending-close flight to its contracted volume with a reason
