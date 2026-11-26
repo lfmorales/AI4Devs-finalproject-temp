@@ -32,8 +32,10 @@ const STATUS_ROW: CampaignStatusRow = {
   campaign: { id: 1, name: "Campaña A" },
   agency: { id: 2, name: "Agencia A" },
   line_number: 1,
-  flight: { campaign_period_id: 7, year: 2026, month: 8, start: "2026-08-01", end: "2026-08-31" },
+  flight: { id: 70, campaign_period_id: 7, year: 2026, month: 8, start: "2026-08-01", end: "2026-08-31" },
   contracted_impressions: 3100,
+  carryover: 0,
+  delivery_target: 3100,
   delivery_metric: "impressions",
   delivered: "1200.0000",
   delivered_impressions: 1200,
@@ -78,6 +80,15 @@ describe("getCampaignStatus", () => {
     expect(rows).toEqual([STATUS_ROW]);
     expect(fetchMock.mock.calls[0]![0]).toBe("http://localhost/api/campaign-status");
     expect(fetchMock.mock.calls[0]![1]?.method).toBe("GET");
+  });
+
+  it("carries the flight, the carry-over and the delivery target without merging them into the contracted volume", async () => {
+    stubFetch(200, [{ ...STATUS_ROW, carryover: 900, delivery_target: 4000 }]);
+
+    const [row] = await getCampaignStatus(client);
+
+    expect(row!.flight.id).toBe(70);
+    expect([row!.contracted_impressions, row!.carryover, row!.delivery_target]).toEqual([3100, 900, 4000]);
   });
 
   it("keeps contracted and delivered as distinct fields", async () => {

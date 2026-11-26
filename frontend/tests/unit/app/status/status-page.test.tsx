@@ -18,8 +18,10 @@ function row(overrides: Partial<CampaignStatusRow> = {}): CampaignStatusRow {
     campaign: { id: 1, name: "Campaña A" },
     agency: { id: 1, name: "Agencia M" },
     line_number: 1,
-    flight: { campaign_period_id: 7, year: 2026, month: 8, start: "2026-08-01", end: "2026-08-31" },
+    flight: { id: 70, campaign_period_id: 7, year: 2026, month: 8, start: "2026-08-01", end: "2026-08-31" },
     contracted_impressions: 31000,
+    carryover: 0,
+    delivery_target: 31000,
     delivery_metric: "impressions",
     delivered: "12000.0000",
     delivered_impressions: 12000,
@@ -34,11 +36,11 @@ function row(overrides: Partial<CampaignStatusRow> = {}): CampaignStatusRow {
 
 const ROWS_IN_SERVER_ORDER: CampaignStatusRow[] = [
   row({ campaign: { id: 1, name: "Campaña Z" }, agency: { id: 3, name: "Zeta" },
-    flight: { campaign_period_id: 9, year: 2026, month: 9, start: "2026-09-01", end: "2026-09-30" } }),
+    flight: { id: 90, campaign_period_id: 9, year: 2026, month: 9, start: "2026-09-01", end: "2026-09-30" } }),
   row({ campaign: { id: 2, name: "Campaña B" }, agency: { id: 1, name: "Alfa" },
-    flight: { campaign_period_id: 8, year: 2026, month: 8, start: "2026-08-01", end: "2026-08-31" } }),
+    flight: { id: 80, campaign_period_id: 8, year: 2026, month: 8, start: "2026-08-01", end: "2026-08-31" } }),
   row({ campaign: { id: 3, name: "Campaña C" }, agency: { id: 2, name: "Media" },
-    flight: { campaign_period_id: 10, year: 2026, month: 10, start: "2026-10-01", end: "2026-10-31" } }),
+    flight: { id: 100, campaign_period_id: 10, year: 2026, month: 10, start: "2026-10-01", end: "2026-10-31" } }),
 ];
 
 function campaignOrder(): string[] {

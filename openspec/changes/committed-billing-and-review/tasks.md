@@ -35,12 +35,12 @@
 
 ## 5. Pacing on the Delivery Target
 
-> Tasks 5.1 and 5.2 (the service and the repository) were done with group 4, since the pacing rule belongs to the carry-over rules; the row carries `carryover`, `delivery_target` and `flight_id` as entity fields. Tasks 5.3 and 5.4 (the API schema) remain.
+> Tasks 5.1 and 5.2 (the service and the repository) were done with group 4, since the pacing rule belongs to the carry-over rules; the row carries `carryover`, `delivery_target` and `flight_id` as entity fields. Tasks 5.3 and 5.4 (the API schema) were done in the next group, which also added `flight.id` to the response (the carry-over route is addressed by flight) and the three fields to the frontend type `CampaignStatusRow` and its Vitest fixtures; the screen itself is task 12.5.
 
 - [x] 5.1 Write failing tests in `backend/tests/application/test_campaign_status_service.py` and `backend/tests/infrastructure/test_sqlalchemy_campaign_status_repository.py`: the November flight with 500,000 contracted, a carry-over of 100,000 and 190,000 delivered at D-1 2026-11-10 expects 200,000, deviates −5 % and is not flagged, and without the carry-over is flagged at +14 %; the ratio is over the delivery target; the row carries `carryover` and `delivery_target`; the flight id is in the row
 - [x] 5.2 Read the carry-over in the status repository and pass the delivery target to `calculate_pacing`; verify 5.1 and the status suite
-- [ ] 5.3 Write failing API tests in `backend/tests/api/test_campaign_status_endpoint.py`: the row of the scenario carries `carryover` 100000 and `delivery_target` 600000 for each of the four roles, and no field, however nested, is an amount, a billable flag or a reason
-- [ ] 5.4 Add the fields to `backend/app/presentation/schemas/campaign_status.py`; verify 5.3
+- [x] 5.3 Write failing API tests in `backend/tests/api/test_campaign_status_endpoint.py`: the row of the scenario carries `carryover` 100000 and `delivery_target` 600000 for each of the four roles, and no field, however nested, is an amount, a billable flag or a reason
+- [x] 5.4 Add the fields to `backend/app/presentation/schemas/campaign_status.py`; verify 5.3
 
 ## 6. Carry-over Routes
 

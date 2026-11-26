@@ -11,7 +11,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
-from app.infrastructure.persistence.models.campaign import CampaignLineRecord
+from app.infrastructure.persistence.models.campaign import CampaignLinePeriodRecord, CampaignLineRecord
+from app.infrastructure.persistence.models.identity import UserRecord
 from app.presentation.dependencies import providers
 from app.presentation.schemas.campaign_status import CampaignStatusResponse
 from tests.fixtures.delivery_data import (
@@ -20,6 +21,7 @@ from tests.fixtures.delivery_data import (
     insert_campaign_line,
     insert_delivery,
     insert_ingestion_batch,
+    insert_user,
     replace_flights,
 )
 from tests.fixtures.margin_data import set_volume
@@ -57,9 +59,10 @@ def test_a_running_flight_is_listed_with_every_figure(business_client, test_db_s
     assert row["campaign"]["name"] == "Spring" and row["agency"]["name"] == "Spring agency"
     assert row["line_number"] == 1
     assert row["flight"] == {
-        "campaign_period_id": row["flight"]["campaign_period_id"], "year": 2026, "month": 8,
-        "start": "2026-08-01", "end": "2026-08-31",
+        "id": row["flight"]["id"], "campaign_period_id": row["flight"]["campaign_period_id"], "year": 2026,
+        "month": 8, "start": "2026-08-01", "end": "2026-08-31",
     }
+    assert isinstance(row["flight"]["id"], int)
     assert row["contracted_impressions"] == CONTRACTED_IMPRESSIONS
     assert row["delivered_impressions"] == 40_000
     assert row["delivery_ratio"] == pytest.approx(0.04)
@@ -345,3 +348,127 @@ def test_every_row_carries_the_commitment_of_its_line(business_client: TestClien
     rows = _rows(business_client)
 
     assert sorted((row["line_number"], row["volume_commitment"]) for row in rows) == [(1, "committed"), (2, "target")]
+
+
+# --- The carry-over and the delivery target (campaign/carryover, campaign/daily-status) ------------------------------
+
+
+def _carry_over(session: Session, line_id: int, volume: int, billable: bool = False) -> None:
+    """Write a carry-over, its reason and its billable flag on the flight of the line, as the service will."""
+    user_id = session.query(UserRecord.id).filter_by(email="carryover-author@example.com").scalar() or insert_user(
+        session, "carryover-author@example.com"
+    )
+    session.execute(
+        update(CampaignLinePeriodRecord).where(CampaignLinePeriodRecord.campaign_line_id == line_id).values(
+            carryover=volume, carryover_reason="Recuperar lo no entregado en julio", carryover_set_by=user_id,
+            carryover_set_at=date(2026, 8, 2), carryover_billable=billable,
+            carryover_billable_set_by=user_id if billable else None,
+            carryover_billable_set_at=date(2026, 8, 3) if billable else None,
+        )
+    )
+    session.flush()
+
+
+def _names(value: object) -> set[str]:
+    if isinstance(value, dict):
+        return set(value) | {name for item in value.values() for name in _names(item)}
+    if isinstance(value, list):
+        return {name for item in value for name in _names(item)}
+    return set()
+
+
+SECRET_WORDS = ("billable", "reason", "adjust", "set_by", "set_at", "author")
+
+
+def _line_with_a_carry_over(session: Session, billable: bool = False) -> int:
+    line = insert_campaign_line(session, campaign_name="With carry-over")
+    set_volume(session, line, 500_000)
+    _carry_over(session, line, 100_000, billable)
+    return line
+
+
+@pytest.mark.parametrize("role", ["operations", "business", "finance", "trading"])
+def test_a_row_with_a_carry_over_carries_it_and_its_delivery_target_for_every_role(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session, role: str
+) -> None:
+    _line_with_a_carry_over(test_db_session)
+    client = client_for_roles(role)
+    cast(FastAPI, client.app).dependency_overrides[providers.get_today] = lambda: TODAY
+
+    [row] = _rows(client)
+
+    assert (row["contracted_impressions"], row["carryover"], row["delivery_target"]) == (500_000, 100_000, 600_000)
+
+
+@pytest.mark.parametrize("role", ["operations", "business", "finance", "trading"])
+def test_no_role_receives_the_billable_flag_the_reason_or_an_amount_with_a_carry_over(
+    client_for_roles: Callable[..., TestClient], test_db_session: Session, role: str
+) -> None:
+    _line_with_a_carry_over(test_db_session, billable=True)
+    client = client_for_roles(role)
+    cast(FastAPI, client.app).dependency_overrides[providers.get_today] = lambda: TODAY
+
+    rows = _rows(client)
+    names = _names(rows)
+
+    assert {"carryover", "delivery_target"} <= names
+    assert not [name for name in names if any(word in name.lower() for word in (*SECRET_WORDS, *COST_WORDS))]
+    assert not [leaf for leaf in _leaf_values(rows) if isinstance(leaf, str) and "Recuperar" in leaf]
+
+
+def test_the_declared_schema_has_no_billable_flag_reason_or_adjustment() -> None:
+    def schema_names(model) -> set[str]:  # type: ignore[no-untyped-def]
+        found: set[str] = set()
+        for name, field in model.model_fields.items():
+            found.add(name)
+            if hasattr(field.annotation, "model_fields"):
+                found |= schema_names(field.annotation)
+        return found
+
+    names = schema_names(CampaignStatusResponse)
+
+    assert {"carryover", "delivery_target"} <= names
+    assert not [name for name in names if any(word in name.lower() for word in SECRET_WORDS)]
+
+
+def test_a_flight_without_a_carry_over_has_a_delivery_target_equal_to_its_contracted_volume(
+    business_client: TestClient, test_db_session: Session
+) -> None:
+    insert_campaign_line(test_db_session, campaign_name="Plain")
+
+    [row] = _rows(business_client)
+
+    assert (row["carryover"], row["delivery_target"]) == (0, row["contracted_impressions"])
+
+
+def test_the_billable_flag_changes_nothing_a_row_shows(business_client: TestClient, test_db_session: Session) -> None:
+    line = _line_with_a_carry_over(test_db_session, billable=False)
+    [not_billable] = _rows(business_client)
+    _carry_over(test_db_session, line, 100_000, billable=True)
+
+    [billable] = _rows(business_client)
+
+    assert billable == not_billable
+
+
+def test_the_pacing_and_the_ratio_are_measured_against_the_delivery_target(
+    business_client: TestClient, test_db_session: Session
+) -> None:
+    line = _line_with_a_carry_over(test_db_session)
+    insert_delivery(test_db_session, line, date(2026, 8, 10), 190_000, insert_ingestion_batch(test_db_session))
+
+    [row] = _rows(business_client)
+
+    assert row["pacing"]["expected_impressions"] == pytest.approx(600_000 * 10 / 31)
+    assert row["delivery_ratio"] == pytest.approx(190_000 / 600_000)
+
+
+def test_the_flight_of_a_row_is_the_flight_that_receives_the_carry_over(
+    business_client: TestClient, test_db_session: Session
+) -> None:
+    line = _line_with_a_carry_over(test_db_session)
+    flight_id = test_db_session.query(CampaignLinePeriodRecord.id).filter_by(campaign_line_id=line).scalar()
+
+    [row] = _rows(business_client)
+
+    assert row["flight"]["id"] == flight_id

@@ -14,6 +14,7 @@ class NamedReference(BaseModel):
 
 
 class FlightWindowResponse(BaseModel):
+    id: int = Field(description="The flight: the row of the line in this month, which receives a carry-over.")
     campaign_period_id: int
     year: int
     month: int
@@ -38,7 +39,15 @@ class CampaignStatusResponse(BaseModel):
     agency: NamedReference
     line_number: int
     flight: FlightWindowResponse
-    contracted_impressions: int = Field(description=f"The flight's contracted volume, {IN_DELIVERY_METRIC}.")
+    contracted_impressions: int = Field(
+        description=f"The flight's contracted volume, {IN_DELIVERY_METRIC}. It never includes the carry-over."
+    )
+    carryover: int = Field(
+        description=f"The volume carried to this flight from the previous flight of its line, {IN_DELIVERY_METRIC}; 0 when none."
+    )
+    delivery_target: int = Field(
+        description=f"The contracted volume plus the carry-over, {IN_DELIVERY_METRIC}: what the pacing and the ratio use."
+    )
     delivery_metric: str = Field(description="The unit the channel counts delivery in: `impressions` or `ots`.")
     delivered: QuantityString = Field(
         description=f"The line's delivery from the flight's start to D-1, {IN_DELIVERY_METRIC}, four decimals."
@@ -62,10 +71,12 @@ class CampaignStatusResponse(BaseModel):
             agency=NamedReference(id=row.agency_id, name=row.agency_name),
             line_number=row.line_number,
             flight=FlightWindowResponse(
-                campaign_period_id=row.campaign_period_id, year=row.period_year, month=row.period_month,
+                id=row.flight_id, campaign_period_id=row.campaign_period_id, year=row.period_year, month=row.period_month,
                 start=row.flight_start, end=row.flight_end,
             ),
             contracted_impressions=row.contracted_impressions,
+            carryover=row.carryover,
+            delivery_target=row.delivery_target,
             delivery_metric=row.delivery_metric,
             delivered=row.delivered,
             delivered_impressions=row.delivered_impressions,

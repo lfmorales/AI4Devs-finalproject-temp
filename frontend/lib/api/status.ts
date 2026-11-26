@@ -13,6 +13,8 @@ export interface NamedReference {
 }
 
 export interface FlightWindow {
+  /** The flight, the row of the line in this month: the one that receives a carry-over. */
+  id: number;
   campaign_period_id: number;
   year: number;
   month: number;
@@ -37,14 +39,18 @@ export interface CampaignStatusRow {
   agency: NamedReference;
   line_number: number;
   flight: FlightWindow;
-  /** The flight's contracted volume, in the unit of `delivery_metric`. */
+  /** The flight's contracted volume, in the unit of `delivery_metric`. It never includes the carry-over. */
   contracted_impressions: number;
+  /** The volume carried to this flight from the previous flight of its line, in that unit; 0 when none. */
+  carryover: number;
+  /** The contracted volume plus the carry-over: what the pacing and the ratio are measured against. */
+  delivery_target: number;
   delivery_metric: DeliveryMetric;
   /** The delivery up to D-1 in that unit: a decimal string with four decimals, shown as received. */
   delivered: string;
   /** The real impressions over the same days, whatever the metric. */
   delivered_impressions: number;
-  /** Delivered over contracted, as a fraction; null when it cannot be computed. */
+  /** Delivered over the delivery target, as a fraction; null when it cannot be computed. */
   delivery_ratio: number | null;
   pacing: Pacing;
   /** Raised below a target, but never above it: a target line may deliver more than its target. */
