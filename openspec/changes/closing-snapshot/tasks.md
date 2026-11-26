@@ -81,8 +81,8 @@
 
 ## 13. E2E Testing with Playwright (MANDATORY - AGENT MUST EXECUTE)
 
-- [ ] 13.1 Reset the E2E data with `e2e/scripts/reset-data.sh` and run the whole Playwright suite; `margin.spec.ts` keeps checking that the closing changes no amount
-- [ ] 13.2 Check in the browser that the margin screen of a closed month shows its figures and no «Cambió tras el cierre» label, restore the data, and document the run in `docs/reports/YYYY-MM-DD-step-13-e2e.md`
+- [x] 13.1 Reset the E2E data with `e2e/scripts/reset-data.sh` and run the whole Playwright suite; `margin.spec.ts` keeps checking that the closing changes no amount
+- [x] 13.2 Check in the browser that the margin screen of a closed month shows its figures and no «Cambió tras el cierre» label, restore the data, and document the run in `docs/reports/YYYY-MM-DD-step-13-e2e.md`
 
 ## 14. Update Technical Documentation (MANDATORY)
 
