@@ -4,7 +4,7 @@ import { expect, test } from "../support/fixtures";
 import {
   amountsByFlight, campaignCard, campaignField, chooseMonth, closedFlightsMessage, currentMonth, deliveryLegend, expectStates, flightCell, flightsOf,
   flightsTable, FRESH_DATABASE_SKIP_REASON, hasPendingClose, isoDate, lastDayOf, madridToday, money, monthName,
-  monthOfYear, NOTHING_TO_CLOSE, openAllCards, percent, previousMonth, readMargin, REMOVE_CAMPAIGN_FILTER, saleLabel,
+  monthOfYear, NOTHING_TO_CLOSE, openAllCards, percent, previousMonth, readMargin, REMOVE_CAMPAIGN_FILTER, reviewMonth, saleLabel,
   type CampaignMargin, type LineMargin, type MarginResponse, type Month,
 } from "../support/margin";
 
@@ -245,6 +245,7 @@ test.describe("the closing order", () => {
       expect(hasPendingClose(await readMargin(api, previous)), "nothing was closed").toBe(true);
     } finally {
       if (registered) {
+        await reviewMonth(api, earlier);
         const cleanup = await api.post("margin/closings", { data: earlier });
         expect(cleanup.ok(), `closing ${monthName(earlier.month)} again to leave the database able to close`).toBe(true);
       }
@@ -259,6 +260,7 @@ test.describe("the real closing", () => {
     const before = await readMargin(api, previous);
     test.skip(!hasPendingClose(before), FRESH_DATABASE_SKIP_REASON);
     const closing = flightsOf(before).filter((flight) => flight.state === "pending_close").length;
+    await reviewMonth(api, previous);
 
     await page.goto("/margin");
     await chooseMonth(page, previous);

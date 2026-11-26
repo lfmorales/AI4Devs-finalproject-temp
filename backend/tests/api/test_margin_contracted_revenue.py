@@ -14,7 +14,7 @@ from tests.fixtures.delivery_data import (
     insert_ingestion_batch,
     replace_flights,
 )
-from tests.fixtures.margin_data import set_volume
+from tests.fixtures.margin_data import make_month_closable, set_volume
 
 SEPTEMBER_FIRST = date(2026, 9, 1)  # as_of is 31 August: August is over
 AUGUST_11 = date(2026, 8, 11)       # as_of is 10 August: August is running
@@ -69,6 +69,7 @@ def test_a_closed_flight_accrues_all_of_it_and_closing_changes_none_of_the_three
     _bill(test_db_session, insert_campaign_line(test_db_session), 1_000_000)
     client = _client(client_for_roles, SEPTEMBER_FIRST)
     (before,) = _flights(_get(client))
+    make_month_closable(test_db_session, 2026, 8, None, SEPTEMBER_FIRST)
     assert client.post("/margin/closings", json={"year": 2026, "month": 8}).status_code == 200
 
     (after,) = _flights(_get(client))
@@ -96,6 +97,7 @@ def test_every_level_adds_the_contracted_revenue_of_the_flights_below(client_for
     second = add_line_to_campaign(test_db_session, first, 2)
     set_volume(test_db_session, second, 300_000, "0.00")
     client = _client(client_for_roles, SEPTEMBER_FIRST)
+    make_month_closable(test_db_session, 2026, 8, None, SEPTEMBER_FIRST)
     client.post("/margin/closings", json={"year": 2026, "month": 8})
     client.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 11)
 
@@ -144,6 +146,7 @@ def test_the_three_states_carry_the_volumes_and_closing_changes_neither(client_f
     for day, impressions in ((date(2026, 8, 5), 100), (date(2026, 9, 5), 200), (date(2026, 10, 5), 400)):
         _deliver(test_db_session, line_id, day, impressions)
     client = _client(client_for_roles, date(2026, 10, 11))
+    make_month_closable(test_db_session, 2026, 8, None, date(2026, 10, 11))
     before_closing = _flights(_get(client))
     client.post("/margin/closings", json={"year": 2026, "month": 8})
 

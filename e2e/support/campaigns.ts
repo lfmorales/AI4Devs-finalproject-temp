@@ -63,7 +63,8 @@ export function campaignLine(masters: LineMasters, window: CampaignWindow) {
 /**
  * Registers an active campaign with one national line and no delivery, over the given window. The body follows
  * CampaignCreateRequest and CampaignLineCreateRequest of the backend's OpenAPI schema; the masters are the first
- * item of each master list, except the channel (see chooseMasterId).
+ * item of each master list, except the channel and the DSP (see chooseMasterId). The DSP is the DEMO one because a
+ * month closes only once its DSP has loaded its last day, and seed_margin_demo records that load for the DEMO DSP.
  */
 export async function registerCampaign(api: APIRequestContext, window: CampaignWindow): Promise<void> {
   const registration = await api.post("campaigns", {
@@ -82,7 +83,7 @@ export async function registerCampaign(api: APIRequestContext, window: CampaignW
       lines: [
         campaignLine(
           {
-            dsp: await firstOf(api, "masters/dsps"),
+            dsp: await demoOrFirstOf(api, "masters/dsps"),
             channel: await demoOrFirstOf(api, "masters/channels"),
             format: await firstOf(api, "masters/formats"),
           },

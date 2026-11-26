@@ -2,7 +2,8 @@
 
 The rows are chosen from the private sheet by what they are (a normal one, one without a rebate schedule, one that
 delivered more than contracted, one with a negative margin and positive revenue), then created in the test
-database, closed with POST /margin/closings and read back with GET /margin.
+database, reviewed campaign by campaign with POST /billing/reviews, closed with POST /margin/closings and read back
+with GET /margin.
 """
 
 from datetime import date, datetime
@@ -35,7 +36,7 @@ from tests.fixtures.delivery_data import (
 )
 from tests.fixtures.delivery_rows import dsp_row
 from tests.fixtures.dsp_delivery_client import InMemoryDspDeliveryClient
-from tests.fixtures.margin_data import group_of, set_volume
+from tests.fixtures.margin_data import group_of, load_months_last_day, set_volume
 
 pytestmark = pytest.mark.skipif(not SHEET_PATH.exists(), reason=SKIP_REASON)
 
@@ -71,7 +72,8 @@ def chosen() -> dict[str, SheetRow]:
 
 @pytest.fixture
 def month(client_for_roles, test_db_session, chosen):
-    """The five lines created, their schedules and platform rates set through the API, and the month closed."""
+    """The five lines created, their schedules and platform rates set through the API, the five campaigns reviewed through
+    the API once their DSP has loaded 31 August, and the month closed."""
     finance = client_for_roles("finance")
     operations = client_for_roles("operations")  # rates and schedules are set by operations only
     finance.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
@@ -94,6 +96,12 @@ def month(client_for_roles, test_db_session, chosen):
     # A platform rate other than the system one, so that ignoring the line override would show.
     create(SYNTHETIC_NAME, 500_000, "0.00", 400_000, Decimal("120.00"), "2.50", None)
 
+    load_months_last_day(test_db_session, 2026, 8)
+    campaign_ids = [campaign["campaign_id"] for campaign in finance.get("/margin").json()["campaigns"]]
+    assert len(campaign_ids) == 5
+    for campaign_id in campaign_ids:
+        review = finance.post("/billing/reviews", json={"campaign_id": campaign_id, "year": 2026, "month": 8})
+        assert review.status_code == 201, review.text
     closed = finance.post("/margin/closings", json={"year": 2026, "month": 8}).json()
     return finance, closed
 

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.domain.exceptions import RebateRuleError, SystemPlatformRateMissingError
 from app.domain.repositories.margin_repositories import (
     AppliedRateRepository,
+    CampaignMonthStanding,
     MarginClosingTransaction,
     MarginFlightRepository,
     MarginMastersTransaction,
@@ -22,12 +23,14 @@ from app.domain.repositories.margin_repositories import (
     RebateScheduleRepository,
 )
 from app.domain.services.closed_flight import snapshot_of
+from app.domain.services.monthly_review import FlightCounts
 from app.domain.value_objects.billing import BillingAdjustment, BillingBasis
 from app.domain.value_objects.closed_flight import ClosedFlightSnapshot
 from app.domain.value_objects.margin_report import FrozenRates
 from app.domain.value_objects.platform_rate import NewPlatformRateSetting, PlatformRateLevel, PlatformRateSetting
 from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight, ReadFlight
 from app.domain.value_objects.rebate import Bracket, CounterKey, NewRebateSchedule, RebateSchedule
+from app.domain.value_objects.review import ReviewKind
 from app.domain.value_objects.volume_commitment import VolumeCommitment
 from app.infrastructure.persistence.models.campaign import (
     CampaignLinePeriodRecord,
@@ -39,6 +42,7 @@ from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord, 
 from app.infrastructure.persistence.models.margin import (
     AppliedRateBracketRecord,
     AppliedRateRecord,
+    CampaignPeriodReviewRecord,
     ClosedFlightSnapshotRecord,
     FlightBillingAdjustmentRecord,
     MonthClosingBatchRecord,
@@ -191,16 +195,17 @@ def _flight_facts_query(
     data_cost = select(
         func.coalesce(func.sum(DailyDeliveryRecord.third_party_data_cost + DailyDeliveryRecord.audience_data_cost), 0)
     ).where(*window).scalar_subquery()
-    # The adjustment in force is the latest row of the flight, by id (the table is append-only). Its basis and amount are
-    # read by correlated subqueries ordered by id, over the (flight, id) index.
+    # The adjustment in force is the latest row of the flight, by id (the table is append-only). Its id, basis and amount
+    # are read by correlated subqueries ordered by id, over the (flight, id) index.
     latest = (
-        select(FlightBillingAdjustmentRecord.basis, FlightBillingAdjustmentRecord.amount)
+        select(FlightBillingAdjustmentRecord.id, FlightBillingAdjustmentRecord.basis, FlightBillingAdjustmentRecord.amount)
         .where(FlightBillingAdjustmentRecord.campaign_line_period_id == flight.id)
         .order_by(FlightBillingAdjustmentRecord.id.desc())
         .limit(1)
     )
     adjustment_basis = latest.with_only_columns(FlightBillingAdjustmentRecord.basis).scalar_subquery()
     adjustment_amount = latest.with_only_columns(FlightBillingAdjustmentRecord.amount).scalar_subquery()
+    adjustment_id = latest.with_only_columns(FlightBillingAdjustmentRecord.id).scalar_subquery()
     return (
         select(
             flight.id.label("flight_id"),
@@ -228,6 +233,7 @@ def _flight_facts_query(
             flight.carryover_billable.label("carryover_billable"),
             adjustment_basis.label("adjustment_basis"),
             adjustment_amount.label("adjustment_amount"),
+            adjustment_id.label("adjustment_id"),
             *extra,
         )
         .select_from(flight)
@@ -261,6 +267,7 @@ def _flight_facts(row: Row[Any]) -> FlightFacts:
             None if values["adjustment_basis"] is None
             else BillingAdjustment(BillingBasis(values["adjustment_basis"]), values["adjustment_amount"])
         ),
+        adjustment_id=values["adjustment_id"],
     )
 
 
@@ -306,12 +313,46 @@ class SqlAlchemyMarginFlightRepository(MarginFlightRepository):
                 CampaignPeriodRecord.period_month == month,
                 flight.flight_end <= as_of,
                 self._not_frozen(),
-                CampaignLineRecord.volume_commitment == VolumeCommitment.TARGET.value,
                 ~loaded,
             )
             .distinct()
             .order_by(DSPRecord.name)
         ))
+
+    def campaigns_of_the_month(self, year: int, month: int, as_of: date) -> list[CampaignMonthStanding]:
+        flight = CampaignLinePeriodRecord
+        frozen = exists().where(AppliedRateRecord.campaign_line_period_id == flight.id)
+        latest_kind = (
+            select(CampaignPeriodReviewRecord.kind)
+            .where(CampaignPeriodReviewRecord.campaign_period_id == CampaignPeriodRecord.id)
+            .order_by(CampaignPeriodReviewRecord.id.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        rows = self._session.execute(
+            select(
+                CampaignRecord.id,
+                CampaignRecord.name,
+                func.count(),
+                func.count().filter(flight.flight_end <= as_of),
+                func.count().filter(frozen),
+                latest_kind,
+            )
+            .select_from(flight)
+            .join(CampaignPeriodRecord, CampaignPeriodRecord.id == flight.campaign_period_id)
+            .join(CampaignRecord, CampaignRecord.id == CampaignPeriodRecord.campaign_id)
+            .where(CampaignPeriodRecord.period_year == year, CampaignPeriodRecord.period_month == month)
+            .group_by(CampaignRecord.id, CampaignRecord.name, CampaignPeriodRecord.id)
+            .order_by(CampaignRecord.name, CampaignRecord.id)
+        ).all()
+        return [
+            CampaignMonthStanding(
+                campaign_id=campaign_id, campaign_name=name,
+                counts=FlightCounts(total=int(total), ended=int(ended), frozen=int(frozen_count)),
+                latest_event=None if kind is None else ReviewKind(kind),
+            )
+            for campaign_id, name, total, ended, frozen_count, kind in rows
+        ]
 
     def earliest_month_with_open_flights(self, year: int, before_month: int, as_of: date) -> int | None:
         flight = CampaignLinePeriodRecord
@@ -335,6 +376,8 @@ def _snapshot(values: RowMapping) -> ClosedFlightSnapshot:
     """The snapshot of a frozen flight as stored, column for field."""
     stored = {name: values[f"snapshot_{name}"] for name in _SNAPSHOT_FIELDS}
     stored["volume_commitment"] = VolumeCommitment(stored["volume_commitment"])
+    if stored["billing_basis"] is not None:
+        stored["billing_basis"] = BillingBasis(stored["billing_basis"])
     return ClosedFlightSnapshot(**stored)
 
 
@@ -453,8 +496,8 @@ class SqlAlchemyAppliedRateRepository(AppliedRateRepository):
     ) -> None:
         for item in priced:
             rebate = item.rebate
-            # A target flight's revenue and gross are what its DSP reported as of closing: frozen with its rates. A
-            # committed flight's revenue is its contract, which does not move, so its row holds neither.
+            # The revenue and the rebate base as of closing, frozen with the rates: a target flight's reported revenue
+            # and gross, and a committed flight's billing, which is both.
             target = item.facts.volume_commitment is VolumeCommitment.TARGET
             row = AppliedRateRecord(
                 campaign_line_period_id=item.facts.flight_id,
@@ -472,8 +515,8 @@ class SqlAlchemyAppliedRateRepository(AppliedRateRepository):
                 position_after=rebate.position_after,
                 rebate_amount=rebate.rebate,
                 platform_rate=item.platform.rate,
-                revenue_amount=item.margin.revenue if target else None,
-                rebate_base_amount=item.margin.gross_revenue if target else None,
+                revenue_amount=item.margin.revenue,
+                rebate_base_amount=item.margin.gross_revenue if target else item.margin.revenue,
                 closed_at=closed_at,
                 closed_by=closed_by,
             )
@@ -513,6 +556,11 @@ def _snapshot_record(item: PricedFlight, applied_rate_id: int, month_closing_id:
         sale_cpm=snapshot.sale_cpm,
         contracted_impressions=snapshot.contracted_impressions,
         volume_commitment=snapshot.volume_commitment.value,
+        billing_basis=None if snapshot.billing_basis is None else snapshot.billing_basis.value,
+        billable=snapshot.billable,
+        carryover=snapshot.carryover,
+        carryover_billable=snapshot.carryover_billable,
+        billing_adjustment_id=snapshot.billing_adjustment_id,
     )
 
 

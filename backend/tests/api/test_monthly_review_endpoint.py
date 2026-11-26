@@ -19,7 +19,9 @@ from app.application.services.delivery_ingestion_service import DeliveryIngestio
 from app.domain.value_objects.delivery import DeliveryDateRange, ExternalLineKey
 from app.domain.value_objects.review import ReviewState
 from app.infrastructure.persistence.models.campaign import CampaignLinePeriodRecord, CampaignLineRecord
+from app.infrastructure.persistence.models.delivery import IngestionBatchRecord
 from app.infrastructure.persistence.models.identity import UserRecord
+from app.infrastructure.persistence.models.masters import DSPRecord
 from app.infrastructure.persistence.models.margin import CampaignPeriodReviewRecord, FlightBillingAdjustmentRecord
 from app.infrastructure.persistence.repositories import sqlalchemy_review_repository as review_repository
 from app.infrastructure.persistence.repositories.sqlalchemy_review_repository import SqlAlchemyMonthlyReviewTransaction
@@ -31,12 +33,13 @@ from tests.fixtures.delivery_data import (
     insert_delivery,
     insert_ingestion_batch,
     insert_mapping,
+    insert_other_dsp,
     replace_flights,
     seeded_dsp_id,
 )
 from tests.fixtures.delivery_rows import dsp_row
 from tests.fixtures.dsp_delivery_client import InMemoryDspDeliveryClient
-from tests.fixtures.margin_data import set_volume
+from tests.fixtures.margin_data import load_months_last_day, make_month_closable, set_volume
 
 OCTOBER = (date(2026, 10, 1), date(2026, 10, 31))
 NOVEMBER = (date(2026, 11, 1), date(2026, 11, 30))
@@ -66,11 +69,24 @@ def _flight_ids(session: Session, line_id: int) -> list[int]:
     ))
 
 
-def _august(session: Session, name: str = "Review") -> tuple[int, int, int]:
-    """A campaign with one August flight that delivered 700,000 of its million; returns campaign, line and flight."""
+def _august(session: Session, name: str = "Review", loaded: bool = True) -> tuple[int, int, int]:
+    """A campaign with one August flight that delivered 700,000 of its million; returns campaign, line and flight.
+
+    Left `loaded`, its DSP has loaded 31 August, as a review requires; False leaves the day unloaded."""
     line_id = insert_campaign_line(session, campaign_name=name)
     insert_delivery(session, line_id, date(2026, 8, 10), 700_000, insert_ingestion_batch(session), Decimal("1200.00"))
+    if loaded:
+        load_months_last_day(session, 2026, 8)
     return _campaign_of(session, line_id), line_id, _flight_ids(session, line_id)[0]
+
+
+def _batch(session: Session, dsp_id: int, status: str, window: tuple[date, date]) -> None:
+    session.add(IngestionBatchRecord(
+        dsp_id=dsp_id, route="api", source_file=None, started_at=datetime(2026, 9, 1, 6, 15),
+        finished_at=datetime(2026, 9, 1, 6, 20), status=status, row_count=0, window_start=window[0],
+        window_end=window[1],
+    ))
+    session.flush()
 
 
 def _review(client: TestClient, campaign_id: int, month: int = 8, year: int = 2026) -> Any:
@@ -157,6 +173,77 @@ def test_a_flight_that_ended_yesterday_has_ended_so_its_campaign_can_be_reviewed
     assert (response.status_code, response.json()["state"]) == (201, "reviewed")
 
 
+def _dsp(session: Session, name: str) -> int:
+    existing = session.scalars(select(DSPRecord.id).where(DSPRecord.name == name)).first()
+    return existing if existing is not None else insert_other_dsp(session, name)
+
+
+NOT_LOADED = "The delivery of 2026-08 from {dsp} is not loaded up to its last day. Load it, then review the campaign."
+
+
+def test_a_campaign_whose_dsp_has_not_loaded_the_months_last_day_cannot_be_reviewed(
+    client_for_roles: Any, test_db_session: Session
+) -> None:
+    campaign, _, _ = _august(test_db_session, loaded=False)
+    _batch(test_db_session, seeded_dsp_id(test_db_session), "succeeded", (date(2026, 8, 24), date(2026, 8, 30)))
+    finance = _on(client_for_roles("finance"))
+
+    response = _review(finance, campaign)
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "month_delivery_not_loaded", "message": NOT_LOADED.format(dsp="Delivery fixture DSP"),
+    }
+    assert _events(test_db_session) == []
+    assert _state(test_db_session, campaign) is ReviewState.PENDING_REVIEW
+    _batch(test_db_session, seeded_dsp_id(test_db_session), "succeeded", (date(2026, 8, 25), date(2026, 8, 31)))
+    assert _review(_on(finance), campaign).status_code == 201
+
+
+def test_a_failed_batch_of_its_dsp_or_a_batch_of_another_dsp_does_not_let_it_be_reviewed(
+    client_for_roles: Any, test_db_session: Session
+) -> None:
+    campaign, _, _ = _august(test_db_session, loaded=False)
+    _batch(test_db_session, seeded_dsp_id(test_db_session), "failed", (date(2026, 8, 25), date(2026, 8, 31)))
+    _batch(test_db_session, _dsp(test_db_session, "Adform"), "succeeded", (date(2026, 8, 25), date(2026, 8, 31)))
+
+    response = _review(_on(client_for_roles("finance")), campaign)
+
+    assert (response.status_code, response.json()["code"]) == (409, "month_delivery_not_loaded")
+    assert _events(test_db_session) == []
+
+
+def test_every_dsp_of_the_campaign_s_lines_must_have_loaded_the_months_last_day(
+    client_for_roles: Any, test_db_session: Session
+) -> None:
+    campaign, line, _ = _august(test_db_session)  # the fixture DSP has loaded 31 August
+    equativ = _dsp(test_db_session, "Equativ")
+    second = add_line_to_campaign(test_db_session, line, 2)
+    test_db_session.execute(update(CampaignLineRecord).where(CampaignLineRecord.id == second).values(dsp_id=equativ))
+
+    response = _review(_on(client_for_roles("operations")), campaign)
+
+    assert response.json() == {"code": "month_delivery_not_loaded", "message": NOT_LOADED.format(dsp="Equativ")}
+    assert _events(test_db_session) == []
+
+
+def test_a_campaign_already_reviewed_answers_its_review_before_the_delivery_is_checked(
+    client_for_roles: Any, test_db_session: Session
+) -> None:
+    campaign, line, _ = _august(test_db_session)
+    finance = _on(client_for_roles("finance"))
+    first = _review(finance, campaign).json()
+    # A line on a DSP that has not loaded 31 August is added afterwards: the campaign's latest event is still a review.
+    second = add_line_to_campaign(test_db_session, line, 2)
+    test_db_session.execute(update(CampaignLineRecord).where(CampaignLineRecord.id == second).values(
+        dsp_id=_dsp(test_db_session, "Equativ")))
+
+    again = _review(_on(finance), campaign)
+
+    assert (again.status_code, again.json()["set_at"]) == (200, first["set_at"])
+    assert len(_events(test_db_session)) == 1
+
+
 def test_the_flight_counts_take_d_minus_1_as_the_last_day_counted(test_db_session: Session) -> None:
     campaign, _, _ = _august(test_db_session)
     transaction = SqlAlchemyMonthlyReviewTransaction(test_db_session)
@@ -169,13 +256,15 @@ def test_the_flight_counts_take_d_minus_1_as_the_last_day_counted(test_db_sessio
 
 def test_a_campaign_whose_flights_are_frozen_cannot_be_reviewed(client_for_roles: Any, test_db_session: Session) -> None:
     campaign, _, _ = _august(test_db_session)
+    make_month_closable(test_db_session, 2026, 8, None, AFTER_AUGUST)
     finance = _on(client_for_roles("finance"))
     assert finance.post("/margin/closings", json={"year": 2026, "month": 8}).status_code == 200
+    reviewed_before_closing = len(_events(test_db_session))
 
     response = _review(finance, campaign)
 
     assert (response.status_code, response.json()["code"]) == (409, "campaign_month_closed")
-    assert _events(test_db_session) == []
+    assert len(_events(test_db_session)) == reviewed_before_closing == 1  # only the review the closing required
     assert _state(test_db_session, campaign) is ReviewState.CLOSED
 
 
@@ -264,6 +353,7 @@ def test_only_a_reviewed_campaign_can_be_withdrawn(client_for_roles: Any, test_d
 
 def test_a_closed_campaign_month_cannot_be_withdrawn(client_for_roles: Any, test_db_session: Session) -> None:
     campaign, _, _ = _august(test_db_session)
+    load_months_last_day(test_db_session, 2026, 8)  # the review is the test's own, through the route
     finance = _on(client_for_roles("finance"))
     _review(finance, campaign)
     assert finance.post("/margin/closings", json={"year": 2026, "month": 8}).status_code == 200
@@ -424,6 +514,8 @@ def _carried_line(session: Session) -> tuple[int, int, int]:
     set_volume(session, line_id, 500_000)
     insert_delivery(session, line_id, date(2026, 10, 10), 400_000, insert_ingestion_batch(session))
     insert_delivery(session, line_id, date(2026, 11, 10), 500_000, insert_ingestion_batch(session))
+    for month in (10, 11):  # its DSP has loaded the last day of both months, as a review requires
+        load_months_last_day(session, 2026, month)
     october, november = _flight_ids(session, line_id)
     return _campaign_of(session, line_id), october, november
 

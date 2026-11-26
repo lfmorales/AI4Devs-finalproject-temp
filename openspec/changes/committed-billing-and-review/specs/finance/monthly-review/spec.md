@@ -13,7 +13,7 @@ The system SHALL give each campaign, in each calendar month in which it has flig
 - otherwise `reviewed` when its latest review event in that month is a review;
 - otherwise `pending_review`.
 
-Only the review events are stored; `in_progress` and `closed` are derived from the flights. A campaign without flights in a month has no state in it. An ingestion and a change of a master, a schedule or a platform rate SHALL NOT change a state; only the review events and the flights (their ends and their freezing) do.
+Only the review events are stored; `in_progress` and `closed` are derived from the flights. A campaign without flights in a month has no state in it. An ingestion and a change of a master, a schedule or a platform rate SHALL NOT change a state; only the review events and the flights (their ends and their freezing) do. An ingestion does not reopen a review because a campaign is only reviewed once the DSP of each of its flights of the month has loaded the month's last day (requirement «Operations and Finance mark a campaign reviewed»): what the DSP sends afterwards is a restatement of a complete delivery.
 
 #### Scenario: A campaign whose flights are running is in progress
 - **WHEN** a campaign has two October 2026 flights, one ended on 2026-10-15 and one ending on 2026-10-31, and D-1 is 2026-10-20
@@ -33,7 +33,7 @@ Only the review events are stored; `in_progress` and `closed` are derived from t
 
 ### Requirement: Operations and Finance mark a campaign reviewed
 
-The system SHALL expose `POST /billing/reviews`, restricted to the `operations` and `finance` roles, taking `campaign_id`, `year` and `month`, which SHALL record a review event of that campaign and month with the user who made the request and the moment, and answer 201 with the campaign, the month, its state `reviewed`, the author and the moment. A campaign already reviewed in that month SHALL be answered 200 with its current review and nothing written. The system SHALL reject the request, writing nothing, with 404 `campaign_not_found` when the campaign does not exist, 404 `campaign_month_not_found` when it has no flights in that month, 409 `campaign_month_in_progress` when its state is `in_progress`, and 409 `campaign_month_closed` when its state is `closed`.
+The system SHALL expose `POST /billing/reviews`, restricted to the `operations` and `finance` roles, taking `campaign_id`, `year` and `month`, which SHALL record a review event of that campaign and month with the user who made the request and the moment, and answer 201 with the campaign, the month, its state `reviewed`, the author and the moment. A campaign already reviewed in that month SHALL be answered 200 with its current review and nothing written. The system SHALL reject the request, writing nothing, with 404 `campaign_not_found` when the campaign does not exist, 404 `campaign_month_not_found` when it has no flights in that month, 409 `campaign_month_in_progress` when its state is `in_progress`, 409 `campaign_month_closed` when its state is `closed`, and 409 `month_delivery_not_loaded`, naming the month and the DSP, when the DSP of the line of one of its flights of that month has no succeeded ingestion batch whose window includes the month's last day, so that a reviewed campaign never has an incomplete delivery. A campaign already reviewed is answered 200 before this check.
 
 #### Scenario: Finance reviews a campaign whose flights have ended
 - **WHEN** a user holding `finance` reviews a campaign in October 2026 whose October flights have all ended
@@ -47,6 +47,11 @@ The system SHALL expose `POST /billing/reviews`, restricted to the `operations` 
 #### Scenario: A closed campaign-month cannot be reviewed
 - **WHEN** a campaign whose October flights are all frozen is reviewed for October
 - **THEN** the response is 409 `campaign_month_closed`
+
+#### Scenario: A campaign whose DSP has not loaded the month's last day cannot be reviewed
+- **WHEN** a campaign whose October flights have all ended is reviewed for October and the DSP of one of its lines has loaded only up to 2026-10-30
+- **THEN** the response is 409 `month_delivery_not_loaded` naming October 2026 and that DSP, and nothing is written
+- **AND** once that DSP has a succeeded batch whose window includes 2026-10-31, the review is 201
 
 #### Scenario: Reviewing twice writes once
 - **WHEN** a campaign already reviewed in October is reviewed again

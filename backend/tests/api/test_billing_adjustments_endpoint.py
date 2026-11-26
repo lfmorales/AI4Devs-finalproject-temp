@@ -26,7 +26,7 @@ from tests.fixtures.delivery_data import (
     insert_ingestion_batch,
     replace_flights,
 )
-from tests.fixtures.margin_data import add_schedule, group_of, set_volume
+from tests.fixtures.margin_data import add_schedule, group_of, make_month_closable, set_volume
 
 JULY = (date(2026, 7, 1), date(2026, 7, 31))
 AUGUST = (date(2026, 8, 1), date(2026, 8, 31))
@@ -227,8 +227,9 @@ def test_an_adjusted_billing_moves_the_rebate_and_the_counter_with_figures(
 
     # July bills 3,000: 300 of rebate. August starts at 3,000: 2,000 at 10 % and 3,000 at 20 % is 800.
     assert rebates() == ("300.00", "800.00")
-    assert finance.post("/margin/closings", json={"year": 2026, "month": 7}).status_code == 200
-    assert finance.post("/margin/closings", json={"year": 2026, "month": 8}).status_code == 200
+    for month in (7, 8):
+        make_month_closable(test_db_session, 2026, month, None, PENDING_CLOSE)
+        assert finance.post("/margin/closings", json={"year": 2026, "month": month}).status_code == 200
     test_db_session.expire_all()
     rows = {
         row.campaign_line_period_id: row
@@ -316,6 +317,7 @@ def test_a_flight_ending_on_the_day_counted_has_ended(client_for_roles: Any, tes
 
 def test_a_frozen_flight_is_not_adjusted(client_for_roles: Any, test_db_session: Session) -> None:
     _, flight = _worked_flight(test_db_session)
+    make_month_closable(test_db_session, 2026, 8, None, PENDING_CLOSE)
     finance = _on(client_for_roles("finance"))
     assert finance.post("/margin/closings", json={"year": 2026, "month": 8}).status_code == 200
 

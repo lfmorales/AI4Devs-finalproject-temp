@@ -2,9 +2,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from app.domain.exceptions import MonthDeliveryNotLoadedError, PreviousMonthOpenError
+from app.domain.exceptions import MonthDeliveryNotLoadedError, MonthNotReviewedError, PreviousMonthOpenError
 from app.domain.repositories.margin_repositories import MarginClosingTransaction
+from app.domain.services.monthly_review import review_state
 from app.domain.services.priced_flights import price_flights
+from app.domain.value_objects.review import ReviewState
+
+# A campaign in one of these states blocks the closing of its month; a reviewed or closed one does not.
+_BLOCKING_STATES = frozenset({ReviewState.IN_PROGRESS, ReviewState.PENDING_REVIEW})
 
 
 @dataclass(frozen=True)
@@ -23,6 +28,10 @@ class MarginClosingService:
 
     It prices the flights with the same domain function the reads use, and only writes what it returns: their rates,
     their snapshots and one header for the run, in one transaction. A run that freezes nothing writes nothing.
+
+    Under the month's lock it checks, in order, that no earlier month of the year is open, that no campaign of the month
+    is in progress, that every DSP of the month's ended and unfrozen flights has loaded the month's last day, and that
+    every campaign of the month is reviewed or closed; the first that fails refuses the closing.
     """
 
     def __init__(
@@ -47,10 +56,21 @@ class MarginClosingService:
         blocking_month = self._transaction.flights.earliest_month_with_open_flights(year, month, as_of)
         if blocking_month is not None:
             raise PreviousMonthOpenError(year, blocking_month)
-        # A target flight earns what its DSP reports: its month waits until the DSP has loaded the month's last day.
+        blocking = tuple(
+            (campaign.campaign_name, state)
+            for campaign in self._transaction.flights.campaigns_of_the_month(year, month, as_of)
+            if (state := review_state(campaign.counts, campaign.latest_event)) in _BLOCKING_STATES
+        )
+        # A flight still running comes first: while it runs, no DSP can have loaded the month's last day.
+        if any(state is ReviewState.IN_PROGRESS for _, state in blocking):
+            raise MonthNotReviewedError(year, month, blocking)
+        # A target flight earns what its DSP reports and a committed one bills its delivery: its month waits until the
+        # DSP has loaded the month's last day.
         not_loaded = self._transaction.flights.dsps_without_the_months_last_day(year, month, as_of)
         if not_loaded:
             raise MonthDeliveryNotLoadedError(year, month, not_loaded[0])
+        if blocking:
+            raise MonthNotReviewedError(year, month, blocking)
 
         already_closed = self._transaction.applied_rates.count_frozen(year, month)
         flights = self._transaction.flights.open_ended_flights(year, month, as_of)

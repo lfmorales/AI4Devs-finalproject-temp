@@ -21,7 +21,8 @@ class FlightFacts:
     `volume_commitment` is declared on the line; `reported_revenue`, `buyer_spend` and `data_cost` (third-party and
     audience summed) are what the DSP reported inside the window. `carryover` is the volume carried to the flight from
     the previous flight of its line, in the unit of `delivery_metric`, and `carryover_billable` whether it raises the
-    cap of the billing; `adjustment` is the billing adjustment in force, if any.
+    cap of the billing; `adjustment` is the billing adjustment in force, if any, and `adjustment_id` the stored entry it
+    was read from, which the closing freezes with it.
     """
 
     flight_id: int
@@ -48,6 +49,7 @@ class FlightFacts:
     carryover: int
     carryover_billable: bool
     adjustment: BillingAdjustment | None
+    adjustment_id: int | None
 
 
 @dataclass(frozen=True)

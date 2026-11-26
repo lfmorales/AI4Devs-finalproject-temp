@@ -7,7 +7,7 @@ import pytest
 
 from app.presentation.dependencies import providers
 from tests.fixtures.delivery_data import add_line_to_campaign, insert_campaign_line, insert_delivery, insert_ingestion_batch
-from tests.fixtures.margin_data import add_schedule, group_of, set_volume
+from tests.fixtures.margin_data import add_schedule, group_of, make_month_closable, set_volume
 
 
 @pytest.fixture
@@ -25,6 +25,7 @@ def world(client_for_roles, test_db_session):
     batch = insert_ingestion_batch(test_db_session)
     insert_delivery(test_db_session, free_line, date(2026, 8, 10), 400_000, batch, Decimal("120.00"))
     insert_delivery(test_db_session, priced_line, date(2026, 8, 10), 700_000, batch, Decimal("1200.00"))
+    make_month_closable(test_db_session, 2026, 8, None, date(2026, 9, 1))  # one test closes August
     client = client_for_roles("finance")
     client.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
     return client

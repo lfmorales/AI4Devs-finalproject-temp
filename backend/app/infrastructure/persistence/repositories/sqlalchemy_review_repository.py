@@ -1,3 +1,4 @@
+from calendar import monthrange
 from datetime import date, datetime
 
 from sqlalchemy import exists, func, select, text
@@ -6,8 +7,15 @@ from sqlalchemy.orm import Session
 from app.domain.repositories.monthly_review_repository import MonthlyReviewTransaction, ReviewEvent
 from app.domain.services.monthly_review import FlightCounts
 from app.domain.value_objects.review import ReviewCause, ReviewKind
-from app.infrastructure.persistence.models.campaign import CampaignLinePeriodRecord, CampaignPeriodRecord, CampaignRecord
+from app.infrastructure.persistence.models.campaign import (
+    CampaignLinePeriodRecord,
+    CampaignLineRecord,
+    CampaignPeriodRecord,
+    CampaignRecord,
+)
+from app.infrastructure.persistence.models.delivery import IngestionBatchRecord
 from app.infrastructure.persistence.models.margin import AppliedRateRecord, CampaignPeriodReviewRecord
+from app.infrastructure.persistence.models.masters import DSPRecord
 from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories import CLOSING_LOCK_NAMESPACE
 
 
@@ -83,6 +91,24 @@ class SqlAlchemyMonthlyReviewTransaction(MonthlyReviewTransaction):
             ).where(flight.campaign_period_id == period_id)
         ).one()
         return FlightCounts(total=int(total), ended=int(ended), frozen=int(frozen_count))
+
+    def dsps_without_the_months_last_day(self, period_id: int, year: int, month: int) -> list[str]:
+        last_day = date(year, month, monthrange(year, month)[1])
+        loaded = exists().where(
+            IngestionBatchRecord.dsp_id == CampaignLineRecord.dsp_id,
+            IngestionBatchRecord.status == "succeeded",
+            IngestionBatchRecord.window_start <= last_day,
+            IngestionBatchRecord.window_end >= last_day,
+        )
+        return list(self._session.scalars(
+            select(DSPRecord.name)
+            .select_from(CampaignLinePeriodRecord)
+            .join(CampaignLineRecord, CampaignLineRecord.id == CampaignLinePeriodRecord.campaign_line_id)
+            .join(DSPRecord, DSPRecord.id == CampaignLineRecord.dsp_id)
+            .where(CampaignLinePeriodRecord.campaign_period_id == period_id, ~loaded)
+            .distinct()
+            .order_by(DSPRecord.name)
+        ))
 
     def latest_event(self, period_id: int) -> ReviewEvent | None:
         record = _latest_event(self._session, period_id)

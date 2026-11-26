@@ -596,3 +596,26 @@ def test_without_equativ_or_deal_it_adds_no_deal_campaign_and_creates_neither(ro
     assert DEAL_NAME not in {c.name for c in rolled_back_session.scalars(select(CampaignRecord))}
     assert (rolled_back_session.scalars(select(DSPRecord).where(DSPRecord.name == "Equativ")).first() is not None) == has_equativ
     assert (rolled_back_session.scalars(select(ChannelRecord).where(ChannelRecord.name == "Deal")).first() is not None) == has_deal
+
+
+def test_the_demo_dsp_has_loaded_every_day_from_the_first_of_january_of_the_previous_month_to_yesterday(
+    rolled_back_session: Session,
+) -> None:
+    # A month of this year closes only once its DSP has loaded its last day (committed-billing-and-review): the E2E
+    # campaigns, on the DEMO DSP, close the previous month and an earlier one of the same year.
+    _run(rolled_back_session)
+    demo_dsp = rolled_back_session.scalars(select(DSPRecord.id).where(DSPRecord.name == "DEMO DSP")).one()
+
+    (batch,) = rolled_back_session.scalars(select(IngestionBatchRecord).where(IngestionBatchRecord.dsp_id == demo_dsp)).all()
+
+    assert (batch.status, batch.window_start, batch.window_end) == ("succeeded", date(2026, 1, 1), date(2026, 10, 27))
+
+
+def test_in_january_the_demo_dsp_has_loaded_from_the_first_of_january_of_last_year(rolled_back_session: Session) -> None:
+    # On 15 January 2027 the previous month is December 2026, so its year starts on 1 January 2026.
+    _run(rolled_back_session, today=date(2027, 1, 15))
+    demo_dsp = rolled_back_session.scalars(select(DSPRecord.id).where(DSPRecord.name == "DEMO DSP")).one()
+
+    (batch,) = rolled_back_session.scalars(select(IngestionBatchRecord).where(IngestionBatchRecord.dsp_id == demo_dsp)).all()
+
+    assert (batch.window_start, batch.window_end) == (date(2026, 1, 1), date(2027, 1, 14))

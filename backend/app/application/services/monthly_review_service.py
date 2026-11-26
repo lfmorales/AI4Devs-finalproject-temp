@@ -2,7 +2,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from app.domain.exceptions import CampaignNotFoundError, MonthlyReviewError
+from app.domain.exceptions import CampaignNotFoundError, MonthDeliveryNotLoadedError, MonthlyReviewError
 from app.domain.repositories.monthly_review_repository import MonthlyReviewTransaction, ReviewEvent
 from app.domain.services.monthly_review import review_state
 from app.domain.value_objects.review import ReviewCause, ReviewKind, ReviewState
@@ -93,6 +93,10 @@ class MonthlyReviewService:
             if state is ReviewState.REVIEWED:
                 assert latest is not None
                 return ReviewResult(campaign_id, year, month, state, latest.created_by, latest.created_at, created=False)
+            # A reviewed campaign never rests on an incomplete delivery: that is why an ingestion does not reopen it.
+            not_loaded = self._transaction.dsps_without_the_months_last_day(period_id, year, month)
+            if not_loaded:
+                raise MonthDeliveryNotLoadedError(year, month, not_loaded[0], next_step="review the campaign")
             kind, cause = ReviewKind.REVIEWED, None
         event = self._transaction.add_event(period_id, kind, cause, None, user_id, self._now())
         new_state = ReviewState.PENDING_REVIEW if withdraw else ReviewState.REVIEWED

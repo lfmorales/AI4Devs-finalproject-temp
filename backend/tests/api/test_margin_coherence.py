@@ -19,7 +19,7 @@ from tests.fixtures.delivery_data import (
     insert_user,
     replace_flights,
 )
-from tests.fixtures.margin_data import add_schedule, group_of, set_rate, set_volume
+from tests.fixtures.margin_data import add_schedule, group_of, make_month_closable, set_rate, set_volume
 
 JULY = (date(2026, 7, 1), date(2026, 7, 31))
 AUGUST = (date(2026, 8, 1), date(2026, 8, 31))
@@ -46,6 +46,8 @@ def scenario(client_for_roles, test_db_session):
     insert_delivery(session, line_b, date(2026, 7, 20), 12_000_000, batch, Decimal("2468.135791"))
     insert_delivery(session, line_c, date(2026, 8, 15), 6_000_000, batch, Decimal("999.999999"))
     user_id = insert_user(session, "platform-rate-author@example.com")
+    for month in (7, 8):  # every test here closes July, August or both, as the closing requires
+        make_month_closable(session, 2026, month, user_id, date(2026, 9, 1))
     client = client_for_roles("finance")
     client.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
     return client, schedule_id, user_id

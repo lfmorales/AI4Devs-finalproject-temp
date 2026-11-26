@@ -13,8 +13,10 @@ from app.application.services import margin_closing_service
 from app.application.services.margin_query_service import MarginQueryService
 from app.application.services.delivery_ingestion_service import DeliveryIngestionService
 from app.application.services.line_mapping_removal_service import LineMappingRemovalService
+from app.application.services.billing_adjustment_service import BillingAdjustmentService
 from app.application.services.margin_closing_service import MarginClosingService
-from app.domain.exceptions import MonthDeliveryNotLoadedError, PreviousMonthOpenError
+from app.application.services.monthly_review_service import MonthlyReviewService
+from app.domain.exceptions import MonthDeliveryNotLoadedError, MonthNotReviewedError, PreviousMonthOpenError
 from app.domain.services.closed_flight import margin_from_snapshot, snapshot_of
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.priced_flights import price_flights
@@ -22,6 +24,8 @@ from app.domain.value_objects.closed_flight import ClosedDeliveryCheck, ClosedFl
 from app.domain.value_objects.delivery import DeliveryDateRange, DspDeliveryRow, ExternalLineKey
 from app.domain.value_objects.margin import FlightMargin
 from app.domain.value_objects.margin_report import FlightReport, FlightState, MarginReport
+from app.domain.value_objects.billing import BillingBasis
+from app.domain.value_objects.review import ReviewState
 from app.domain.value_objects.volume_commitment import VolumeCommitment
 from app.infrastructure.dsp.equativ_delivery_client import EquativDeliveryClient
 from app.infrastructure.persistence.models.campaign import CampaignLinePeriodRecord, CampaignLineRecord, CampaignRecord
@@ -48,6 +52,12 @@ from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories 
 from app.infrastructure.persistence.repositories.sqlalchemy_line_mapping_removal_repository import (
     SqlAlchemyLineMappingRemovalRepository,
 )
+from app.infrastructure.persistence.repositories.sqlalchemy_billing_adjustment_repository import (
+    SqlAlchemyBillingAdjustmentTransaction,
+)
+from app.infrastructure.persistence.repositories.sqlalchemy_review_repository import (
+    SqlAlchemyMonthlyReviewTransaction,
+)
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from scripts.run_ingestion import main as run_ingestion
 from tests.fixtures.delivery_data import (
@@ -65,6 +75,7 @@ from tests.fixtures.delivery_rows import dsp_row
 from tests.fixtures.dsp_delivery_client import InMemoryDspDeliveryClient
 from tests.fixtures.fake_equativ import FakeEquativ, package_row
 from tests.fixtures.flight_inputs import flight_economics
+from tests.fixtures.margin_data import load_months_last_day, make_month_closable, review_month
 
 SEPTEMBER_FIRST = date(2026, 9, 1)  # D; as_of is 31 August, so August is over
 
@@ -145,6 +156,7 @@ def test_closing_freezes_one_row_per_ended_flight(rolled_back_session, user_id):
     lines = _august_lines(rolled_back_session)
     _schedule(rolled_back_session, _group_of(rolled_back_session, lines[0]), ("0", None, "0.25"))
 
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
     result = _service(rolled_back_session).close_month(2026, 8, user_id)
 
     assert (result.year, result.month, result.closed, result.already_closed) == (2026, 8, 3, 0)
@@ -159,6 +171,7 @@ def test_closing_writes_one_header_and_one_snapshot_per_frozen_flight_under_it(
 ) -> None:
     _august_lines(rolled_back_session)
 
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
     result = _service(rolled_back_session).close_month(2026, 8, user_id)
 
     assert result.closings == 1
@@ -171,26 +184,33 @@ def test_closing_writes_one_header_and_one_snapshot_per_frozen_flight_under_it(
     assert {snapshot.month_closing_id for snapshot in snapshots} == {header.id}
 
 
-def test_a_flight_that_has_not_ended_gets_no_row(rolled_back_session, user_id):
+def test_a_flight_that_has_not_ended_gets_no_row_and_its_month_is_refused(rolled_back_session, user_id):
+    # committed-billing-and-review: the month is refused while a flight runs, instead of closing the ended ones.
     line_id = insert_campaign_line(rolled_back_session, start_date=date(2026, 8, 1), end_date=date(2026, 8, 31))
     replace_flights(rolled_back_session, line_id, [(date(2026, 8, 1), date(2026, 8, 31))])
+    make_month_closable(rolled_back_session, 2026, 8, user_id, date(2026, 8, 31))
 
-    result = _service(rolled_back_session, today=date(2026, 8, 31)).close_month(2026, 8, user_id)
+    with pytest.raises(MonthNotReviewedError):
+        _service(rolled_back_session, today=date(2026, 8, 31)).close_month(2026, 8, user_id)
 
-    assert result.closed == 0
     assert _rows(rolled_back_session) == []
 
 
 def test_the_day_before_today_is_the_last_day_counted(rolled_back_session, user_id):
     insert_campaign_line(rolled_back_session)
+    make_month_closable(rolled_back_session, 2026, 8, user_id, date(2026, 8, 31))
+    rolled_back_session.commit()  # the refused closing rolls back what was only flushed
 
-    assert _service(rolled_back_session, today=date(2026, 8, 31)).close_month(2026, 8, user_id).closed == 0
+    with pytest.raises(MonthNotReviewedError):  # on 31 August its flight, ending that day, is still running
+        _service(rolled_back_session, today=date(2026, 8, 31)).close_month(2026, 8, user_id)
+    make_month_closable(rolled_back_session, 2026, 8, user_id, date(2026, 9, 1))
     assert _service(rolled_back_session, today=date(2026, 9, 1)).close_month(2026, 8, user_id).closed == 1
 
 
 def test_closing_twice_neither_adds_nor_changes_a_row(rolled_back_session, user_id):
     _august_lines(rolled_back_session)
     service = _service(rolled_back_session)
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
     service.close_month(2026, 8, user_id)
     before = [(r.id, r.rebate_amount, r.closed_at, r.position_after) for r in _rows(rolled_back_session)]
 
@@ -203,6 +223,7 @@ def test_closing_twice_neither_adds_nor_changes_a_row(rolled_back_session, user_
 
 
 def test_a_month_with_no_ended_flights_closes_nothing_and_writes_nothing(rolled_back_session, user_id):
+    make_month_closable(rolled_back_session, 2026, 3, user_id, SEPTEMBER_FIRST)
     result = _service(rolled_back_session).close_month(2026, 3, user_id)
 
     assert (result.closed, result.already_closed, result.closings) == (0, 0, 0)
@@ -212,19 +233,23 @@ def test_a_month_with_no_ended_flights_closes_nothing_and_writes_nothing(rolled_
 
 
 def test_a_closing_that_freezes_nothing_writes_no_header(rolled_back_session: Session, user_id: int) -> None:
-    line_id = insert_campaign_line(rolled_back_session, start_date=date(2026, 8, 1), end_date=date(2026, 8, 31))
-    replace_flights(rolled_back_session, line_id, [(date(2026, 8, 1), date(2026, 8, 31))])
+    # committed-billing-and-review: a month with a running flight is refused, so nothing is frozen with no header
+    # only when every flight of the month is frozen already.
+    _august_lines(rolled_back_session, count=1)
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
+    _service(rolled_back_session).close_month(2026, 8, user_id)
 
-    result = _service(rolled_back_session, today=date(2026, 8, 31)).close_month(2026, 8, user_id)
+    result = _service(rolled_back_session, today=date(2026, 9, 20)).close_month(2026, 8, user_id)
 
-    assert (result.closed, result.closings) == (0, 0)
-    assert _headers(rolled_back_session) == []
+    assert (result.closed, result.closings) == (0, 1)
+    assert len(_headers(rolled_back_session)) == 1
 
 
 def test_a_flight_registered_in_a_closed_month_is_frozen_by_a_second_closing_under_a_second_header(
     rolled_back_session: Session, user_id: int
 ) -> None:
     lines = _august_lines(rolled_back_session)
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
     _service(rolled_back_session).close_month(2026, 8, user_id)
     rolled_back_session.expire_all()
     first = [
@@ -276,15 +301,16 @@ def test_months_close_in_order(rolled_back_session, user_id):
     ])
     service = _service(rolled_back_session)
 
-    assert service.close_month(2026, 6, user_id).closed == 1
-    assert service.close_month(2026, 7, user_id).closed == 1
-    assert service.close_month(2026, 8, user_id).closed == 1
+    for month in (6, 7, 8):
+        make_month_closable(rolled_back_session, 2026, month, user_id, SEPTEMBER_FIRST)
+        assert service.close_month(2026, month, user_id).closed == 1
 
 
 def test_an_earlier_year_does_not_block(rolled_back_session, user_id):
     line_id = insert_campaign_line(rolled_back_session, start_date=date(2025, 11, 1), end_date=date(2026, 8, 31))
     replace_flights(rolled_back_session, line_id, [(date(2025, 12, 1), date(2025, 12, 31)), (date(2026, 8, 1), date(2026, 8, 31))])
 
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
     assert _service(rolled_back_session).close_month(2026, 8, user_id).closed == 1
 
 
@@ -299,6 +325,7 @@ def test_the_months_flights_reach_the_engine_by_start_then_id(rolled_back_sessio
 
     monkeypatch.setattr(margin_closing_service, "price_flights", spy)
 
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
     _service(rolled_back_session).close_month(2026, 8, user_id)
 
     assert len(seen) == 1 and len(seen[0]) == len(lines)
@@ -312,6 +339,7 @@ def test_the_month_is_locked_before_anything_is_read(rolled_back_session, user_i
     original_lock, original_open = transaction.lock_month, transaction.flights.open_ended_flights
     transaction.lock_month = lambda year, month: (calls.append(f"lock {year}-{month}"), original_lock(year, month))[1]  # type: ignore[method-assign]
     transaction.flights.open_ended_flights = lambda *a: (calls.append("read"), original_open(*a))[1]  # type: ignore[method-assign]
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
 
     MarginClosingService(transaction, today=lambda: SEPTEMBER_FIRST, now=lambda: datetime(2026, 9, 1)).close_month(2026, 8, user_id)
 
@@ -322,6 +350,7 @@ def test_a_failure_halfway_leaves_no_row(rolled_back_session, user_id, monkeypat
     lines = _august_lines(rolled_back_session)
     _schedule(rolled_back_session, _group_of(rolled_back_session, lines[0]), ("0", "1000", "0.15"), ("1000", None, "0.2"))
     insert_ingestion_batch(rolled_back_session)  # so that the header names a batch too
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
     rolled_back_session.commit()  # the fixtures stay; only the closing may be undone
     original_save = sqlalchemy_margin_repositories.SqlAlchemyAppliedRateRepository.save
     written: list[int] = []
@@ -361,10 +390,12 @@ def test_the_next_closing_starts_from_the_frozen_position_and_does_not_price_fro
     ])
     rolled_back_session.flush()
     service = _service(rolled_back_session)
+    make_month_closable(rolled_back_session, 2026, 7, user_id, SEPTEMBER_FIRST)
     service.close_month(2026, 7, user_id)
     july = _rows(rolled_back_session)[0]
     july_snapshot = (july.rebate_amount, july.position_before, july.position_after)
 
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
     service.close_month(2026, 8, user_id)
     august = _rows(rolled_back_session)[1]
 
@@ -378,6 +409,7 @@ def test_a_schedule_edited_after_closing_does_not_move_the_frozen_row(rolled_bac
     lines = _august_lines(rolled_back_session, count=1)
     group_id = _group_of(rolled_back_session, lines[0])
     schedule_id = _schedule(rolled_back_session, group_id, ("0", None, "0.25"))
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
     _service(rolled_back_session).close_month(2026, 8, user_id)
     frozen = _rows(rolled_back_session)[0].rebate_amount
 
@@ -397,6 +429,7 @@ def test_the_platform_rate_in_force_is_frozen_with_its_override(rolled_back_sess
         level="agency", agency_id=campaign.agency_id, rate_per_thousand=Decimal("1.40"), created_by=user_id))
     rolled_back_session.flush()
 
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
     _service(rolled_back_session).close_month(2026, 8, user_id)
 
     assert _rows(rolled_back_session)[0].platform_rate == Decimal("1.40")
@@ -430,6 +463,7 @@ def test_pending_close_figures_are_the_figures_closing_freezes(rolled_back_sessi
     called: list[int] = []
     original = margin_closing_service.price_flights
     monkeypatch.setattr(margin_closing_service, "price_flights", lambda *a, **k: (called.append(1), original(*a, **k))[1])
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
 
     MarginClosingService(transaction, today=lambda: SEPTEMBER_FIRST, now=lambda: datetime(2026, 9, 1)).close_month(2026, 8, user_id)
 
@@ -455,15 +489,12 @@ def test_pending_close_figures_are_the_figures_closing_freezes(rolled_back_sessi
     for item in pending:
         stored = _snapshot_of_record(snapshots[frozen[item.facts.flight_id].id])
         assert stored == snapshot_of(item)
-        # pending-9.4: comparison without billable or billing_basis. The snapshot does not hold them until task 9.3 of
-        # committed-billing-and-review; every other field must be the pending-close one.
-        assert margin_from_snapshot(stored, item.facts.flight_start, item.facts.flight_end) == replace(
-            item.margin, billable=None, billing_basis=None
-        )
+        assert margin_from_snapshot(stored, item.facts.flight_start, item.facts.flight_end) == item.margin
 
 
 def test_changing_the_system_rate_after_closing_does_not_move_the_frozen_flight(rolled_back_session, user_id):
     _august_lines(rolled_back_session, count=1)
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
     _service(rolled_back_session).close_month(2026, 8, user_id)
     frozen = _rows(rolled_back_session)[0]
     assert frozen.platform_rate == Decimal("1.000000")
@@ -498,6 +529,7 @@ def test_closing_a_dooh_month_freezes_a_platform_cost_on_impressions_and_changes
         return flight.margin
 
     before = read()
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
     _service(rolled_back_session).close_month(2026, 8, user_id)
     after = read()
 
@@ -600,7 +632,7 @@ def _batch(session: Session, dsp_id: int, status: str, window: tuple[date, date]
     session.commit()
 
 
-def test_closing_the_worked_examples_month_freezes_its_revenue_and_its_gross_and_none_on_a_committed_row(
+def test_closing_the_worked_examples_month_freezes_its_revenue_and_its_gross_and_the_billing_of_a_committed_row(
     november: _November, user_id: int
 ) -> None:
     november.ingest_the_month()
@@ -609,6 +641,7 @@ def test_closing_the_worked_examples_month_freezes_its_revenue_and_its_gross_and
     insert_delivery(november.session, november.committed, date(2026, 11, 10), 1_000_000,
                     insert_ingestion_batch(november.session))
 
+    make_month_closable(november.session, 2026, 11, user_id, DECEMBER_FIRST)
     result = _service(november.session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
 
     assert (result.closed, result.already_closed) == (2, 0)
@@ -618,7 +651,8 @@ def test_closing_the_worked_examples_month_freezes_its_revenue_and_its_gross_and
     # The Deal counter advances by the gross: from the committed flight's 5,000.00 to 10,500.00.
     assert target.counter_channel_id == committed.counter_channel_id == november.deal_channel
     assert (target.position_before, target.position_after) == (Decimal("5000.00"), Decimal("10500.00"))
-    assert (committed.revenue_amount, committed.rebate_base_amount) == (None, None)
+    # A committed row holds its billing as both (committed-billing-and-review).
+    assert (committed.revenue_amount, committed.rebate_base_amount) == (Decimal("5000.00"), Decimal("5000.00"))
     assert (committed.position_before, committed.position_after) == (Decimal(0), Decimal("5000.00"))
 
 
@@ -626,6 +660,7 @@ def test_a_restatement_after_closing_moves_no_figure_of_the_closed_month_and_fla
     november: _November, user_id: int
 ) -> None:
     november.ingest_the_month()
+    make_month_closable(november.session, 2026, 11, user_id, DECEMBER_FIRST)
     _service(november.session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
     closed = november.target_report()
 
@@ -656,6 +691,7 @@ def test_closing_a_month_with_target_flights_twice_neither_adds_nor_changes_a_ro
     november: _November, user_id: int
 ) -> None:
     november.ingest_the_month()
+    make_month_closable(november.session, 2026, 11, user_id, DECEMBER_FIRST)
     _service(november.session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
     before = [(r.id, r.rebate_amount, r.revenue_amount, r.rebate_base_amount, r.position_after)
               for r in _rows(november.session)]
@@ -670,6 +706,7 @@ def test_closing_a_month_with_target_flights_twice_neither_adds_nor_changes_a_ro
 def test_a_month_with_a_target_flight_whose_dsp_has_not_loaded_its_last_day_is_not_closed(
     november: _November, user_id: int
 ) -> None:
+    _batch(november.session, seeded_dsp_id(november.session), "succeeded", (date(2026, 11, 30), date(2026, 11, 30)))
     _batch(november.session, november.equativ, "succeeded", (date(2026, 11, 23), date(2026, 11, 29)))
 
     with pytest.raises(MonthDeliveryNotLoadedError) as blocked:
@@ -682,9 +719,11 @@ def test_a_month_with_a_target_flight_whose_dsp_has_not_loaded_its_last_day_is_n
 def test_a_succeeded_batch_of_its_dsp_whose_window_includes_the_last_day_unblocks_the_month(
     november: _November, user_id: int
 ) -> None:
+    _batch(november.session, seeded_dsp_id(november.session), "succeeded", (date(2026, 11, 30), date(2026, 11, 30)))
     _batch(november.session, november.equativ, "succeeded", (date(2026, 11, 23), date(2026, 11, 29)))
     _batch(november.session, november.equativ, "succeeded", (date(2026, 11, 24), date(2026, 11, 30)))
 
+    make_month_closable(november.session, 2026, 11, user_id, DECEMBER_FIRST, load_last_day=False)
     result = _service(november.session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
 
     assert result.closed == 2
@@ -694,27 +733,33 @@ def test_a_failed_batch_of_its_dsp_or_a_succeeded_batch_of_another_dsp_does_not_
     november: _November, user_id: int
 ) -> None:
     adform = insert_other_dsp(november.session, "Adform")
+    _batch(november.session, seeded_dsp_id(november.session), "succeeded", (date(2026, 11, 30), date(2026, 11, 30)))
     _batch(november.session, november.equativ, "failed", (date(2026, 11, 24), date(2026, 11, 30)))
     _batch(november.session, adform, "succeeded", (date(2026, 11, 24), date(2026, 11, 30)))
 
-    with pytest.raises(MonthDeliveryNotLoadedError):
+    with pytest.raises(MonthDeliveryNotLoadedError) as blocked:
         _service(november.session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
+    assert blocked.value.dsp_name == "Equativ"
     assert _rows(november.session) == []
 
 
-def test_a_month_of_committed_adform_lines_only_closes_as_before_whatever_the_batches(
+def test_a_month_of_committed_adform_lines_only_waits_for_adform_to_load_its_last_day(
     rolled_back_session: Session, user_id: int
 ) -> None:
+    # committed-billing-and-review: a committed flight bills its delivery, so its month waits for its DSP as well.
     adform = insert_other_dsp(rolled_back_session, "Adform")
     line = insert_campaign_line(rolled_back_session, "Adform only", *NOVEMBER, dsp_id=adform)
     replace_flights(rolled_back_session, line, [NOVEMBER])
-    # No batch has loaded 30 November at all: a committed month does not wait for it.
+    _batch(rolled_back_session, adform, "succeeded", (date(2026, 11, 23), date(2026, 11, 29)))
 
-    result = _service(rolled_back_session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
+    with pytest.raises(MonthDeliveryNotLoadedError) as blocked:
+        _service(rolled_back_session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
 
-    assert result.closed == 1
-    (row,) = _rows(rolled_back_session)
-    assert (row.revenue_amount, row.rebate_base_amount) == (None, None)
+    assert (blocked.value.year, blocked.value.month, blocked.value.dsp_name) == (2026, 11, "Adform")
+    assert _rows(rolled_back_session) == []
+    _batch(rolled_back_session, adform, "succeeded", (date(2026, 11, 24), date(2026, 11, 30)))
+    make_month_closable(rolled_back_session, 2026, 11, user_id, DECEMBER_FIRST, load_last_day=False)
+    assert _service(rolled_back_session, today=DECEMBER_FIRST).close_month(2026, 11, user_id).closed == 1
 
 
 def test_an_earlier_open_month_is_still_reported_before_a_month_not_loaded(november: _November, user_id: int) -> None:
@@ -763,6 +808,7 @@ def _closed_adform_november(session: Session, user_id: int) -> int:
         dsp_row(date(2026, 11, 10), ADFORM_KEY, impressions=400_000, media_cost=Decimal("600.000000")),
         dsp_row(date(2026, 11, 28), ADFORM_KEY, impressions=300_000, media_cost=Decimal("600.000000")),
     ], window=DeliveryDateRange(date(2026, 11, 1), date(2026, 11, 30)))
+    make_month_closable(session, 2026, 11, user_id, DECEMBER_FIRST)
     result = _service(session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
     assert result.closed == 1
     return line_id
@@ -793,9 +839,10 @@ def test_the_committed_example_keeps_its_closed_margin_after_the_restatement_and
     assert after.delivery_change == ClosedDeliveryCheck(
         delivered_difference=Decimal("500000.0000"), delivered_impressions_difference=500_000,
         media_cost_difference=Decimal("1800.00"), reported_revenue_difference=None, buyer_spend_difference=None,
-        # pending-9.4: margin and motive. The check keeps the frozen revenue: 3,500.00 - 3,000.00 - 875.00 - 1,200.00. Task 9.4 compares
-        # with the current billing, 5,000.00, for a current margin of -75.00.
-        current_margin=Decimal("-1575.00"), margin_difference=Decimal("-2300.00"), changed=True,
+        # The check compares with the current billing: 1,200,000 delivered bills the cap, 5,000.00 €, so
+        # 5,000.00 - 3,000.00 - 875.00 - 1,200.00 = -75.00 €.
+        current_margin=Decimal("-75.00"), margin_difference=Decimal("-800.00"), changed=True,
+        billable_difference=Decimal("300000.0000"), billing_difference=Decimal("1500.00"),
     )
     (campaign,) = [c for c in report.campaigns if any(line.campaign_line_id == line_id for line in c.lines)]
     for totals in (campaign.lines[0].totals, campaign.totals):
@@ -814,12 +861,12 @@ def test_a_closed_flight_read_with_no_change_to_its_delivery_equals_its_pending_
     ], window=DeliveryDateRange(date(2026, 11, 1), date(2026, 11, 30)))
     (pending,) = _flight_reports(_read_margin(rolled_back_session, DECEMBER_FIRST), line_id)
 
+    make_month_closable(rolled_back_session, 2026, 11, user_id, DECEMBER_FIRST)
     _service(rolled_back_session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
     (closed,) = _flight_reports(_read_margin(rolled_back_session, DECEMBER_FIRST), line_id)
 
     assert pending.state is FlightState.PENDING_CLOSE and closed.state is FlightState.CLOSED
-    # pending-9.4: comparison without billable or billing_basis (the snapshot does not hold them until task 9.3).
-    assert closed.margin == replace(pending.margin, provisional=False, billable=None, billing_basis=None)
+    assert closed.margin == replace(pending.margin, provisional=False)
     assert closed.delivery_change is not None and closed.delivery_change.changed is False
     assert closed.delivery_change.current_margin == closed.margin.margin == Decimal("725.00")
 
@@ -835,10 +882,12 @@ def test_unlinking_a_line_with_a_closed_flight_keeps_its_closed_figures(rolled_b
     assert replace(after.margin, delivery_changed=False) == before.margin
     assert after.margin.delivery_changed is True
     assert after.delivery_change is not None
-    # pending-9.4: margin and motive. The current margin keeps the frozen revenue: 3,500.00 - 0.00 - 875.00 - 0.00. Task 9.4 compares
-    # with the current billing, nothing once the delivery is gone, for a current margin of -875.00.
+    # With its delivery gone it would bill nothing: 0.00 - 0.00 - 875.00 - 0.00 = -875.00 €.
     assert (after.delivery_change.delivered_impressions_difference, after.delivery_change.current_margin) == (
-        -700_000, Decimal("2625.00"),
+        -700_000, Decimal("-875.00"),
+    )
+    assert (after.delivery_change.billable_difference, after.delivery_change.billing_difference) == (
+        Decimal("-700000.0000"), Decimal("-3500.00"),
     )
 
 
@@ -849,6 +898,7 @@ def test_a_change_of_the_channel_s_metric_after_closing_does_not_move_a_closed_f
     replace_flights(rolled_back_session, line_id, [NOVEMBER])
     insert_delivery(rolled_back_session, line_id, date(2026, 11, 10), 12_000, insert_ingestion_batch(rolled_back_session),
                     ots=Decimal("280000.5000"))
+    make_month_closable(rolled_back_session, 2026, 11, user_id, DECEMBER_FIRST)
     _service(rolled_back_session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
     (before,) = _flight_reports(_read_margin(rolled_back_session, DECEMBER_FIRST), line_id)
     channel_id = rolled_back_session.get(CampaignLineRecord, line_id).channel_id  # type: ignore[union-attr]
@@ -878,3 +928,187 @@ def test_a_running_or_pending_close_flight_carries_no_check(rolled_back_session:
         assert flight.state is state
         assert (flight.delivery_change, flight.margin.delivery_changed) == (None, False)
     assert report.totals.delivery_changed_count == 0
+
+
+# --- The closing waits for the review (committed-billing-and-review) -------------------------------------------------
+
+
+def _two_august_campaigns(session: Session) -> tuple[int, int]:
+    """Two August campaigns of one line each, both delivered and loaded up to 31 August: A and B."""
+    batch = insert_ingestion_batch(session)
+    first = insert_campaign_line(session, "Campaign A")
+    second = insert_campaign_line(session, "Campaign B")
+    for line_id in (first, second):
+        insert_delivery(session, line_id, date(2026, 8, 10), 700_000, batch)
+    load_months_last_day(session, 2026, 8)
+    return first, second
+
+
+def _campaign_of(session: Session, line_id: int) -> int:
+    line = session.get(CampaignLineRecord, line_id)
+    assert line is not None
+    return line.campaign_id
+
+
+def test_a_month_with_a_running_flight_is_refused_naming_its_campaign_in_progress(
+    rolled_back_session: Session, user_id: int
+) -> None:
+    line_id = insert_campaign_line(rolled_back_session, "Running campaign")
+    load_months_last_day(rolled_back_session, 2026, 8)
+
+    with pytest.raises(MonthNotReviewedError) as refused:
+        _service(rolled_back_session, today=date(2026, 8, 31)).close_month(2026, 8, user_id)
+
+    assert (refused.value.year, refused.value.month) == (2026, 8)
+    assert refused.value.campaigns == (("Running campaign", ReviewState.IN_PROGRESS),)
+    assert "2026-08" in str(refused.value) and "Running campaign" in str(refused.value)
+    assert (_rows(rolled_back_session), _headers(rolled_back_session), _snapshots(rolled_back_session)) == ([], [], [])
+    assert line_id
+
+
+def test_a_month_with_a_campaign_pending_review_is_refused_naming_it_and_closes_once_it_is_reviewed(
+    rolled_back_session: Session, user_id: int
+) -> None:
+    first, second = _two_august_campaigns(rolled_back_session)
+    reviews = MonthlyReviewService(
+        SqlAlchemyMonthlyReviewTransaction(rolled_back_session), today=lambda: SEPTEMBER_FIRST,
+        now=lambda: datetime(2026, 9, 1, 8, 0),
+    )
+    reviews.review(_campaign_of(rolled_back_session, first), 2026, 8, user_id)
+
+    with pytest.raises(MonthNotReviewedError) as refused:
+        _service(rolled_back_session).close_month(2026, 8, user_id)
+
+    assert refused.value.campaigns == (("Campaign B", ReviewState.PENDING_REVIEW),)
+    assert (_rows(rolled_back_session), _headers(rolled_back_session)) == ([], [])
+    reviews.review(_campaign_of(rolled_back_session, second), 2026, 8, user_id)
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
+    assert _service(rolled_back_session).close_month(2026, 8, user_id).closed == 2
+
+
+def test_the_refusal_names_every_blocking_campaign_with_its_state_and_not_a_reviewed_one(
+    rolled_back_session: Session, user_id: int
+) -> None:
+    # As of 30 August: A ended on the 15th and is reviewed, B ended on the 20th and is pending, C runs to the 31st.
+    today = date(2026, 8, 31)
+    lines = {name: insert_campaign_line(rolled_back_session, name) for name in ("Campaign C", "Campaign B", "Campaign A")}
+    for name, last_day in (("Campaign A", 15), ("Campaign B", 20), ("Campaign C", 31)):
+        rolled_back_session.execute(
+            update(CampaignLinePeriodRecord).where(CampaignLinePeriodRecord.campaign_line_id == lines[name])
+            .values(flight_end=date(2026, 8, last_day))
+        )
+    load_months_last_day(rolled_back_session, 2026, 8)
+    MonthlyReviewService(
+        SqlAlchemyMonthlyReviewTransaction(rolled_back_session), today=lambda: today, now=lambda: datetime(2026, 8, 31, 8, 0),
+    ).review(_campaign_of(rolled_back_session, lines["Campaign A"]), 2026, 8, user_id)
+
+    with pytest.raises(MonthNotReviewedError) as refused:
+        _service(rolled_back_session, today=today).close_month(2026, 8, user_id)
+
+    assert refused.value.campaigns == (
+        ("Campaign B", ReviewState.PENDING_REVIEW), ("Campaign C", ReviewState.IN_PROGRESS),
+    )
+    assert "Campaign A" not in str(refused.value)
+    assert _rows(rolled_back_session) == []
+
+
+def test_a_closed_campaign_does_not_block_a_later_closing_but_a_late_one_does_until_it_is_reviewed(
+    rolled_back_session: Session, user_id: int
+) -> None:
+    _two_august_campaigns(rolled_back_session)
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
+    assert _service(rolled_back_session).close_month(2026, 8, user_id).closed == 2
+    late = insert_campaign_line(rolled_back_session, "Late campaign")
+    rolled_back_session.commit()  # the refused closing rolls back what was only flushed
+
+    with pytest.raises(MonthNotReviewedError) as refused:
+        _service(rolled_back_session, today=date(2026, 9, 20)).close_month(2026, 8, user_id)
+
+    assert refused.value.campaigns == (("Late campaign", ReviewState.PENDING_REVIEW),)
+    review_month(rolled_back_session, 2026, 8, user_id, date(2026, 9, 20))
+    assert _service(rolled_back_session, today=date(2026, 9, 20)).close_month(2026, 8, user_id).closed == 1
+    assert late
+
+
+def test_a_month_not_loaded_is_reported_before_a_month_not_reviewed(rolled_back_session: Session, user_id: int) -> None:
+    line_id = insert_campaign_line(rolled_back_session, "Pending and not loaded")
+    insert_delivery(rolled_back_session, line_id, date(2026, 8, 10), 700_000, insert_ingestion_batch(rolled_back_session))
+    rolled_back_session.commit()  # the refused closing rolls back what was only flushed
+
+    with pytest.raises(MonthDeliveryNotLoadedError):
+        _service(rolled_back_session).close_month(2026, 8, user_id)
+    load_months_last_day(rolled_back_session, 2026, 8)
+    rolled_back_session.commit()
+    with pytest.raises(MonthNotReviewedError):
+        _service(rolled_back_session).close_month(2026, 8, user_id)
+
+
+def test_a_campaign_in_progress_is_reported_before_a_month_not_loaded(rolled_back_session: Session, user_id: int) -> None:
+    # As of 30 August: A ended on the 15th and its DSP has not loaded 31 August, which it cannot while C still runs.
+    lines = {name: insert_campaign_line(rolled_back_session, name) for name in ("Campaign A", "Campaign C")}
+    rolled_back_session.execute(
+        update(CampaignLinePeriodRecord).where(CampaignLinePeriodRecord.campaign_line_id == lines["Campaign A"])
+        .values(flight_end=date(2026, 8, 15))
+    )
+
+    with pytest.raises(MonthNotReviewedError) as refused:
+        _service(rolled_back_session, today=date(2026, 8, 31)).close_month(2026, 8, user_id)
+
+    assert refused.value.campaigns == (
+        ("Campaign A", ReviewState.PENDING_REVIEW), ("Campaign C", ReviewState.IN_PROGRESS),
+    )
+
+
+def test_an_earlier_open_month_is_reported_before_a_month_not_reviewed(rolled_back_session: Session, user_id: int) -> None:
+    line_id = insert_campaign_line(rolled_back_session, start_date=date(2026, 7, 1), end_date=date(2026, 8, 31))
+    replace_flights(rolled_back_session, line_id, [(date(2026, 7, 1), date(2026, 7, 31)), (date(2026, 8, 1), date(2026, 8, 31))])
+    load_months_last_day(rolled_back_session, 2026, 8)
+
+    with pytest.raises(PreviousMonthOpenError):
+        _service(rolled_back_session).close_month(2026, 8, user_id)
+
+
+def test_a_reviewed_month_freezes_the_billing_of_a_committed_flight(rolled_back_session: Session, user_id: int) -> None:
+    # 700,000 of 1,000,000 contracted at 5.00 € with a 25 % schedule: it bills 3,500.00 € and accrues 875.00 €.
+    (line_id,) = _august_lines(rolled_back_session, count=1, deliver_the_contract=False)
+    insert_delivery(rolled_back_session, line_id, date(2026, 8, 10), 700_000, insert_ingestion_batch(rolled_back_session))
+    _schedule(rolled_back_session, _group_of(rolled_back_session, line_id), ("0", None, "0.25"))
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
+
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
+    _service(rolled_back_session).close_month(2026, 8, user_id)
+
+    (row,) = _rows(rolled_back_session)
+    assert (row.revenue_amount, row.rebate_base_amount, row.rebate_amount) == (
+        Decimal("3500.00"), Decimal("3500.00"), Decimal("875.00"),
+    )
+    # The counter advances by the billing, not by the 5,000.00 € contracted.
+    assert (row.position_before, row.position_after) == (Decimal(0), Decimal("3500.00"))
+    (snapshot,) = _snapshots(rolled_back_session)
+    assert (snapshot.revenue, snapshot.contracted_revenue) == (Decimal("3500.00"), Decimal("5000.00"))
+    assert (snapshot.billing_basis, snapshot.billable, snapshot.carryover, snapshot.carryover_billable,
+            snapshot.billing_adjustment_id) == ("minimum", Decimal("700000.0000"), 0, False, None)
+
+
+def test_an_adjusted_flight_freezes_its_adjustment_in_force(rolled_back_session: Session, user_id: int) -> None:
+    (line_id,) = _august_lines(rolled_back_session, count=1, deliver_the_contract=False)
+    insert_delivery(rolled_back_session, line_id, date(2026, 8, 10), 700_000, insert_ingestion_batch(rolled_back_session))
+    (flight_id,) = [f.id for f in rolled_back_session.scalars(
+        select(CampaignLinePeriodRecord).where(CampaignLinePeriodRecord.campaign_line_id == line_id))]
+    adjustments = BillingAdjustmentService(
+        SqlAlchemyBillingAdjustmentTransaction(rolled_back_session), today=lambda: SEPTEMBER_FIRST,
+        now=lambda: datetime(2026, 9, 1, 8, 0),
+    )
+    adjustments.adjust(flight_id, BillingBasis.DELIVERED, None, "Billed as served", user_id)
+    latest = adjustments.adjust(flight_id, BillingBasis.CONTRACTED, None, "Agreed with the agency", user_id)
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
+
+    make_month_closable(rolled_back_session, 2026, 8, user_id, SEPTEMBER_FIRST)
+    _service(rolled_back_session).close_month(2026, 8, user_id)
+
+    (snapshot,) = _snapshots(rolled_back_session)
+    assert (snapshot.billing_basis, snapshot.billable, snapshot.billing_adjustment_id, snapshot.revenue) == (
+        "contracted", Decimal("1000000.0000"), latest.entry.entry_id, Decimal("5000.00"),
+    )
+    (row,) = _rows(rolled_back_session)
+    assert (row.revenue_amount, row.rebate_base_amount) == (Decimal("5000.00"), Decimal("5000.00"))

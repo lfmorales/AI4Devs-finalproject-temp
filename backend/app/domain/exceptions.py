@@ -1,3 +1,7 @@
+from app.domain.value_objects.review import ReviewState
+
+
+
 class DomainError(Exception):
     """Base class for domain rule violations."""
 
@@ -187,21 +191,39 @@ class PreviousMonthOpenError(DomainError):
 
 
 class MonthDeliveryNotLoadedError(DomainError):
-    """A month holding a target flight cannot be closed until its DSP has loaded the month's last day.
+    """A month cannot be closed, nor a campaign of it reviewed, until the DSP of each of its flights concerned has loaded
+    the month's last day.
 
-    A target flight earns what its DSP reports, so a month closed before its last day was ingested would freeze a
-    revenue short of that day.
+    A target flight earns what its DSP reports and a committed flight bills its delivery, so a month closed or a
+    campaign reviewed before its last day was ingested would rest on a revenue short of that day. `next_step` is what
+    the user does once the day is loaded: close the month, or review the campaign.
     """
 
-    def __init__(self, year: int, month: int, dsp_name: str) -> None:
+    def __init__(self, year: int, month: int, dsp_name: str, next_step: str = "close the month") -> None:
         super().__init__(f"{year}-{month:02d} is not loaded up to its last day from {dsp_name}")
         self.year = year
         self.month = month
         self.dsp_name = dsp_name
+        self.next_step = next_step
 
 
 class CampaignNotFoundError(DomainError):
     """The campaign named by a request does not exist."""
+
+
+class MonthNotReviewedError(DomainError):
+    """A month cannot be closed while a campaign with flights in it is in progress or pending review.
+
+    `campaigns` names each such campaign with its state, by campaign name: a campaign in progress has a flight of the
+    month that has not ended, so a month is never closed before its last flight has ended.
+    """
+
+    def __init__(self, year: int, month: int, campaigns: tuple[tuple[str, ReviewState], ...]) -> None:
+        listed = ", ".join(f"{name} ({state.value.replace('_', ' ')})" for name, state in campaigns)
+        super().__init__(f"{year}-{month:02d} has campaigns not reviewed: {listed}")
+        self.year = year
+        self.month = month
+        self.campaigns = campaigns
 
 
 class CarryoverError(DomainError):

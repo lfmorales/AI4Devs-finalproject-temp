@@ -21,6 +21,7 @@ from app.domain.services.closed_flight import (
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.priced_flights import price_flights
 from app.domain.value_objects.closed_flight import ClosedDeliveryCheck, ClosedFlightSnapshot
+from app.domain.value_objects.billing import BillingAdjustment, BillingBasis
 from app.domain.value_objects.margin import FlightEconomics, FlightMargin, FlightStatus, WindowDelivery
 from app.domain.value_objects.platform_rate import PlatformRateLevel, ResolvedPlatformRate
 from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight
@@ -118,6 +119,11 @@ def test_the_snapshot_of_a_committed_flight_copies_its_amounts_its_delivery_and_
         sale_cpm=Decimal("5.00"),
         contracted_impressions=726_202,
         volume_commitment=VolumeCommitment.COMMITTED,
+        billing_basis=BillingBasis.MINIMUM,
+        billable=Decimal(700_000),
+        carryover=0,
+        carryover_billable=False,
+        billing_adjustment_id=None,
     )
 
 
@@ -262,24 +268,11 @@ def test_the_flags_of_a_target_flight_come_from_the_snapshot() -> None:
     assert (margin.accrued_days, margin.window_days) == (30, 30)
 
 
-def _without_billing(margin: FlightMargin) -> FlightMargin:  # pending-9.4: helper, remove in task 9.3/9.4
-    """The margin without its billable volume and billing basis.
-
-    The snapshot does not hold them until task 9.3 of committed-billing-and-review adds them to it, so a margin read
-    from a snapshot carries neither; every other field must still be the closing's. Task 9.3 removes this helper and
-    compares whole margins again.
-    """
-    return dataclasses.replace(margin, billable=None, billing_basis=None)  # pending-9.4: comparison without billing
-
-
 @pytest.mark.parametrize("priced", [committed_flight(), target_flight(), zero_sale_flight(), dooh_flight()])
 def test_a_flight_read_from_its_snapshot_is_the_flight_its_closing_priced(priced: PricedFlight) -> None:
     snapshot = snapshot_of(priced)
 
-    # pending-9.4: comparison without billable or billing_basis
-    assert margin_from_snapshot(snapshot, priced.facts.flight_start, priced.facts.flight_end) == _without_billing(
-        priced.margin
-    )
+    assert margin_from_snapshot(snapshot, priced.facts.flight_start, priced.facts.flight_end) == priced.margin
 
 
 def _economics_at_closing(commitment: VolumeCommitment) -> FlightEconomics:
@@ -324,7 +317,7 @@ def test_the_margin_read_from_a_snapshot_is_the_margin_calculate_flight_margin_g
     )
 
     assert at_closing.status is FlightStatus.CLOSED
-    assert read == _without_billing(at_closing)  # pending-9.4: comparison without billable or billing_basis
+    assert read == at_closing
     assert read.margin_pct == at_closing.margin_pct
     if commitment is VolumeCommitment.TARGET:
         assert (read.gross_differs_from_buyer_spend, read.data_cost_reported) == (True, True)
@@ -343,9 +336,10 @@ def test_the_margin_of_a_closed_flight_is_never_computed() -> None:
 
 # --- check_closed_delivery (finance/margin-calculation, «A closed flight is checked against its current delivery») ---
 #
-# The committed flight of the example closed with a revenue of 5,000.00 € (1,000,000 at 5.00 €), a media cost of
-# 1,200.00 €, a rebate of 1,250.00 €, a platform cost of 700.00 € on 700,000 impressions at 1.00 € and a margin of
-# 1,850.00 €. The Deal flight is the worked target example of the snapshot above.
+# `_closed_committed` is a snapshot written before committed-billing-and-review: it has no billing and keeps comparing
+# with its frozen revenue. The committed flight of that example closed with a revenue of 5,000.00 € (1,000,000 at
+# 5.00 €), a media cost of 1,200.00 €, a rebate of 1,250.00 €, a platform cost of 700.00 € on 700,000 impressions at
+# 1.00 € and a margin of 1,850.00 €. The Deal flight is the worked target example of the snapshot above.
 
 FROZEN_RATE = Decimal("1.00")
 
@@ -535,3 +529,272 @@ def test_the_current_platform_cost_uses_the_frozen_rate_given() -> None:
     # 700,001 / 1000 × 1.37 = 959.00137, rounded 959.00: only the impressions moved, by one.
     assert check.current_margin == Decimal("1591.00")
     assert (check.delivered_impressions_difference, check.changed) == (1, False)
+
+
+# --- The billing the closing freezes (committed-billing-and-review) --------------------------------------------------
+#
+# A snapshot written with this change holds the billing basis, the billable volume, the carry-over and whether it was
+# billable, and the adjustment in force; `_closed_committed` above is a snapshot written before it, which has none of
+# them and keeps its revenue. The billed example: 1,000,000 contracted at 5.00 € that delivered 700,000 bills 3,500.00 €,
+# a 25 % rebate of 875.00 €, a media cost of 1,200.00 € and a platform cost of 700.00 €: a margin of 725.00 €.
+
+
+def _closed_billed(**overrides: object) -> ClosedFlightSnapshot:
+    values: dict[str, object] = {
+        "revenue": Decimal("3500.00"), "rebate": Decimal("875.00"), "margin": Decimal("725.00"),
+        "billing_basis": BillingBasis.MINIMUM, "billable": Decimal("700000.0000"), "carryover": 0,
+        "carryover_billable": False, "billing_adjustment_id": None,
+    }
+    values.update(overrides)
+    return _closed_committed(**values)
+
+
+def _priced_with(**fields: object) -> PricedFlight:
+    """The committed flight of the worked example, closed, with some of its billing inputs given."""
+    return _priced(_facts(**fields), [_schedule("0.25")], CLOSING_OF_AUGUST)
+
+
+def test_the_snapshot_of_a_flight_billed_by_the_rule_holds_its_basis_volume_and_carry_over() -> None:
+    snapshot = snapshot_of(committed_flight())
+
+    assert (snapshot.billing_basis, snapshot.billable, snapshot.carryover, snapshot.carryover_billable) == (
+        BillingBasis.MINIMUM, Decimal("700000"), 0, False,
+    )
+    assert snapshot.billing_adjustment_id is None
+
+
+def test_the_snapshot_of_an_adjusted_flight_holds_its_adjustment_and_its_basis() -> None:
+    adjusted = _priced_with(adjustment=BillingAdjustment(BillingBasis.CONTRACTED, None), adjustment_id=41)
+
+    snapshot = snapshot_of(adjusted)
+
+    assert (snapshot.revenue, snapshot.billing_basis, snapshot.billable, snapshot.billing_adjustment_id) == (
+        Decimal("3631.01"), BillingBasis.CONTRACTED, Decimal("726202"), 41,
+    )
+
+
+def test_the_snapshot_of_a_custom_billing_holds_no_volume() -> None:
+    adjusted = _priced_with(adjustment=BillingAdjustment(BillingBasis.CUSTOM, Decimal("4200.00")), adjustment_id=7)
+
+    snapshot = snapshot_of(adjusted)
+
+    assert (snapshot.revenue, snapshot.billing_basis, snapshot.billable, snapshot.billing_adjustment_id) == (
+        Decimal("4200.00"), BillingBasis.CUSTOM, None, 7,
+    )
+
+
+def test_the_snapshot_holds_a_billable_carry_over_and_the_cap_it_raised() -> None:
+    carried = _priced_with(contracted_impressions=500_000, delivered_impressions=580_000, carryover=100_000,
+                           carryover_billable=True)
+
+    snapshot = snapshot_of(carried)
+
+    assert (snapshot.carryover, snapshot.carryover_billable, snapshot.billable, snapshot.revenue) == (
+        100_000, True, Decimal("580000"), Decimal("2900.00"),
+    )
+
+
+def test_the_snapshot_of_a_target_flight_names_the_reported_basis_and_no_volume() -> None:
+    snapshot = snapshot_of(target_flight())
+
+    assert (snapshot.billing_basis, snapshot.billable, snapshot.carryover, snapshot.carryover_billable) == (
+        BillingBasis.REPORTED, None, 0, False,
+    )
+
+
+def test_a_snapshot_closed_before_the_billing_has_none_of_it() -> None:
+    legacy = _closed_committed()
+
+    assert (legacy.billing_basis, legacy.billable, legacy.carryover, legacy.carryover_billable,
+            legacy.billing_adjustment_id) == (None, None, None, None, None)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"carryover": None},
+        {"carryover_billable": None},
+        {"billing_basis": None},
+        {"billable": None},
+        {"billing_basis": BillingBasis.CUSTOM, "billable": Decimal(1), "billing_adjustment_id": 1},
+        {"billing_basis": BillingBasis.REPORTED, "billable": None},
+        {"billing_basis": BillingBasis.CONTRACTED, "billable": Decimal(1000000)},
+        {"billing_basis": BillingBasis.DELIVERED},
+        {"billing_basis": BillingBasis.CUSTOM, "billable": None},
+        {"carryover": -1},
+        {"billable": 700000.0},
+    ],
+    ids=["no-carry-over", "no-flag", "no-basis-with-the-rest", "minimum-without-volume", "custom-with-volume",
+         "reported-on-committed", "contracted-without-adjustment", "delivered-without-adjustment",
+         "custom-without-adjustment", "negative-carry-over", "float-volume"],
+)
+def test_a_snapshot_whose_billing_does_not_hold_together_is_refused(overrides: dict[str, object]) -> None:
+    with pytest.raises((ValueError, TypeError)):
+        _closed_billed(**overrides)
+
+
+def test_a_target_snapshot_must_name_the_reported_basis() -> None:
+    with pytest.raises(ValueError):
+        dataclasses.replace(snapshot_of(target_flight()), billing_basis=BillingBasis.MINIMUM, billable=Decimal(1))
+
+
+def test_a_closed_flight_read_from_its_snapshot_carries_its_billable_volume_and_its_basis() -> None:
+    margin = margin_from_snapshot(_closed_billed(), AUGUST_START, AUGUST_END)
+
+    assert (margin.billable, margin.billing_basis, margin.revenue) == (
+        Decimal("700000.0000"), BillingBasis.MINIMUM, Decimal("3500.00"),
+    )
+
+
+def test_a_flight_closed_before_the_billing_is_read_with_no_volume_and_no_basis() -> None:
+    margin = margin_from_snapshot(_closed_committed(), AUGUST_START, AUGUST_END)
+
+    assert (margin.billable, margin.billing_basis, margin.revenue) == (None, None, Decimal("5000.00"))
+
+
+@pytest.mark.parametrize(
+    "priced",
+    [
+        _priced_with(adjustment=BillingAdjustment(BillingBasis.CONTRACTED, None), adjustment_id=41),
+        _priced_with(adjustment=BillingAdjustment(BillingBasis.CUSTOM, Decimal("4200.00")), adjustment_id=7),
+        _priced_with(contracted_impressions=500_000, delivered_impressions=580_000, carryover=100_000,
+                     carryover_billable=True),
+    ],
+    ids=["contracted", "custom", "billable-carry-over"],
+)
+def test_an_adjusted_or_carried_flight_read_from_its_snapshot_is_the_flight_its_closing_priced(priced: PricedFlight) -> None:
+    assert margin_from_snapshot(snapshot_of(priced), priced.facts.flight_start, priced.facts.flight_end) == priced.margin
+
+
+# --- The check compares with the current billing ---------------------------------------------------------------------
+
+
+def test_the_restated_billed_flight_is_checked_against_its_current_billing() -> None:
+    # Restated with 1,200,000 impressions and 3,000.00 € of media cost: it would now bill its cap, 1,000,000.
+    snapshot = _closed_billed()
+    current = _delivery_of(
+        snapshot, impressions=1_200_000, delivered=Decimal("1200000.0000"), media_cost=Decimal("3000.000000"),
+    )
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, current)
+
+    assert check == ClosedDeliveryCheck(
+        delivered_difference=Decimal("500000.0000"),
+        delivered_impressions_difference=500_000,
+        media_cost_difference=Decimal("1800.00"),
+        reported_revenue_difference=None,
+        buyer_spend_difference=None,
+        current_margin=Decimal("-75.00"),  # 5,000.00 - 3,000.00 - 875.00 - 1,200.00
+        margin_difference=Decimal("-800.00"),
+        changed=True,
+        billable_difference=Decimal("300000.0000"),
+        billing_difference=Decimal("1500.00"),
+    )
+    assert (snapshot.revenue, snapshot.margin) == (Decimal("3500.00"), Decimal("725.00"))
+
+
+def test_a_billed_flight_whose_delivery_is_gone_would_bill_nothing() -> None:
+    # Its line was unlinked: its delivery is deleted, so its current billing is nothing and only the rebate stays.
+    snapshot = _closed_billed()
+    current = _delivery_of(snapshot, impressions=0, delivered=Decimal(0), media_cost=Decimal(0))
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, current)
+
+    assert (check.current_margin, check.billing_difference, check.billable_difference) == (
+        Decimal("-875.00"), Decimal("-3500.00"), Decimal("-700000.0000"),
+    )
+    assert check.changed is True
+
+
+def test_a_billed_flight_with_its_delivery_unchanged_raises_nothing() -> None:
+    snapshot = _closed_billed()
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, _delivery_of(snapshot))
+
+    assert (check.current_margin, check.margin_difference, check.changed) == (Decimal("725.00"), Decimal("0.00"), False)
+    assert (check.billable_difference, check.billing_difference) == (Decimal("0.0000"), Decimal("0.00"))
+
+
+def test_a_flight_closed_before_the_billing_keeps_comparing_with_its_frozen_revenue() -> None:
+    snapshot = _closed_committed()
+    current = _delivery_of(
+        snapshot, impressions=1_200_000, delivered=Decimal("1200000.0000"), media_cost=Decimal("3000.000000"),
+    )
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, current)
+
+    assert (check.current_margin, check.margin_difference) == (Decimal("-450.00"), Decimal("-2300.00"))
+    assert (check.billable_difference, check.billing_difference) == (None, None)
+
+
+def test_a_custom_billing_does_not_move_with_the_delivery() -> None:
+    snapshot = _closed_billed(
+        revenue=Decimal("4200.00"), rebate=Decimal("1050.00"), margin=Decimal("1250.00"),
+        billing_basis=BillingBasis.CUSTOM, billable=None, billing_adjustment_id=7,
+    )
+    current = _delivery_of(snapshot, impressions=900_000, delivered=Decimal("900000.0000"))
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, current)
+
+    assert (check.billing_difference, check.billable_difference) == (Decimal("0.00"), None)
+    assert check.current_margin == Decimal("4200.00") - Decimal("1200.00") - Decimal("1050.00") - Decimal("900.00")
+
+
+def test_a_delivered_basis_follows_the_current_delivery_without_a_cap() -> None:
+    snapshot = _closed_billed(billing_basis=BillingBasis.DELIVERED, billing_adjustment_id=3)
+    current = _delivery_of(snapshot, impressions=1_100_000, delivered=Decimal("1100000.0000"))
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, current)
+
+    assert (check.billable_difference, check.billing_difference) == (Decimal("400000.0000"), Decimal("2000.00"))
+
+
+def test_a_contracted_basis_does_not_move_with_the_delivery() -> None:
+    snapshot = _closed_billed(
+        revenue=Decimal("5000.00"), billing_basis=BillingBasis.CONTRACTED, billable=Decimal("1000000.0000"),
+        billing_adjustment_id=3,
+    )
+    current = _delivery_of(snapshot, impressions=600_000, delivered=Decimal("600000.0000"))
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, current)
+
+    assert (check.billable_difference, check.billing_difference) == (Decimal("0.0000"), Decimal("0.00"))
+
+
+def test_the_frozen_cap_with_a_billable_carry_over_bounds_the_current_billing() -> None:
+    # 500,000 contracted + 100,000 billable carried in; frozen with 580,000 delivered, now 700,000: capped at 600,000.
+    snapshot = _closed_billed(
+        revenue=Decimal("2900.00"), contracted_impressions=500_000, billable=Decimal("580000.0000"), carryover=100_000,
+        carryover_billable=True, delivered=Decimal("580000.0000"), delivered_impressions=580_000,
+    )
+    current = _delivery_of(snapshot, impressions=700_000, delivered=Decimal("700000.0000"))
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, current)
+
+    assert (check.billable_difference, check.billing_difference) == (Decimal("20000.0000"), Decimal("100.00"))
+
+
+@pytest.mark.parametrize(
+    ("delivered", "changed"),
+    [("303000.0000", True), ("302999.9999", False)],
+)
+def test_a_billed_dooh_flight_at_its_cap_is_flagged_by_its_volume_alone(delivered: str, changed: bool) -> None:
+    # 300,000 contracted OTS, frozen with 300,000.0000 delivered: above it the billing stays at the cap.
+    snapshot = _closed_billed(
+        revenue=Decimal("1500.00"), contracted_revenue=Decimal("1500.00"), media_cost=Decimal("0.00"),
+        rebate=Decimal("0.00"), platform_cost=Decimal("12.00"), margin=Decimal("1488.00"),
+        delivered_impressions=12_000, delivered=Decimal("300000.0000"), window_media_cost=Decimal(0),
+        delivery_metric="ots", contracted_impressions=300_000, billable=Decimal("300000.0000"),
+    )
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, _delivery_of(snapshot, delivered=Decimal(delivered)))
+
+    assert (check.changed, check.margin_difference, check.billing_difference) == (changed, Decimal("0.00"), Decimal("0.00"))
+
+
+def test_a_target_flight_has_no_billable_or_billing_difference() -> None:
+    snapshot = snapshot_of(target_flight())
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, _delivery_of(snapshot))
+
+    assert (check.billable_difference, check.billing_difference) == (None, None)

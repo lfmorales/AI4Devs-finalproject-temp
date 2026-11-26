@@ -7,7 +7,7 @@ import pytest
 
 from app.presentation.dependencies import providers
 from tests.fixtures.delivery_data import insert_campaign_line, insert_delivery, insert_ingestion_batch, replace_flights
-from tests.fixtures.margin_data import group_of, set_volume
+from tests.fixtures.margin_data import group_of, make_month_closable, set_volume
 
 
 @pytest.fixture
@@ -40,6 +40,7 @@ def test_a_closed_month_gives_the_margin_of_the_specs_worked_example(operations,
     insert_delivery(test_db_session, line_id, date(2026, 8, 10), 700_000, insert_ingestion_batch(test_db_session), Decimal("1200.00"))
     _flat_schedule(operations, group_of(test_db_session, line_id), "0.25")
     operations.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
+    make_month_closable(test_db_session, 2026, 8, None, date(2026, 9, 1))
 
     assert operations.post("/margin/closings", json={"year": 2026, "month": 8}).json()["closed"] == 1
     body = operations.get("/margin").json()
@@ -95,6 +96,7 @@ def test_the_margin_percentage_is_present_at_every_level_as_a_two_decimal_string
     insert_delivery(test_db_session, line_id, date(2026, 8, 10), 700_000, insert_ingestion_batch(test_db_session), Decimal("1200.00"))
     _flat_schedule(operations, group_of(test_db_session, line_id), "0.25")
     operations.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)
+    make_month_closable(test_db_session, 2026, 8, None, date(2026, 9, 1))
     operations.post("/margin/closings", json={"year": 2026, "month": 8})
 
     body = operations.get("/margin").json()

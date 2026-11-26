@@ -124,6 +124,24 @@ export async function readMargin(api: APIRequestContext, month?: Month): Promise
   return (await response.json()) as MarginResponse;
 }
 
+/**
+ * What every E2E does before it closes a month (committed-billing-and-review): mark reviewed, through
+ * POST /api/billing/reviews, each campaign of the month that GET /api/margin lists and that is not closed yet. A campaign
+ * already reviewed answers 200 and writes nothing; any other refusal fails the test, with its code. The DSPs' last day
+ * comes from the seeds (reset-data.sh).
+ */
+export async function reviewMonth(api: APIRequestContext, month: Month): Promise<void> {
+  const margin = await readMargin(api, month);
+  for (const campaign of margin.campaigns) {
+    const flights = campaign.lines.flatMap((line) => line.flights);
+    if (flights.every((flight) => flight.state === "closed")) continue;
+    const response = await api.post("billing/reviews", { data: { campaign_id: campaign.campaign_id, ...month } });
+    expect([200, 201], `reviewing ${campaign.name} in ${month.year}-${month.month}: ${await response.text()}`).toContain(
+      response.status(),
+    );
+  }
+}
+
 export function flightsOf(margin: MarginResponse): FlightMargin[] {
   return margin.campaigns.flatMap((campaign) => campaign.lines.flatMap((line) => line.flights));
 }

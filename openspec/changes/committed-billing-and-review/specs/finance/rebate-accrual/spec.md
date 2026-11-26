@@ -60,8 +60,9 @@ The system SHALL expose `POST /margin/closings`, restricted to the `operations` 
 The closing SHALL check, in this order, and write nothing when one fails:
 
 1. no earlier month of the same year has an ended flight without frozen rates, or 409 `previous_month_open` naming the earliest one;
-2. for each DSP of the lines of the month's ended and unfrozen flights, whatever their commitment, a succeeded ingestion batch has a window that includes the month's last day, or 409 `month_delivery_not_loaded` naming the month and the DSP;
-3. every campaign with flights in the month is reviewed or closed (`finance/monthly-review`), or 409 `month_not_reviewed` whose message names the month and each campaign in progress or pending review. A campaign with a flight of the month that has not ended is in progress, so a month cannot be closed before its last flight has ended.
+2. no campaign with flights in the month is in progress (`finance/monthly-review`), or 409 `month_not_reviewed` whose message names the month and each campaign in progress or pending review. A campaign with a flight of the month that has not ended is in progress, so a month cannot be closed before its last flight has ended; this comes before the delivery, which cannot include the month's last day while a flight of it runs;
+3. for each DSP of the lines of the month's ended and unfrozen flights, whatever their commitment, a succeeded ingestion batch has a window that includes the month's last day, or 409 `month_delivery_not_loaded` naming the month and the DSP;
+4. every campaign with flights in the month is reviewed or closed (`finance/monthly-review`), or 409 `month_not_reviewed` whose message names the month and each campaign pending review.
 
 For every flight it freezes, the closing SHALL also store one snapshot, tied one to one to its `applied_rates` row, holding the figures the closing computed for it, which are the figures its pending-close read showed: its revenue, contracted revenue, media cost, rebate, platform cost and margin, each rounded to two decimals as the margin rounds them, and its gross when its line is `target` and none when it is `committed`; its billing basis (`minimum`, `delivered`, `contracted` or `custom` for a `committed` flight, `reported` for a `target` one), the adjustment in force when there is one, its billable volume (four decimals, none for a `target` flight or a `custom` billing), its carry-over (an integer, zero when it has none) and whether the carry-over is billable; the delivery they were computed on, which is its delivered impressions, its delivered volume in the unit of its metric, and the sums of its media cost, reported revenue, buyer's spend and data costs inside its window; its flags `gross_differs_from_buyer_spend` and `data_cost_reported`; and its line's delivery metric, sale CPM, contracted volume and volume commitment. A snapshot stored before this change has no billing basis, billable volume, carry-over or adjustment.
 
@@ -112,9 +113,14 @@ Every closing that freezes at least one flight SHALL record one closing header n
 - **AND** the flights frozen by the first closing are unchanged
 
 #### Scenario: A month with a running flight is not closed
-- **WHEN** a month is closed and one of its flights has not ended
-- **THEN** the request is rejected with 409 `month_not_reviewed`, naming that flight's campaign as in progress
+- **WHEN** a month is closed and one of its flights has not ended, while another flight of it has ended and its DSP has not loaded the month's last day
+- **THEN** the request is rejected with 409 `month_not_reviewed`, naming that flight's campaign as in progress and the ended campaign as pending review, not with `month_delivery_not_loaded`
 - **AND** no flight of the month gets a row
+
+#### Scenario: An ended month waits for its DSPs before its reviews
+- **WHEN** every flight of a month has ended, a campaign is pending review and the DSP of one of its lines has not loaded the month's last day
+- **THEN** the request is rejected with 409 `month_delivery_not_loaded` naming that DSP
+- **AND** once the DSP has loaded it, the request is rejected with 409 `month_not_reviewed` naming the campaign
 
 #### Scenario: A month with a campaign pending review is not closed
 - **WHEN** every flight of October 2026 has ended, campaign A is reviewed and campaign B is pending review

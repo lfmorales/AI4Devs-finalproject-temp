@@ -13,6 +13,7 @@ from app.infrastructure.persistence.models.margin import AppliedRateRecord
 from app.infrastructure.persistence.models.masters import DSPRecord
 from app.presentation.dependencies import providers
 from tests.fixtures.delivery_data import add_line_to_campaign, insert_campaign_line, insert_other_dsp, replace_flights
+from tests.fixtures.margin_data import load_months_last_day, make_month_closable
 
 D = date(2026, 9, 1)  # as_of is 31 August: August has ended
 
@@ -29,9 +30,11 @@ def _count(session) -> int:
 
 
 def _august_with_three_lines(session) -> None:
+    """One campaign of three August lines, its last day loaded and reviewed: ready to close on D."""
     first = insert_campaign_line(session)
     add_line_to_campaign(session, first, 2)
     add_line_to_campaign(session, first, 3)
+    make_month_closable(session, 2026, 8, None, D)
 
 
 def _close(client, year: int = 2026, month: int = 8):
@@ -140,6 +143,7 @@ def test_a_flight_registered_in_a_closed_month_is_closed_by_a_second_closing_tha
     finance_client: Any, test_db_session: Session
 ) -> None:
     first = insert_campaign_line(test_db_session)
+    make_month_closable(test_db_session, 2026, 8, None, D)
     _close(finance_client)
     add_line_to_campaign(test_db_session, first, 2)
 
@@ -198,3 +202,36 @@ def test_campaign_registration_keeps_its_own_validation_format(authenticated_cli
     assert response.status_code == 422
     assert "detail" in response.json()
     assert "code" not in response.json()
+
+
+def test_a_month_with_a_campaign_pending_review_is_a_conflict_that_names_the_month_and_the_campaign(
+    finance_client: Any, test_db_session: Session
+) -> None:
+    insert_campaign_line(test_db_session, "Campaign B")
+    load_months_last_day(test_db_session, 2026, 8)
+
+    response = _close(finance_client)
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "month_not_reviewed",
+        "message": "2026-08 has campaigns not reviewed: Campaign B (pending review). Review them, then close the month.",
+    }
+    assert _count(test_db_session) == 0
+
+
+def test_a_month_with_a_running_flight_is_a_conflict_that_names_its_campaign_in_progress(
+    client_for_roles: Any, test_db_session: Session
+) -> None:
+    insert_campaign_line(test_db_session, "Campaign C")
+    load_months_last_day(test_db_session, 2026, 8)
+    client = client_for_roles("operations")
+    client.app.dependency_overrides[providers.get_today] = lambda: date(2026, 8, 31)
+
+    response = _close(client)
+
+    assert (response.status_code, response.json()["code"]) == (409, "month_not_reviewed")
+    assert response.json()["message"] == (
+        "2026-08 has campaigns not reviewed: Campaign C (in progress). Review them, then close the month."
+    )
+    assert _count(test_db_session) == 0

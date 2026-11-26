@@ -211,6 +211,30 @@ class ClosedFlightSnapshotRecord(Base):
         CheckConstraint(
             "volume_commitment IN ('committed', 'target')", name="ck_closed_flight_snapshots_volume_commitment"
         ),
+        # The billing a closing froze (committed-billing-and-review). A snapshot written before it has none of the
+        # basis, the carry-over and its flag: the three are null together, and its flight keeps the revenue it had.
+        CheckConstraint(
+            "(billing_basis IS NULL) = (carryover IS NULL) AND (billing_basis IS NULL) = (carryover_billable IS NULL)"
+            " AND (billing_basis IS NOT NULL OR (billable IS NULL AND billing_adjustment_id IS NULL))",
+            name="ck_closed_flight_snapshots_billing_together",
+        ),
+        CheckConstraint(
+            "billing_basis IS NULL OR billing_basis IN ('minimum', 'delivered', 'contracted', 'custom', 'reported')",
+            name="ck_closed_flight_snapshots_billing_basis",
+        ),
+        CheckConstraint(
+            "billing_basis IS NULL OR (billing_basis = 'reported') = (volume_commitment = 'target')",
+            name="ck_closed_flight_snapshots_reported_with_target",
+        ),
+        CheckConstraint(
+            "(billing_basis IN ('minimum', 'delivered', 'contracted')) = (billable IS NOT NULL)",
+            name="ck_closed_flight_snapshots_billable_with_volume_basis",
+        ),
+        CheckConstraint(
+            "billing_basis NOT IN ('delivered', 'contracted', 'custom') OR billing_adjustment_id IS NOT NULL",
+            name="ck_closed_flight_snapshots_adjustment_with_adjusted_basis",
+        ),
+        CheckConstraint("carryover IS NULL OR carryover >= 0", name="ck_closed_flight_snapshots_carryover_not_negative"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -236,6 +260,15 @@ class ClosedFlightSnapshotRecord(Base):
     sale_cpm: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     contracted_impressions: Mapped[int] = mapped_column(BigInteger, nullable=False)
     volume_commitment: Mapped[str] = mapped_column(String, nullable=False)
+    # How the billing was reached, the volume it was billed on (none for a custom amount or a target flight), the
+    # carry-over the flight had received and whether it was billable, and the adjustment in force, if any.
+    billing_basis: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    billable: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    carryover: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    carryover_billable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    billing_adjustment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("flight_billing_adjustments.id"), nullable=True
+    )
 
 
 class FlightBillingAdjustmentRecord(Base):

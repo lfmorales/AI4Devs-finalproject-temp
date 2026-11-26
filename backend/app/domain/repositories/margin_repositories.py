@@ -1,11 +1,25 @@
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 
+from app.domain.services.monthly_review import FlightCounts
 from app.domain.value_objects.platform_rate import NewPlatformRateSetting, PlatformRateSetting
 from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight, ReadFlight
 from app.domain.value_objects.rebate import CounterKey, NewRebateSchedule, RebateSchedule
+from app.domain.value_objects.review import ReviewKind
+
+
+@dataclass(frozen=True)
+class CampaignMonthStanding:
+    """A campaign with flights in a month, as the closing needs it to derive its review state: its name, its flights'
+    counts as of D-1 and the kind of its latest review event in the month, if any."""
+
+    campaign_id: int
+    campaign_name: str
+    counts: FlightCounts
+    latest_event: ReviewKind | None
 
 
 class RebateScheduleRepository(ABC):
@@ -43,8 +57,12 @@ class MarginFlightRepository(ABC):
 
     @abstractmethod
     def dsps_without_the_months_last_day(self, year: int, month: int, as_of: date) -> list[str]:
-        """The DSPs, by name, of the month's ended and unfrozen target flights that have no succeeded ingestion batch
+        """The DSPs, by name, of the month's ended and unfrozen flights, committed or target, that have no succeeded ingestion batch
         whose window includes the month's last day. Empty when the month can be closed."""
+
+    @abstractmethod
+    def campaigns_of_the_month(self, year: int, month: int, as_of: date) -> list[CampaignMonthStanding]:
+        """Every campaign with flights in the month, by name and then id, with what derives its review state."""
 
     @abstractmethod
     def earliest_month_with_open_flights(self, year: int, before_month: int, as_of: date) -> int | None:

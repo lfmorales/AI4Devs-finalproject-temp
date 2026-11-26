@@ -26,7 +26,7 @@ from tests.fixtures.delivery_data import (
     insert_ingestion_batch,
     replace_flights,
 )
-from tests.fixtures.margin_data import add_schedule, group_of, set_volume
+from tests.fixtures.margin_data import add_schedule, group_of, make_month_closable, set_volume
 
 SEPTEMBER_FIRST = date(2026, 9, 1)  # as_of is 31 August: August is over
 AUGUST_11 = date(2026, 8, 11)       # as_of is 10 August: August is running
@@ -89,6 +89,7 @@ def test_a_closed_flight_is_read_from_what_was_frozen_and_is_not_provisional(cli
     _deliver(test_db_session, line_id, 1_000_000)  # billed 5,000.00 €, so a 25 % rebate of 1,250.00 €
     add_schedule(test_db_session, group_of(test_db_session, line_id), ("0", None, "0.25"))
     client = _client(client_for_roles, SEPTEMBER_FIRST)
+    make_month_closable(test_db_session, 2026, 8, None, SEPTEMBER_FIRST)
     assert client.post("/margin/closings", json={"year": 2026, "month": 8}).status_code == 200
 
     (flight,) = _flights(_get(client))
@@ -124,6 +125,7 @@ def test_a_line_with_a_closed_flight_and_a_running_one_shows_both_and_is_provisi
     line_id = insert_campaign_line(test_db_session, start_date=date(2026, 8, 1), end_date=date(2026, 9, 30))
     replace_flights(test_db_session, line_id, [(date(2026, 8, 1), date(2026, 8, 31)), (date(2026, 9, 1), date(2026, 9, 30))])
     client = _client(client_for_roles, SEPTEMBER_FIRST)
+    make_month_closable(test_db_session, 2026, 8, None, SEPTEMBER_FIRST)
     client.post("/margin/closings", json={"year": 2026, "month": 8})
     client.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 11)
 
@@ -190,6 +192,7 @@ def test_every_amount_is_a_decimal_string_and_no_float_appears_anywhere(client_f
     _deliver(test_db_session, first, 1_000_000)  # a billing to put a rebate on
     add_schedule(test_db_session, group_of(test_db_session, first), ("0", "1000", "0.15"), ("1000", None, "0.2"))
     client = _client(client_for_roles, SEPTEMBER_FIRST)
+    make_month_closable(test_db_session, 2026, 8, None, SEPTEMBER_FIRST)
     client.post("/margin/closings", json={"year": 2026, "month": 8})
 
     body = _get(client)
@@ -402,6 +405,7 @@ def test_reading_and_closing_agree_on_the_volumes_of_a_dooh_flight(
     fields = ("contracted_impressions", "delivered", "delivered_impressions", "delivery_metric")
 
     before = [{name: f[name] for name in fields} for f in _flights(_get(client))]
+    make_month_closable(test_db_session, 2026, 8, None, SEPTEMBER_FIRST)
     assert client.post("/margin/closings", json={"year": 2026, "month": 8}).status_code == 200
     after = [{name: f[name] for name in fields} for f in _flights(_get(client))]
 

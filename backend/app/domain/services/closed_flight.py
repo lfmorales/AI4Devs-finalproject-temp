@@ -3,7 +3,8 @@
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
-from app.domain.services.flight_margin import round_amount
+from app.domain.services.flight_margin import committed_billing, round_amount
+from app.domain.value_objects.billing import Billing, BillingAdjustment, BillingBasis
 from app.domain.value_objects.closed_flight import ClosedDeliveryCheck, ClosedFlightSnapshot
 from app.domain.value_objects.margin import FlightMargin, FlightStatus, WindowDelivery
 from app.domain.value_objects.priced_flight import PricedFlight
@@ -22,7 +23,7 @@ def snapshot_of(priced: PricedFlight) -> ClosedFlightSnapshot:
     """The snapshot of a flight the closing priced: the amounts it showed and the delivery they were computed on.
 
     The closing and the pending-close read price with the same function, so the snapshot holds, by construction, the
-    figures the pending-close read showed. Only a closed flight has one.
+    figures the pending-close read showed, and the billing they came from. Only a closed flight has one.
     """
     margin, facts = priced.margin, priced.facts
     if (
@@ -33,6 +34,7 @@ def snapshot_of(priced: PricedFlight) -> ClosedFlightSnapshot:
         or margin.rebate is None
         or margin.platform_cost is None
         or margin.margin is None
+        or margin.billing_basis is None
     ):
         raise ValueError(f"flight {facts.flight_id} is not closed, so it has no snapshot")
     return ClosedFlightSnapshot(
@@ -55,6 +57,11 @@ def snapshot_of(priced: PricedFlight) -> ClosedFlightSnapshot:
         sale_cpm=facts.sale_cpm,
         contracted_impressions=facts.contracted_impressions,
         volume_commitment=facts.volume_commitment,
+        billing_basis=margin.billing_basis,
+        billable=margin.billable,
+        carryover=facts.carryover,
+        carryover_billable=facts.carryover_billable,
+        billing_adjustment_id=facts.adjustment_id if facts.adjustment is not None else None,
     )
 
 
@@ -86,6 +93,8 @@ def margin_from_snapshot(snapshot: ClosedFlightSnapshot, flight_start: date, fli
         gross_revenue=snapshot.gross_revenue,
         gross_differs_from_buyer_spend=snapshot.gross_differs_from_buyer_spend,
         data_cost_reported=snapshot.data_cost_reported,
+        billable=snapshot.billable,
+        billing_basis=snapshot.billing_basis,
     )
 
 
@@ -95,10 +104,18 @@ def check_closed_delivery(
     """Compare a closed flight with the delivery stored now in its window; no figure of the flight changes.
 
     `platform_rate` is the rate its closing froze, and `current.delivered` is summed in the snapshot's metric. Nothing
-    is resolved again: the current margin keeps the closing's rebate and, for a committed flight, its revenue.
+    is resolved again: the current margin keeps the closing's rebate, and a committed flight's revenue is its billing
+    on the current delivered volume with the cap and the basis its snapshot froze, or its frozen revenue when its
+    snapshot has no billing.
     """
     is_target = snapshot.volume_commitment is VolumeCommitment.TARGET
-    current_revenue = round_amount(current.reported_revenue) if is_target else snapshot.revenue
+    current_billing = _current_billing(snapshot, current.delivered)
+    if is_target:
+        current_revenue = round_amount(current.reported_revenue)
+    elif current_billing is None:
+        current_revenue = snapshot.revenue
+    else:
+        current_revenue = current_billing.amount
     current_media_cost = round_amount(current.media_cost)
     current_platform_cost = round_amount(Decimal(current.impressions) / _THOUSAND * platform_rate)
     current_margin = current_revenue - current_media_cost - snapshot.rebate - current_platform_cost
@@ -120,7 +137,33 @@ def check_closed_delivery(
             abs(margin_difference) >= MARGIN_CHANGE_TOLERANCE
             or _delivered_moved(snapshot.delivered, current.delivered)
         ),
+        billable_difference=_billable_difference(snapshot.billable, current_billing),
+        billing_difference=None if current_billing is None else current_billing.amount - snapshot.revenue,
     )
+
+
+def _current_billing(snapshot: ClosedFlightSnapshot, delivered: Decimal) -> Billing | None:
+    """What a committed flight with its billing frozen would bill on `delivered`: its frozen contracted volume,
+    carry-over, flag, sale CPM and basis, and a custom billing's frozen amount. None for a target flight and for a
+    snapshot written before the billing was frozen."""
+    basis = snapshot.billing_basis
+    if basis is None or basis is BillingBasis.REPORTED:
+        return None
+    assert snapshot.carryover is not None and snapshot.carryover_billable is not None
+    return committed_billing(
+        contracted=snapshot.contracted_impressions,
+        carryover=snapshot.carryover,
+        carryover_billable=snapshot.carryover_billable,
+        delivered=delivered,
+        sale_cpm=snapshot.sale_cpm,
+        adjustment=BillingAdjustment(basis, snapshot.revenue if basis is BillingBasis.CUSTOM else None),
+    )
+
+
+def _billable_difference(frozen: Decimal | None, current_billing: Billing | None) -> Decimal | None:
+    if frozen is None or current_billing is None or current_billing.billable is None:
+        return None
+    return (current_billing.billable - frozen).quantize(_TEN_THOUSANDTH, rounding=ROUND_HALF_UP)
 
 
 def _delivered_moved(frozen: Decimal, current: Decimal) -> bool:

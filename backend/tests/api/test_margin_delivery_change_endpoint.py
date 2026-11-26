@@ -28,7 +28,7 @@ from tests.fixtures.delivery_data import (
     insert_other_dsp,
     replace_flights,
 )
-from tests.fixtures.margin_data import add_schedule, group_of
+from tests.fixtures.margin_data import add_schedule, group_of, make_month_closable
 
 NOVEMBER = (date(2026, 11, 1), date(2026, 11, 30))
 DECEMBER_FIRST = date(2026, 12, 1)
@@ -103,6 +103,7 @@ class _Month:
 @pytest.fixture
 def closed_month(client_for_roles: Any, test_db_session: Session) -> _Month:
     month = _Month(test_db_session, client_for_roles("finance"))
+    make_month_closable(test_db_session, 2026, 11, None, DECEMBER_FIRST)
     response = _on(month.finance, DECEMBER_FIRST).post("/margin/closings", json={"year": 2026, "month": 11})
     assert response.status_code == 200, response.text
     assert response.json()["closed"] == 2
@@ -131,9 +132,9 @@ def test_the_restated_committed_flight_reports_its_change_and_keeps_its_frozen_f
     assert flight["delivery_change"] == {
         "delivered_difference": "500000.0000", "delivered_impressions_difference": 500_000,
         "media_cost_difference": "1800.00", "reported_revenue_difference": None, "buyer_spend_difference": None,
-        # pending-9.4: margin and motive. The check keeps the frozen revenue of a committed flight: 3,500.00 - 3,000.00 - 875.00 -
-        # 1,200.00. Task 9.4 compares with the current billing instead (5,000.00, a current margin of -75.00).
-        "current_margin": "-1575.00", "margin_difference": "-2300.00",
+        # The check compares with the current billing: 1,200,000 delivered bills the cap, 5,000.00 €, so
+        # 5,000.00 - 3,000.00 - 875.00 - 1,200.00 = -75.00 €.
+        "current_margin": "-75.00", "margin_difference": "-800.00",
     }
     for totals in (line["totals"], campaign["totals"]):
         assert (totals["delivery_changed_count"], totals["margin"]) == (1, "725.00")

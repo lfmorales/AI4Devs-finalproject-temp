@@ -607,7 +607,7 @@ def test_save_writes_one_snapshot_per_frozen_flight_under_its_header_holding_wha
         assert {name: getattr(snapshot, name) for name in expected} == expected
 
 
-def test_a_target_snapshot_agrees_with_its_applied_rates_row_and_a_committed_one_has_no_gross(
+def test_a_target_snapshot_agrees_with_its_applied_rates_row_and_a_committed_one_holds_its_billing_and_no_gross(
     rolled_back_session: Session,
 ) -> None:
     committed = _adform_committed_august(rolled_back_session)
@@ -632,8 +632,10 @@ def test_a_target_snapshot_agrees_with_its_applied_rates_row_and_a_committed_one
     ) == (Decimal("4400.00"), Decimal("5500.00"))
     assert target_snapshot.volume_commitment == "target"
     committed_row, committed_snapshot = by_line[committed]
-    assert (committed_snapshot.gross_revenue, committed_row.rebate_base_amount) == (None, None)
-    assert committed_snapshot.volume_commitment == "committed"
+    # A committed row holds its billing as both its revenue and its rebate base (committed-billing-and-review).
+    assert committed_snapshot.gross_revenue is None
+    assert committed_row.revenue_amount == committed_row.rebate_base_amount == committed_snapshot.revenue
+    assert (committed_snapshot.billing_basis, committed_snapshot.volume_commitment) == ("minimum", "committed")
 
 
 # ---------------------------------------------------------------- a closed flight is read with its snapshot

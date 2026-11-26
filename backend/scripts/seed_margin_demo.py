@@ -22,8 +22,9 @@ flight of the previous month is the worked example (a target of 1,000,000, 1,100
 directly under a succeeded Equativ batch that covers the previous month's last day, so that month can be closed: nothing
 here ever calls Equativ. Without that DSP or that channel it adds nothing and creates neither.
 
-It also invents daily deliveries for each line up to yesterday and a flat example rebate schedule for a
-demonstration holding group. The campaigns go through the registration service, the deliveries through the delivery
+It also invents daily deliveries for each line up to yesterday, under a DEMO DSP batch that has loaded every day from
+1 January of the previous month's year to yesterday, and a flat example rebate schedule for a demonstration holding
+group. The campaigns go through the registration service, the deliveries through the delivery
 repository, the master data through the master loader and the schedule through the schedule service: no row is
 inserted by hand except the demonstration masters' names, which the loader writes.
 
@@ -363,8 +364,17 @@ def _invented_day(campaign: DemoCampaign, day: date) -> DailyDelivery:
 
 
 def _write_deliveries(session: Session, campaigns: list[DemoCampaign], as_of: date, started_at: datetime) -> None:
-    """Write the invented deliveries of each line from its start to `as_of`, replacing what was there."""
-    batch_id = _batch(session, DeliveryDateRange(min(c.start for c in campaigns), as_of), started_at)
+    """Write the invented deliveries of each line from its start to `as_of`, replacing what was there.
+
+    They go under one succeeded batch of the DEMO DSP whose window runs from 1 January of the previous month's year to
+    `as_of`: a month closes only once its DSP has loaded its last day, and the campaigns the E2E registers on the DEMO
+    DSP close the previous month and an earlier month of the same year. The batch states that those days were loaded;
+    a day without an invented delivery simply has none.
+    """
+    today = as_of + timedelta(days=1)
+    previous_month_year = (today.replace(day=1) - timedelta(days=1)).year
+    first_day = min(date(previous_month_year, 1, 1), min(c.start for c in campaigns))
+    batch_id = _batch(session, DeliveryDateRange(first_day, as_of), started_at)
     deliveries = SqlAlchemyDeliveryRepository(session)
     for campaign in campaigns:
         line_id = session.scalars(

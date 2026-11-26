@@ -35,6 +35,11 @@ class MonthlyReviewTransaction(ABC):
         """The flights the campaign period holds: all, the ones ended by `as_of` and the ones a closing froze."""
 
     @abstractmethod
+    def dsps_without_the_months_last_day(self, period_id: int, year: int, month: int) -> list[str]:
+        """The DSPs, by name, of the lines of the campaign period's flights that have no succeeded ingestion batch whose
+        window includes the month's last day. Empty when the campaign can be reviewed."""
+
+    @abstractmethod
     def latest_event(self, period_id: int) -> ReviewEvent | None: ...
 
     @abstractmethod

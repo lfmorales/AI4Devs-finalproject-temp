@@ -1,8 +1,9 @@
 """A month still running through the database and the API: four real rows and a line without a price.
 
 The windows are moved so that one `as_of` serves every row: a row's flight starts `days_served` days before it, so the
-contract days elapsed are the days the sheet says were served, and ends `days_oc` days after its start. The month is
-closed for what has ended and the rest is read as it stands.
+contract days elapsed are the days the sheet says were served, and ends `days_oc` days after its start. Closing the
+month is refused while a flight of it runs (committed-billing-and-review), so every row is read as it stands: the ended
+ones pending close and the rest running.
 """
 
 from datetime import date, timedelta
@@ -10,6 +11,9 @@ from decimal import Decimal
 
 import pytest
 
+from sqlalchemy import func, select
+
+from app.infrastructure.persistence.models.margin import AppliedRateRecord
 from app.presentation.dependencies import providers
 from tests.acceptance.running_month_sheet import (
     SHEET_PATH,
@@ -90,8 +94,9 @@ def month(client_for_roles, test_db_session, chosen):
     # A platform rate other than the system one, so that ignoring the line override would show.
     create(SYNTHETIC_NAME, date(2026, 10, 1), date(2026, 10, 31), 500_000, "0.00", 400_000, Decimal("120.00"), "2.50", None)
 
-    closed = finance.post("/margin/closings", json={"year": 2026, "month": 10}).json()
-    return finance, closed
+    test_db_session.commit()  # the refused closing rolls back what was only flushed
+    refused = finance.post("/margin/closings", json={"year": 2026, "month": 10})
+    return finance, refused
 
 
 def _flight_of(body: dict, name: str) -> tuple[dict, dict, dict]:
@@ -101,13 +106,19 @@ def _flight_of(body: dict, name: str) -> tuple[dict, dict, dict]:
     return campaign, line, flight
 
 
-def test_only_the_flights_that_have_ended_are_closed(month, chosen):
-    _, closed = month
+def test_closing_the_month_with_running_flights_is_refused_naming_them_and_writes_nothing(
+    month, chosen, test_db_session
+):
+    _, refused = month
 
-    closed_count = sum(1 for r in chosen.values() if r.is_closed)
-    assert closed == {
-        "year": 2026, "month": 10, "closed": closed_count, "already_closed": 0, "closings": 1 if closed_count else 0,
-    }
+    assert (refused.status_code, refused.json()["code"]) == (409, "month_not_reviewed")
+    message = refused.json()["message"]
+    assert message.startswith("2026-10 has campaigns not reviewed: ")
+    for label, row in chosen.items():
+        state = "pending review" if row.is_closed else "in progress"
+        assert f"{row.campaign} ({state})" in message, label
+    assert f"{SYNTHETIC_NAME} (in progress)" in message
+    assert test_db_session.scalar(select(func.count()).select_from(AppliedRateRecord)) == 0
 
 
 def test_each_real_row_reads_back_with_the_amounts_of_the_domain_and_of_the_sheet(month, chosen):
@@ -132,8 +143,8 @@ def test_the_state_and_the_provisional_flag_follow_the_days(month, chosen):
 
     for label, row in chosen.items():
         _, _, flight = _flight_of(body, row.campaign)
-        assert flight["state"] == ("closed" if row.is_closed else "running"), label
-        assert flight["provisional"] is (not row.is_closed), label
+        assert flight["state"] == ("pending_close" if row.is_closed else "running"), label
+        assert flight["provisional"] is True, label
 
 
 def test_the_percentage_matches_the_sheet_billed_to_date(month, chosen):

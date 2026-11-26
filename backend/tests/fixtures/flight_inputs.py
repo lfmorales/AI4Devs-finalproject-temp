@@ -70,6 +70,7 @@ def flight_facts(
     carryover: int = 0,
     carryover_billable: bool = False,
     adjustment: BillingAdjustment | None = None,
+    adjustment_id: int | None = None,
 ) -> FlightFacts:
     return FlightFacts(
         flight_id=flight_id, campaign_line_id=campaign_line_id, campaign_id=campaign_id, flight_start=flight_start,
@@ -80,4 +81,5 @@ def flight_facts(
         delivered=Decimal(delivered_impressions) if delivered is None else delivered,
         volume_commitment=volume_commitment, reported_revenue=reported_revenue, buyer_spend=buyer_spend,
         data_cost=data_cost, carryover=carryover, carryover_billable=carryover_billable, adjustment=adjustment,
+        adjustment_id=adjustment_id,
     )

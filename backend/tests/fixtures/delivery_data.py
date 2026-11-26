@@ -7,7 +7,7 @@ identity sequences, which collides with rows other infrastructure tests commit f
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
 from app.infrastructure.persistence.models.campaign import (
@@ -127,20 +127,35 @@ def insert_campaign_line(
 def replace_flights(session: Session, campaign_line_id: int, windows: list[tuple[date, date]]) -> list[int]:
     """Give a line exactly these flights, one per window, each in a period of its own month; return the period ids.
 
-    A window must sit inside one calendar month. The periods are created under the line's campaign.
+    A window must sit inside one calendar month. As the registration does, a campaign has one period per month: a
+    window reuses the campaign's period of its month, and a period of the campaign left without any flight is removed.
+    Only a second window of the line in the same month gets a period of its own, since a line has one flight per period.
     """
     from sqlalchemy import delete
 
     session.execute(delete(CampaignLinePeriodRecord).where(CampaignLinePeriodRecord.campaign_line_id == campaign_line_id))
     campaign_id = campaign_id_of(session, campaign_line_id)
+    session.execute(delete(CampaignPeriodRecord).where(
+        CampaignPeriodRecord.campaign_id == campaign_id,
+        ~exists().where(CampaignLinePeriodRecord.campaign_period_id == CampaignPeriodRecord.id),
+    ))
     period_ids: list[int] = []
     for flight_start, flight_end in windows:
-        period = CampaignPeriodRecord(
-            campaign_id=campaign_id, period_year=flight_start.year, period_month=flight_start.month,
-            period_start=flight_start, period_end=flight_end,
-        )
-        session.add(period)
-        session.flush()
+        period = session.scalars(
+            select(CampaignPeriodRecord).where(
+                CampaignPeriodRecord.campaign_id == campaign_id,
+                CampaignPeriodRecord.period_year == flight_start.year,
+                CampaignPeriodRecord.period_month == flight_start.month,
+                CampaignPeriodRecord.id.not_in(period_ids),
+            ).order_by(CampaignPeriodRecord.id)
+        ).first()
+        if period is None:
+            period = CampaignPeriodRecord(
+                campaign_id=campaign_id, period_year=flight_start.year, period_month=flight_start.month,
+                period_start=flight_start, period_end=flight_end,
+            )
+            session.add(period)
+            session.flush()
         session.add(CampaignLinePeriodRecord(
             campaign_line_id=campaign_line_id, campaign_period_id=period.id,
             flight_start=flight_start, flight_end=flight_end, contracted_impressions=CONTRACTED_IMPRESSIONS,

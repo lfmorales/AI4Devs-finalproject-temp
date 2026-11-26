@@ -57,12 +57,14 @@ from app.domain.exceptions import (
     LastActiveOperationsUserError,
     MissingRoleError,
     MonthDeliveryNotLoadedError,
+    MonthNotReviewedError,
     PreviousMonthOpenError,
     RebateRuleError,
     SystemPlatformRateMissingError,
     UnregisteredUserError,
     UserNotFoundError,
 )
+from app.domain.value_objects.review import ReviewState
 from app.presentation.schemas.errors import ErrorResponse
 
 
@@ -208,10 +210,25 @@ async def _month_delivery_not_loaded_handler(request: Request, error: Exception)
         code="month_delivery_not_loaded",
         message=(
             f"The delivery of {error.year}-{error.month:02d} from {error.dsp_name} is not loaded up to its last day. "
-            "Load it, then close the month."
+            f"Load it, then {error.next_step}."
         ),
     )
     return JSONResponse(status_code=409, content=body.model_dump())
+
+
+_REVIEW_STATE_LABELS = {ReviewState.IN_PROGRESS: "in progress", ReviewState.PENDING_REVIEW: "pending review"}
+
+
+async def _month_not_reviewed_handler(request: Request, error: Exception) -> JSONResponse:
+    """Names the month and each campaign that blocks the closing with its state: a name and a state, never a figure."""
+    assert isinstance(error, MonthNotReviewedError)
+    listed = "; ".join(f"{name} ({_REVIEW_STATE_LABELS[state]})" for name, state in error.campaigns)
+    body = ErrorResponse(
+        code="month_not_reviewed",
+        message=f"{error.year}-{error.month:02d} has campaigns not reviewed: {listed}. Review them, then close the month.",
+    )
+    return JSONResponse(status_code=409, content=body.model_dump())
+
 
 
 # Each carry-over rule has its own status and code. The message is fixed, except the shortfall, which is the volume the
@@ -329,6 +346,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         app.add_exception_handler(exception_type, _handler_for(mapping))
     app.add_exception_handler(PreviousMonthOpenError, _previous_month_open_handler)
     app.add_exception_handler(MonthDeliveryNotLoadedError, _month_delivery_not_loaded_handler)
+    app.add_exception_handler(MonthNotReviewedError, _month_not_reviewed_handler)
     app.add_exception_handler(RebateRuleError, _rebate_rule_handler)
     app.add_exception_handler(CarryoverError, _carryover_handler)
     app.add_exception_handler(BillingAdjustmentError, _billing_adjustment_handler)

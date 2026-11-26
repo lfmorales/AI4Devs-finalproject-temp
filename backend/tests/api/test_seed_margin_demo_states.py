@@ -16,6 +16,7 @@ from scripts.seed_margin_demo import (
     RUNNING_NAME,
     main,
 )
+from tests.fixtures.margin_data import make_month_closable
 
 TODAY = date(2026, 10, 28)  # as_of is 27 October
 
@@ -23,6 +24,8 @@ TODAY = date(2026, 10, 28)  # as_of is 27 October
 @pytest.fixture
 def demo(client_for_roles, test_db_session):
     assert main([], out=lambda line: None, session_factory=lambda: test_db_session, today=TODAY) == 0
+    # Its September campaigns are reviewed, as a closing requires; the last day must come from the seed's own batches.
+    make_month_closable(test_db_session, 2026, 9, None, TODAY, load_last_day=False)
     client = client_for_roles("finance")
     client.app.dependency_overrides[providers.get_today] = lambda: TODAY
     return client
