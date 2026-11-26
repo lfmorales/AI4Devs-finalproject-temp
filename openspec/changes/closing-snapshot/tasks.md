@@ -63,7 +63,7 @@
 
 ## 10. Review and Update Existing Unit Tests (MANDATORY)
 
-- [ ] 10.1 Review the tests whose meaning changed and record each in the report of task 11: in `test_margin_closing_service.py` the DOOH closing (`:338`), the restatement (`:485`), the pending-close figures (`:276`) and the failure halfway (`:204`); `test_margin_coherence.py:60` and `:103`; `test_margin_contracted_revenue.py:59` and `:130`; `test_margin_endpoint.py:81`; `test_margin_zero_sale.py:68`; the exact closing responses in the acceptance and endpoint tests; the floating-point check of `test_margin_schema.py:325`, which adds the three tables; the margin builders of `frontend/tests/helpers/margin-data.ts` and the types of `e2e/support/margin.ts`
+- [x] 10.1 Review the tests whose meaning changed and record each in `docs/reports/YYYY-MM-DD-step-10-test-review.md`, as in equativ-deals: in `test_margin_closing_service.py` the DOOH closing (`:338`), the restatement (`:485`), the pending-close figures (`:276`) and the failure halfway (`:204`); `test_margin_coherence.py:60` and `:103`; `test_margin_contracted_revenue.py:59` and `:130`; `test_margin_endpoint.py:81`; `test_margin_zero_sale.py:68`; the exact closing responses in the acceptance and endpoint tests; the floating-point check of `test_margin_schema.py:325`, which adds the three tables; the margin builders of `frontend/tests/helpers/margin-data.ts` and the types of `e2e/support/margin.ts`
 
 ## 11. Run Unit Tests and Verify Database State (MANDATORY)
 

@@ -47,7 +47,7 @@ async function openDialog(user: ReturnType<typeof userEvent.setup>) {
 
 describe("the close-month button", () => {
   it("is off until a year and a month are chosen, and says why", async () => {
-    installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 0, already_closed: 0 })));
+    installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 0, already_closed: 0, closings: 0 })));
     const user = userEvent.setup();
 
     renderAuthenticated(<MarginPage />);
@@ -63,7 +63,7 @@ describe("the close-month button", () => {
   });
 
   it("opens the shared native dialog that explains what closing freezes and that it cannot be undone", async () => {
-    const requests = installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 3, already_closed: 0 })));
+    const requests = installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 3, already_closed: 0, closings: 1 })));
     const user = userEvent.setup();
 
     renderAuthenticated(<MarginPage />);
@@ -81,7 +81,7 @@ describe("the close-month button", () => {
   });
 
   it("sends nothing when the dialog is cancelled, and closes it", async () => {
-    const requests = installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 3, already_closed: 0 })));
+    const requests = installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 3, already_closed: 0, closings: 1 })));
     const user = userEvent.setup();
 
     renderAuthenticated(<MarginPage />);
@@ -93,7 +93,7 @@ describe("the close-month button", () => {
   });
 
   it("closes the month on confirmation, tells how many flights were closed and reads the margin again", async () => {
-    const requests = installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 3, already_closed: 0 })));
+    const requests = installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 3, already_closed: 0, closings: 1 })));
     const user = userEvent.setup();
 
     renderAuthenticated(<MarginPage />);
@@ -110,7 +110,7 @@ describe("the close-month button", () => {
   });
 
   it("says 'Se cerró 1 flight' for a single flight", async () => {
-    installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 1, already_closed: 0 })));
+    installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 1, already_closed: 0, closings: 1 })));
     const user = userEvent.setup();
 
     renderAuthenticated(<MarginPage />);
@@ -118,10 +118,11 @@ describe("the close-month button", () => {
     await user.click(within(dialog).getByRole("button", { name: "Confirmar cierre" }));
 
     expect(await screen.findByText("Se cerró 1 flight de agosto de 2026")).toBeInTheDocument();
+    expect(screen.queryByText(/cierres/)).not.toBeInTheDocument();
   });
 
   it("says that there are no ended flights when none was closed", async () => {
-    installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 0, already_closed: 0 })));
+    installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 0, already_closed: 0, closings: 0 })));
     const user = userEvent.setup();
 
     renderAuthenticated(<MarginPage />);
@@ -133,7 +134,7 @@ describe("the close-month button", () => {
   });
 
   it("mentions the flights that were already closed", async () => {
-    installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 0, already_closed: 4 })));
+    installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 0, already_closed: 4, closings: 1 })));
     const user = userEvent.setup();
 
     renderAuthenticated(<MarginPage />);
@@ -182,7 +183,7 @@ describe("the close-month button", () => {
     expect(within(dialog).getByRole("button", { name: "Cancelar" })).toBeDisabled();
     await user.click(confirm);
     expect(requests.filter((request) => request.method === "POST")).toHaveLength(1);
-    answer(reply(200, { year: 2026, month: 8, closed: 2, already_closed: 0 }));
+    answer(reply(200, { year: 2026, month: 8, closed: 2, already_closed: 0, closings: 1 }));
     expect(await screen.findByText("Se cerraron 2 flights de agosto de 2026")).toBeInTheDocument();
   });
 });
@@ -190,7 +191,7 @@ describe("the close-month button", () => {
 describe("the availability of the close-month button", () => {
   const HELP = "No hay flights pendientes de cierre en este mes";
 
-  async function showAugust(margins: FlightState[][], closing: () => FakeReply = () => reply(200, { year: 2026, month: 8, closed: 1, already_closed: 0 })) {
+  async function showAugust(margins: FlightState[][], closing: () => FakeReply = () => reply(200, { year: 2026, month: 8, closed: 1, already_closed: 0, closings: 1 })) {
     let reads = 0;
     const answer = () => reply(200, marginWith(...(margins[Math.min(reads++, margins.length - 1)] ?? [])));
     installRoutes({ "GET /margin": () => reply(200, marginWith("pending_close")), "GET /margin?year=2026&month=8": answer, "POST /margin/closings": closing });

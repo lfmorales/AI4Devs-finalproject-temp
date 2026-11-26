@@ -324,7 +324,10 @@ def test_the_ladder_step_and_zero_reason_are_constrained(rolled_back_session, id
 
 def test_the_columns_of_the_margin_tables_hold_no_floating_point(rolled_back_session):
     inspector = inspect(rolled_back_session.get_bind())
-    for table in ("rebate_schedules", "rebate_brackets", "platform_rate_settings", "applied_rates", "applied_rate_brackets"):
+    for table in (
+        "rebate_schedules", "rebate_brackets", "platform_rate_settings", "applied_rates", "applied_rate_brackets",
+        "month_closings", "month_closing_batches", "closed_flight_snapshots",
+    ):
         for column in inspector.get_columns(table):
             assert column["type"].__class__.__name__ not in {"FLOAT", "REAL", "DOUBLE_PRECISION"}, (table, column["name"])
 
