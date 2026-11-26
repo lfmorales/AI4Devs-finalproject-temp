@@ -13,7 +13,7 @@ from app.infrastructure.persistence.models.delivery import (
     IngestionExceptionRecord,
 )
 from scripts.run_ingestion import main
-from tests.scripts.test_run_ingestion import EquativScenario, FailsAfterTwoRows, Scenario
+from tests.scripts.test_run_ingestion import EquativScenario, FailsAfterTwoRows, Scenario, close_month
 
 # 12:00 UTC on 10 August is the 10th in Madrid, so the last day a range may end on is the 9th.
 NOW = datetime(2026, 8, 10, 12, 0, tzinfo=UTC)
@@ -166,3 +166,22 @@ def test_a_custom_range_of_equativ_is_one_report_in_utc_days_and_skips_the_absen
     assert (batch.window_start, batch.window_end, batch.dsp_id) == (date(2026, 11, 1), date(2026, 11, 23), equativ.equativ_id)
     assert equativ.missing_delivery() == []
     assert "absences: skipped, custom range" in equativ.output
+
+
+
+def test_a_custom_range_counts_its_days_in_a_closed_october_and_ingests_them(scenario: Scenario) -> None:
+    close_month(scenario.session, 2026, 10)
+
+    code = _range(scenario, *_window("2026-10-15", "2026-11-14"), now=datetime(2026, 11, 20, 12, 0, tzinfo=UTC))
+
+    assert code == 0
+    assert "closed_month_days: 17" in scenario.output
+    assert scenario.client.requested_ranges == [DeliveryDateRange(date(2026, 10, 15), date(2026, 11, 14))]
+    batch = scenario.session.scalars(select(IngestionBatchRecord)).one()
+    assert (batch.window_start, batch.window_end, batch.status) == (date(2026, 10, 15), date(2026, 11, 14), "succeeded")
+
+
+def test_a_custom_range_with_no_closed_month_counts_none(scenario: Scenario) -> None:
+    assert _range(scenario, *_window("2026-08-03", "2026-08-09")) == 0
+
+    assert "closed_month_days: 0" in scenario.output

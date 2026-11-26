@@ -9,7 +9,9 @@ per DSP stops two runs of one DSP overlapping, while runs of different DSPs may.
 Exit codes: 0 the batch succeeded; 1 it failed; 2 another run holds the lock; 3 configuration is missing.
 
 It prints states and counts only: never an identifier, a name, an amount, a token or the text of a DSP error;
-a failure is summarised by the name of its error class.
+a failure is summarised by the name of its error class. A succeeded run also prints `closed_month_days`, how many days
+of its window fall in a month that holds a closing header: those days are ingested like any other, and a closed
+flight only gets the warning that its delivery changed.
 
 A custom range, --from YYYY-MM-DD --to YYYY-MM-DD, replaces the rolling window with one request for the whole
 range (at most 31 days, ending no later than yesterday in the configured zone). It uses the same service and the
@@ -33,6 +35,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.services.delivery_ingestion_service import DeliveryIngestionService
 from app.domain.entities.ingestion_batch import IngestionRoute
+from app.domain.services.closed_months import days_in_closed_months
 from app.domain.services.dsp_delivery_client import DspDeliveryClient
 from app.domain.services.local_calendar import local_today, utc_now
 from app.domain.value_objects.delivery import DeliveryDateRange
@@ -40,6 +43,7 @@ from app.infrastructure.dsp.adform_delivery_client import AdformDeliveryClient
 from app.infrastructure.dsp.equativ_delivery_client import EquativDeliveryClient
 from app.infrastructure.persistence.database import build_engine, build_session_factory
 from app.infrastructure.persistence.models.delivery import IngestionExceptionRecord
+from app.infrastructure.persistence.models.margin import MonthClosingRecord
 from app.infrastructure.persistence.models.masters import DSPRecord
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
@@ -233,6 +237,7 @@ def _run(
         result = service.run(dsp_id, today, route=IngestionRoute.API, window=custom_window)
         absences = None if absence_skipped else service.detect_missing_delivery(dsp_id, today, result.batch_id)
         new_exceptions = _new_unmatched_exceptions(session_factory, result.batch_id)
+        closed_month_days = days_in_closed_months(result.window, _closed_months(session_factory, result.window))
     except Exception as error:  # noqa: BLE001 - the class name is all that is reported
         out("status: failed")
         out(f"error: {type(error).__name__}")
@@ -246,6 +251,7 @@ def _run(
     out(f"mapped_lines: {result.mapped_line_count}")
     out(f"skipped_lines: {len(result.skipped_line_ids)}")
     out(f"absences: {absences}" if absences is not None else f"absences: skipped, {absence_skipped}")
+    out(f"closed_month_days: {closed_month_days}")
     return EXIT_SUCCEEDED
 
 
@@ -270,6 +276,23 @@ def _new_unmatched_exceptions(session_factory: Callable[[], Session], batch_id: 
                 IngestionExceptionRecord.exception_type == "unmatched_delivery",
             )
         ) or 0)
+    finally:
+        session.close()
+
+
+def _closed_months(session_factory: Callable[[], Session], window: DeliveryDateRange) -> set[tuple[int, int]]:
+    """The (year, month) of the window's years that hold at least one closing header, read after the run. Only the
+    days inside the window are counted from them."""
+    session = session_factory()
+    try:
+        return {
+            (year, month)
+            for year, month in session.execute(
+                select(MonthClosingRecord.period_year, MonthClosingRecord.period_month)
+                .where(MonthClosingRecord.period_year.between(window.start.year, window.end.year))
+                .distinct()
+            )
+        }
     finally:
         session.close()
 

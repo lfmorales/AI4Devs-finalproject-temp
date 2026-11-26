@@ -20,12 +20,14 @@ from app.infrastructure.persistence.models.delivery import (
 from app.infrastructure.dsp.equativ_delivery_client import EquativDeliveryClient
 from app.infrastructure.persistence.models.campaign import CampaignLineRecord
 from app.infrastructure.persistence.models.dsp_catalog import DspCatalogLineRecord
+from app.infrastructure.persistence.models.margin import MonthClosingRecord
 from app.infrastructure.persistence.models.masters import ChannelRecord, DSPRecord
 from scripts.run_ingestion import NIGHTLY_INGESTION_LOCK_KEY, main
 from tests.fixtures.delivery_data import (
     add_line_to_campaign,
     insert_campaign_line,
     insert_mapping,
+    insert_user,
     period_of_line,
     replace_flights,
 )
@@ -73,7 +75,13 @@ def lock_is_free(engine: Engine, dsp_id: int) -> bool:
 class Scenario:
     """An Adform DSP, a mapped line that delivers and a mapped line whose only flight ended with no delivery."""
 
-    def __init__(self, session, engine, rows=None, client_class=InMemoryDspDeliveryClient):
+    def __init__(
+        self,
+        session: Session,
+        engine: Engine,
+        rows: list[DspDeliveryRow] | None = None,
+        client_class: type[InMemoryDspDeliveryClient] = InMemoryDspDeliveryClient,
+    ) -> None:
         self.session = session
         self.engine = engine
         dsp = DSPRecord(name="Adform", is_active=True)
@@ -524,3 +532,14 @@ def test_a_deal_that_never_receives_bids_is_a_line_without_delivery(
     assert list(session.scalars(
         select(DspCatalogLineRecord.external_campaign_id).where(DspCatalogLineRecord.dsp_id == equativ.id)
     )) == [DELIVERING_PACKAGE]
+
+
+
+def close_month(session: Session, year: int, month: int) -> None:
+    """Close a month as far as the command can tell: it holds a closing header. Committed, like the scenario."""
+    user_id = insert_user(session, f"closer-{year}-{month}@example.com")
+    session.add(MonthClosingRecord(
+        period_year=year, period_month=month, closed_at=datetime(2026, 12, 1, 8, 0), closed_by=user_id,
+        as_of=date(year, month, 28),
+    ))
+    session.commit()

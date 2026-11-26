@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, func, select, text
 from sqlalchemy.orm import Session
 
 from app.domain.exceptions import DspUnreachableError
@@ -15,7 +15,9 @@ from scripts.run_ingestion import main
 from tests.fixtures.delivery_rows import catalog_info, dsp_row
 from tests.fixtures.dsp_delivery_client import InMemoryDspDeliveryClient
 from tests.fixtures.fake_equativ import REPORT_ID, FakeEquativ, package_row
-from tests.scripts.test_run_ingestion import EquativScenario, Scenario, held_lock
+from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord
+from tests.fixtures.delivery_data import insert_campaign_line, insert_mapping
+from tests.scripts.test_run_ingestion import EquativScenario, Scenario, close_month, held_lock
 
 D5 = date(2026, 8, 5)
 SECRET_ID, SECRET_VALUE = "synthetic-adform-id-5150", "synthetic-adform-secret-6160"
@@ -33,7 +35,8 @@ VALUES = [
 ALLOWED_LINE = re.compile(
     r"^(status: (succeeded|failed|not configured|another run is in progress)"
     r"|error: [A-Za-z]+Error"
-    r"|(rows_read|ignored_rows|zero_unmatched_rows|new_exceptions|mapped_lines|skipped_lines|absences): \d+"
+    r"|(rows_read|ignored_rows|zero_unmatched_rows|new_exceptions|mapped_lines|skipped_lines|absences"
+    r"|closed_month_days): \d+"
     r"|absences: skipped, (custom range|before 06:00 UTC))$"
 )
 
@@ -189,3 +192,101 @@ def test_a_failed_equativ_run_prints_the_class_of_the_error_and_not_the_report(
 
     _assert_no_equativ_value(equativ.output)
     assert equativ.output == ["status: failed", "error: DspReportFailedError"]
+
+
+
+# --- closed_month_days: the days of the window in a closed month, counted and still ingested ----------------------
+
+NOVEMBER_KEY = ExternalLineKey("5553001", "5553002")
+
+
+def _november_scenario(session: Session, engine: Engine) -> tuple[Scenario, int]:
+    """A line from November to December that delivered on 28 November and on 1 December."""
+    scenario = Scenario(session, engine)
+    line_id = insert_campaign_line(session, "November line", date(2026, 11, 1), date(2026, 12, 31), dsp_id=scenario.dsp_id)
+    insert_mapping(session, line_id, scenario.dsp_id, NOVEMBER_KEY.external_campaign_id,
+                   NOVEMBER_KEY.external_line_item_id, validated_at=datetime(2026, 11, 1, 9, 0))
+    session.commit()
+    return scenario, line_id
+
+
+def _november_client(impressions: int) -> InMemoryDspDeliveryClient:
+    return InMemoryDspDeliveryClient([
+        dsp_row(date(2026, 11, 28), NOVEMBER_KEY, impressions=impressions, media_cost=Decimal("100.000000")),
+        dsp_row(date(2026, 12, 1), NOVEMBER_KEY, impressions=impressions, media_cost=Decimal("100.000000")),
+    ])
+
+
+def _stored(session: Session, line_id: int) -> list[tuple[date, int, Decimal]]:
+    return [
+        (row.delivery_date, row.impressions, row.media_cost)
+        for row in session.scalars(
+            select(DailyDeliveryRecord).where(DailyDeliveryRecord.campaign_line_id == line_id)
+            .order_by(DailyDeliveryRecord.delivery_date)
+        )
+    ]
+
+
+def test_a_run_whose_window_falls_in_a_closed_november_counts_five_days_and_still_ingests_them(
+    rolled_back_session: Session, test_engine: Engine
+) -> None:
+    scenario, line_id = _november_scenario(rolled_back_session, test_engine)
+    close_month(rolled_back_session, 2026, 11)
+
+    # 3 December: the window is 26 November to 2 December, five of its days in November.
+    code = main(
+        ["--date", "2026-12-03"], out=scenario.output.append, engine=scenario.engine,
+        session_factory=lambda: scenario.session, client=_november_client(1_000),
+    )
+
+    assert code == 0
+    _assert_clean(scenario.output)
+    assert "closed_month_days: 5" in scenario.output
+    assert _stored(rolled_back_session, line_id) == [
+        (date(2026, 11, 28), 1_000, Decimal("100.000000")), (date(2026, 12, 1), 1_000, Decimal("100.000000")),
+    ]
+
+
+def test_with_november_open_the_same_window_counts_none(rolled_back_session: Session, test_engine: Engine) -> None:
+    scenario, _ = _november_scenario(rolled_back_session, test_engine)
+    close_month(rolled_back_session, 2026, 10)  # a closed month outside the window counts nothing
+
+    code = main(
+        ["--date", "2026-12-03"], out=scenario.output.append, engine=scenario.engine,
+        session_factory=lambda: scenario.session, client=_november_client(1_000),
+    )
+
+    assert code == 0
+    assert "closed_month_days: 0" in scenario.output
+
+
+def test_a_closed_month_changes_nothing_the_run_stores(rolled_back_session: Session, test_engine: Engine) -> None:
+    scenario, line_id = _november_scenario(rolled_back_session, test_engine)
+
+    def run(impressions: int) -> list[tuple[date, int, Decimal]]:
+        assert main(
+            ["--date", "2026-12-03"], out=scenario.output.append, engine=scenario.engine,
+            session_factory=lambda: scenario.session, client=_november_client(impressions),
+        ) == 0
+        return _stored(rolled_back_session, line_id)
+
+    open_month = run(2_000)
+    close_month(rolled_back_session, 2026, 11)
+    restated = run(3_000)
+    rows_after = rolled_back_session.scalar(select(func.count()).select_from(DailyDeliveryRecord))
+    again_with_the_same_figures = run(3_000)
+
+    assert [impressions for _, impressions, _ in open_month] == [2_000, 2_000]
+    assert [impressions for _, impressions, _ in restated] == [3_000, 3_000]  # the closed day is replaced too
+    assert again_with_the_same_figures == restated
+    assert rolled_back_session.scalar(select(func.count()).select_from(DailyDeliveryRecord)) == rows_after
+
+
+def test_a_failed_run_prints_no_count_of_closed_days(rolled_back_session: Session, test_engine: Engine) -> None:
+    scenario = _scenario(rolled_back_session, test_engine, client_class=FailsWithDetail)
+    close_month(rolled_back_session, 2026, 8)
+
+    assert scenario.run() == 1
+
+    assert scenario.output == ["status: failed", "error: DspUnreachableError"]
+    assert not any(line.startswith("closed_month_days") for line in scenario.output)

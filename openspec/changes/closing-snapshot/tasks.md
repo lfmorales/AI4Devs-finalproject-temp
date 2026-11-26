@@ -49,8 +49,8 @@
 
 ## 7. The Command Reports the Days in Closed Months
 
-- [ ] 7.1 Write failing tests in `backend/tests/scripts/test_run_ingestion_output.py` and `test_run_ingestion_range.py`: a succeeded run prints `closed_month_days` with 5 for the window 2026-11-26 to 2026-12-02 and November closed, 0 with November open, 17 for the range 2026-10-15 to 2026-11-14 with October closed; the days of a closed month are still ingested; a failed run prints no count
-- [ ] 7.2 Read the closed months of the window in `scripts/run_ingestion.py` after a succeeded run, print the count and update the module docstring; verify 7.1 and the script tests
+- [x] 7.1 Write failing tests in `backend/tests/scripts/test_run_ingestion_output.py` and `test_run_ingestion_range.py`: a succeeded run prints `closed_month_days` with 5 for the window 2026-11-26 to 2026-12-02 and November closed, 0 with November open, 17 for the range 2026-10-15 to 2026-11-14 with October closed; the days of a closed month are still ingested; a failed run prints no count
+- [x] 7.2 Read the closed months of the window in `scripts/run_ingestion.py` after a succeeded run, print the count and update the module docstring; verify 7.1 and the script tests
 
 ## 8. Screens
 
