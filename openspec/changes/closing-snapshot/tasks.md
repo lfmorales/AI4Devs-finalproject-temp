@@ -74,10 +74,10 @@
 
 ## 12. Manual Endpoint Testing with curl (MANDATORY - AGENT MUST EXECUTE)
 
-- [ ] 12.1 With the stack reset by `e2e/scripts/reset-data.sh` and a test-issuer token, `POST /api/margin/closings` for the demo's pending month as `finance` and check 200 with `closings` 1, and again with `closed` 0 and `closings` 1; as `trading` check 403 and that nothing is written
-- [ ] 12.2 `GET /api/margin` as `operations` and check that the closed flights carry `delivery_changed` false and a `delivery_change` of zeros; change one closed flight's delivery in the database and check `delivery_changed` true, its differences, its current margin, unchanged amounts and the counts; as `business` check 403
-- [ ] 12.3 If the Adform credentials are configured in the local `.env`, run `python -m scripts.run_ingestion --from <first day of the closed month> --to <a day of it>` and check `closed_month_days` and exit 0; otherwise record in the report that the count is covered by task 7.1 and no real DSP was called
-- [ ] 12.4 Restore the development database with `e2e/scripts/reset-data.sh` (a closing cannot be undone), check the baseline of 11.1, and document every command and response in `docs/reports/YYYY-MM-DD-step-12-curl.md` with no identifier, name, amount or token of a real DSP
+- [x] 12.1 With the stack reset by `e2e/scripts/reset-data.sh` and a test-issuer token, `POST /api/margin/closings` for the demo's pending month as `finance` and check 200 with `closings` 1, and again with `closed` 0 and `closings` 1; as `trading` check 403 and that nothing is written
+- [x] 12.2 `GET /api/margin` as `operations` and check that the closed flights carry `delivery_changed` false and a `delivery_change` of zeros; change one closed flight's delivery in the database and check `delivery_changed` true, its differences, its current margin, unchanged amounts and the counts; as `business` check 403
+- [x] 12.3 If the Adform credentials are configured in the local `.env`, run `python -m scripts.run_ingestion --from <first day of the closed month> --to <a day of it>` and check `closed_month_days` and exit 0; otherwise record in the report that the count is covered by task 7.1 and no real DSP was called
+- [x] 12.4 Restore the development database with `e2e/scripts/reset-data.sh` (a closing cannot be undone), check the baseline of 11.1, and document every command and response in `docs/reports/YYYY-MM-DD-step-12-curl.md` with no identifier, name, amount or token of a real DSP
 
 ## 13. E2E Testing with Playwright (MANDATORY - AGENT MUST EXECUTE)
 
