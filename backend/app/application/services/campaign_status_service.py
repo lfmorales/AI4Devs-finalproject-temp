@@ -3,6 +3,7 @@ from datetime import date, timedelta
 
 from app.domain.entities.campaign_status import CampaignStatusRow, FlightDeliveryFigures
 from app.domain.repositories.campaign_status_repository import CampaignStatusRepository
+from app.domain.services.carryover import delivery_target
 from app.domain.services.missing_data import has_missing_data
 from app.domain.services.pacing import calculate_pacing, pacing_flag
 
@@ -26,11 +27,11 @@ class CampaignStatusService:
 
     @staticmethod
     def _to_row(figures: FlightDeliveryFigures, day_before: date, missing_data_flag: bool) -> CampaignStatusRow:
-        pacing = calculate_pacing(
-            figures.contracted_impressions, figures.flight_start, figures.flight_end, day_before,
-            figures.delivered,
-        )
-        ratio = float(figures.delivered) / figures.contracted_impressions if figures.contracted_impressions else None
+        # The pacing and the ratio are measured against what the flight has to deliver: its contracted volume plus the
+        # volume carried to it, whether or not that volume is billable.
+        target = delivery_target(figures.contracted_impressions, figures.carryover)
+        pacing = calculate_pacing(target, figures.flight_start, figures.flight_end, day_before, figures.delivered)
+        ratio = float(figures.delivered) / target if target else None
         return CampaignStatusRow(
             campaign_id=figures.campaign_id, campaign_name=figures.campaign_name, agency_id=figures.agency_id,
             agency_name=figures.agency_name, line_number=figures.line_number,
@@ -40,4 +41,5 @@ class CampaignStatusService:
             delivered=figures.delivered, delivered_impressions=figures.delivered_impressions,
             delivery_ratio=ratio, pacing=pacing, pacing_flag=pacing_flag(pacing, figures.volume_commitment),
             missing_data_flag=missing_data_flag, volume_commitment=figures.volume_commitment,
+            carryover=figures.carryover, delivery_target=target, flight_id=figures.flight_id,
         )

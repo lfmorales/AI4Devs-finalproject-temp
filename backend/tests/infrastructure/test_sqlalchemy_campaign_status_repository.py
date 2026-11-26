@@ -1,13 +1,15 @@
 """The flight-level aggregate behind the daily status, against PostgreSQL: one query, delivery summed in the database."""
 
-from datetime import date
+import dataclasses
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import event, update
+from sqlalchemy import event, select, update
 from sqlalchemy.orm import Session
 
+from app.domain.entities.campaign_status import FlightDeliveryFigures
 from app.domain.value_objects.volume_commitment import VolumeCommitment
-from app.infrastructure.persistence.models.campaign import CampaignLineRecord
+from app.infrastructure.persistence.models.campaign import CampaignLinePeriodRecord, CampaignLineRecord
 from app.infrastructure.persistence.repositories.sqlalchemy_campaign_status_repository import (
     SqlAlchemyCampaignStatusRepository,
 )
@@ -17,6 +19,7 @@ from tests.fixtures.delivery_data import (
     insert_campaign_line,
     insert_delivery,
     insert_ingestion_batch,
+    insert_user,
     replace_flights,
 )
 
@@ -205,6 +208,39 @@ def test_a_dooh_row_with_impressions_and_no_ots_still_sets_the_latest_delivery_d
     assert figures.campaign_latest_delivery_date == date(2026, 8, 10)
     assert figures.delivered == Decimal("500.0000")
     assert figures.delivered_impressions == 12
+
+
+def test_a_figure_carries_the_flight_and_no_carry_over_by_default(rolled_back_session: Session) -> None:
+    line_id = insert_campaign_line(rolled_back_session, campaign_name="Plain")
+    flight_id = rolled_back_session.execute(
+        select(CampaignLinePeriodRecord.id).where(CampaignLinePeriodRecord.campaign_line_id == line_id)
+    ).scalar_one()
+
+    [figures] = _running(rolled_back_session)
+
+    assert (figures.flight_id, figures.carryover) == (flight_id, 0)
+
+
+def test_a_figure_carries_the_carry_over_of_its_flight_and_not_of_the_others(rolled_back_session: Session) -> None:
+    first = insert_campaign_line(rolled_back_session, campaign_name="With carry-over")
+    second = add_line_to_campaign(rolled_back_session, first, 2)
+    user_id = insert_user(rolled_back_session)
+    rolled_back_session.execute(
+        update(CampaignLinePeriodRecord).where(CampaignLinePeriodRecord.campaign_line_id == first).values(
+            carryover=100_000, carryover_reason="Recuperar", carryover_set_by=user_id, carryover_set_at=datetime(2026, 8, 5)
+        )
+    )
+
+    by_line = {figures.line_number: figures for figures in _running(rolled_back_session)}
+
+    assert (by_line[1].carryover, by_line[2].carryover) == (100_000, 0)
+    assert second != first
+
+
+def test_the_billable_flag_and_the_reason_are_not_read_by_the_status(rolled_back_session: Session) -> None:
+    names = {field.name for field in dataclasses.fields(FlightDeliveryFigures)}
+
+    assert not {name for name in names if "billable" in name or "reason" in name or "adjust" in name}
 
 
 def test_each_figure_carries_the_commitment_of_its_line(rolled_back_session: Session) -> None:

@@ -202,3 +202,12 @@ class MonthDeliveryNotLoadedError(DomainError):
 
 class CampaignNotFoundError(DomainError):
     """The campaign named by a request does not exist."""
+
+
+class CarryoverError(DomainError):
+    """A carry-over broke a rule of campaign/carryover. Carries a stable code: `invalid_carryover`,
+    `no_previous_flight`, `previous_flight_not_ended`, `carryover_exceeds_shortfall` or `month_closed`."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code

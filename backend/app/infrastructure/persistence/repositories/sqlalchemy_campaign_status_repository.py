@@ -57,7 +57,7 @@ class SqlAlchemyCampaignStatusRepository(CampaignStatusRepository):
                 CampaignPeriodRecord.period_year, CampaignPeriodRecord.period_month,
                 flight.flight_start, flight.flight_end, flight.contracted_impressions,
                 ChannelRecord.delivery_metric, delivered, delivered_impressions, latest_of_campaign,
-                CampaignLineRecord.volume_commitment,
+                CampaignLineRecord.volume_commitment, flight.carryover, flight.id,
             )
             .select_from(flight)
             .join(CampaignLineRecord, CampaignLineRecord.id == flight.campaign_line_id)
@@ -77,6 +77,7 @@ class SqlAlchemyCampaignStatusRepository(CampaignStatusRepository):
                 *row[:10], contracted_impressions=int(row[10]), delivery_metric=row[11],
                 delivered=Decimal(row[12]), delivered_impressions=int(row[13]),
                 campaign_latest_delivery_date=row[14], volume_commitment=VolumeCommitment(row[15]),
+                carryover=int(row[16]), flight_id=int(row[17]),
             )
             for row in rows
         ]

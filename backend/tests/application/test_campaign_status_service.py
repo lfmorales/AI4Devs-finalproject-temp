@@ -34,6 +34,8 @@ def _figures(
     delivery_metric: str = "impressions",
     delivered_volume: Decimal | None = None,
     volume_commitment: VolumeCommitment = VolumeCommitment.COMMITTED,
+    carryover: int = 0,
+    flight_id: int = 1,
 ) -> FlightDeliveryFigures:
     # A 31-day flight, 10 days elapsed at D-1: 1_000 impressions are expected.
     return FlightDeliveryFigures(
@@ -43,6 +45,7 @@ def _figures(
         delivery_metric=delivery_metric,
         delivered=Decimal(delivered) if delivered_volume is None else delivered_volume,
         delivered_impressions=delivered, campaign_latest_delivery_date=latest, volume_commitment=volume_commitment,
+        carryover=carryover, flight_id=flight_id,
     )
 
 
@@ -62,6 +65,62 @@ def test_a_row_carries_contracted_delivered_ratio_and_pacing():
     assert row.pacing.deviation == 0
     assert row.pacing.days_remaining == 21
     assert row.pacing_flag is False
+
+
+# --- The pacing uses the delivery target: the contracted volume plus the carry-over (campaign/daily-status) -----------
+
+
+def test_the_pacing_expects_the_delivery_target_not_the_contracted_volume() -> None:
+    # 3,100 contracted + 3,100 carried in = 6,200 to deliver over 31 days: 2,000 expected after 10 days.
+    [row] = _rows(_figures(contracted=3_100, carryover=3_100, delivered=1_900))
+
+    assert row.pacing.expected_impressions == 2_000
+    assert row.pacing.deviation == Decimal("-0.05")
+    assert row.pacing_flag is False
+
+
+def test_the_same_delivery_without_the_carry_over_is_far_ahead_and_flagged() -> None:
+    [row] = _rows(_figures(contracted=3_100, carryover=0, delivered=1_900))
+
+    assert row.pacing.expected_impressions == 1_000
+    assert row.pacing.status is PacingStatus.OVER_DELIVERING
+    assert row.pacing_flag is True
+
+
+def test_a_carry_over_makes_a_flight_that_paced_well_fall_behind() -> None:
+    [row] = _rows(_figures(contracted=3_100, carryover=3_100, delivered=1_000))
+
+    assert row.pacing.status is PacingStatus.UNDER_DELIVERING
+    assert row.pacing_flag is True
+
+
+def test_the_ratio_is_the_delivered_volume_over_the_delivery_target() -> None:
+    [row] = _rows(_figures(contracted=3_100, carryover=3_100, delivered=1_550))
+
+    assert row.delivery_ratio == 1_550 / 6_200
+
+
+def test_a_row_carries_the_flight_the_carry_over_and_the_delivery_target_and_keeps_the_contracted_volume() -> None:
+    [row] = _rows(_figures(contracted=3_100, carryover=900, flight_id=42))
+
+    assert (row.flight_id, row.contracted_impressions, row.carryover, row.delivery_target) == (42, 3_100, 900, 4_000)
+
+
+def test_a_flight_without_a_carry_over_has_a_delivery_target_equal_to_its_contracted_volume() -> None:
+    [row] = _rows(_figures(contracted=3_100))
+
+    assert (row.carryover, row.delivery_target) == (0, 3_100)
+
+
+def test_a_target_flight_with_a_carry_over_is_flagged_only_below_its_delivery_target() -> None:
+    ahead = _figures(contracted=3_100, carryover=3_100, delivered=2_500, volume_commitment=VolumeCommitment.TARGET)
+    behind = _figures(contracted=3_100, carryover=3_100, delivered=1_000, volume_commitment=VolumeCommitment.TARGET)
+
+    [over] = _rows(ahead)
+    [under] = _rows(behind)
+
+    assert (over.pacing.status, over.pacing_flag) == (PacingStatus.OVER_DELIVERING, False)
+    assert (under.pacing.status, under.pacing_flag) == (PacingStatus.UNDER_DELIVERING, True)
 
 
 def test_a_flight_far_behind_what_is_expected_raises_the_pacing_flag():

@@ -31,6 +31,10 @@ class FlightDeliveryFigures:
     campaign_latest_delivery_date: date | None
     # Declared on the line: a target volume is only flagged when delivery falls behind it.
     volume_commitment: VolumeCommitment
+    # The volume carried to this flight from the previous flight of its line, in the unit of `delivery_metric`: the
+    # pacing is measured against the contracted volume plus it. Neither its reason nor its billable flag is read here.
+    carryover: int
+    flight_id: int
 
 
 @dataclass(frozen=True)
@@ -57,3 +61,7 @@ class CampaignStatusRow:
     # Belongs to the campaign and repeats on every row of it.
     missing_data_flag: bool
     volume_commitment: VolumeCommitment
+    carryover: int
+    # The contracted volume plus the carry-over: what the pacing and the ratio are measured against.
+    delivery_target: int
+    flight_id: int

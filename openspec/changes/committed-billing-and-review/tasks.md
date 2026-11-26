@@ -28,15 +28,17 @@
 
 ## 4. Carry-over: Columns and Domain
 
-- [ ] 4.1 Write failing migration tests in a new `backend/tests/infrastructure/test_carryover_columns_migration.py`, on a scratch database as `test_closing_snapshot_migration.py` does: the seven columns exist with their types and defaults; a negative carry-over, a non-zero one without reason, author or moment, and a billable flag set to true without author or moment are refused; existing flights get 0 and false; `downgrade -1` drops them; the history has one head
-- [ ] 4.2 Add the columns to `CampaignLinePeriodRecord`, generate the migration with `--autogenerate`, add the checks by hand and review it; verify 4.1, a second `--autogenerate` with no difference and `test_migration_schema_sync.py`
-- [ ] 4.3 Write failing tests in a new `backend/tests/domain/test_carryover.py` for the shortfall (500,000 − 400,000 = 100,000; 520,000 delivered gives 0; a previous flight with its own carry-over of 50,000 that delivered 480,000 gives 70,000; OTS decimals compared exactly) and for the validation of a carry-over (no previous flight, previous not ended, above the shortfall, month closed, volume negative), each with its error code
-- [ ] 4.4 Implement them in `backend/app/domain/services/carryover.py` with their domain errors; verify 4.3
+- [x] 4.1 Write failing migration tests in a new `backend/tests/infrastructure/test_carryover_columns_migration.py`, on a scratch database as `test_closing_snapshot_migration.py` does: the seven columns exist with their types and defaults; a negative carry-over, a non-zero one without reason, author or moment, and a billable flag set to true without author or moment are refused; existing flights get 0 and false; `downgrade -1` drops them; the history has one head
+- [x] 4.2 Add the columns to `CampaignLinePeriodRecord`, generate the migration with `--autogenerate`, add the checks by hand and review it; verify 4.1, a second `--autogenerate` with no difference and `test_migration_schema_sync.py`
+- [x] 4.3 Write failing tests in a new `backend/tests/domain/test_carryover.py` for the shortfall (500,000 − 400,000 = 100,000; 520,000 delivered gives 0; a previous flight with its own carry-over of 50,000 that delivered 480,000 gives 70,000; OTS decimals compared exactly) and for the validation of a carry-over (no previous flight, previous not ended, above the shortfall, month closed, volume negative), each with its error code
+- [x] 4.4 Implement them in `backend/app/domain/services/carryover.py` with their domain errors; verify 4.3
 
 ## 5. Pacing on the Delivery Target
 
-- [ ] 5.1 Write failing tests in `backend/tests/application/test_campaign_status_service.py` and `backend/tests/infrastructure/test_sqlalchemy_campaign_status_repository.py`: the November flight with 500,000 contracted, a carry-over of 100,000 and 190,000 delivered at D-1 2026-11-10 expects 200,000, deviates −5 % and is not flagged, and without the carry-over is flagged at +14 %; the ratio is over the delivery target; the row carries `carryover` and `delivery_target`; the flight id is in the row
-- [ ] 5.2 Read the carry-over in the status repository and pass the delivery target to `calculate_pacing`; verify 5.1 and the status suite
+> Tasks 5.1 and 5.2 (the service and the repository) were done with group 4, since the pacing rule belongs to the carry-over rules; the row carries `carryover`, `delivery_target` and `flight_id` as entity fields. Tasks 5.3 and 5.4 (the API schema) remain.
+
+- [x] 5.1 Write failing tests in `backend/tests/application/test_campaign_status_service.py` and `backend/tests/infrastructure/test_sqlalchemy_campaign_status_repository.py`: the November flight with 500,000 contracted, a carry-over of 100,000 and 190,000 delivered at D-1 2026-11-10 expects 200,000, deviates −5 % and is not flagged, and without the carry-over is flagged at +14 %; the ratio is over the delivery target; the row carries `carryover` and `delivery_target`; the flight id is in the row
+- [x] 5.2 Read the carry-over in the status repository and pass the delivery target to `calculate_pacing`; verify 5.1 and the status suite
 - [ ] 5.3 Write failing API tests in `backend/tests/api/test_campaign_status_endpoint.py`: the row of the scenario carries `carryover` 100000 and `delivery_target` 600000 for each of the four roles, and no field, however nested, is an amount, a billable flag or a reason
 - [ ] 5.4 Add the fields to `backend/app/presentation/schemas/campaign_status.py`; verify 5.3
 

@@ -1,7 +1,7 @@
 """Campaign tree: campaigns, campaign periods, and campaign lines."""
 
-from datetime import date
-from sqlalchemy import CheckConstraint, Index, String, ForeignKey, Date, BigInteger, UniqueConstraint, Enum as SQLEnum
+from datetime import date, datetime
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, String, ForeignKey, Date, BigInteger, Text, UniqueConstraint, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 from decimal import Decimal
 from sqlalchemy import Numeric, text
@@ -77,6 +77,17 @@ class CampaignLinePeriodRecord(Base):
     __table_args__ = (
         UniqueConstraint("campaign_line_id", "campaign_period_id", name="uq_campaign_line_periods_line_period"),
         CheckConstraint("flight_start <= flight_end", name="ck_campaign_line_periods_window_order"),
+        CheckConstraint("carryover >= 0", name="ck_campaign_line_periods_carryover_not_negative"),
+        # A carry-over is written with its reason, its author and its moment; a removed one (0) may keep them.
+        CheckConstraint(
+            "carryover = 0 OR (carryover_reason IS NOT NULL AND length(btrim(carryover_reason)) > 0"
+            " AND carryover_set_by IS NOT NULL AND carryover_set_at IS NOT NULL)",
+            name="ck_campaign_line_periods_carryover_is_accounted_for",
+        ),
+        CheckConstraint(
+            "NOT carryover_billable OR (carryover_billable_set_by IS NOT NULL AND carryover_billable_set_at IS NOT NULL)",
+            name="ck_campaign_line_periods_carryover_billable_is_accounted_for",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -85,3 +96,13 @@ class CampaignLinePeriodRecord(Base):
     flight_start: Mapped[date] = mapped_column(Date, nullable=False)
     flight_end: Mapped[date] = mapped_column(Date, nullable=False)
     contracted_impressions: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # The volume carried to this flight from the previous flight of its line, in the unit of the line's delivery metric.
+    # It never changes `contracted_impressions`: the delivery target is the two added (campaign/carryover).
+    carryover: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
+    carryover_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    carryover_set_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    carryover_set_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Whether the carry-over raises the cap of the flight's billing; set only by operations or finance.
+    carryover_billable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    carryover_billable_set_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    carryover_billable_set_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
