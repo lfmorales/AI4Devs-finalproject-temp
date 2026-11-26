@@ -2,6 +2,7 @@
 import type {
   AppliedRates,
   CampaignMargin,
+  DeliveryChange,
   FlightMargin,
   LineMargin,
   MarginResponse,
@@ -35,6 +36,7 @@ export function totals(overrides: Partial<MarginTotals> = {}): MarginTotals {
     gross_revenue: null,
     gross_differs_count: 0,
     data_cost_count: 0,
+    delivery_changed_count: 0,
     ...overrides,
   };
 }
@@ -81,6 +83,22 @@ export function flight(overrides: Partial<FlightMargin> = {}): FlightMargin {
     gross_revenue: null,
     gross_differs_from_buyer_spend: false,
     data_cost_reported: false,
+    delivery_changed: false,
+    delivery_change: null,
+    ...overrides,
+  };
+}
+
+/** The check of a closed committed flight whose delivery did not change; override what moved. */
+export function deliveryChange(overrides: Partial<DeliveryChange> = {}): DeliveryChange {
+  return {
+    delivered_difference: "0.0000",
+    delivered_impressions_difference: 0,
+    media_cost_difference: "0.00",
+    reported_revenue_difference: null,
+    buyer_spend_difference: null,
+    current_margin: "823.26",
+    margin_difference: "0.00",
     ...overrides,
   };
 }

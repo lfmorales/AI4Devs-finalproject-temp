@@ -6,7 +6,7 @@ import type { VolumeCommitment } from "./volume-commitment";
 
 // Shapes of GET /margin and POST /margin/closings, as published by the backend's OpenAPI schema
 // (MarginResponse, CampaignMarginResponse, LineMarginResponse, FlightMarginResponse, TotalsResponse,
-// AppliedRatesResponse, ClosingRequest and ClosingResponse). Every amount, rate and percentage is a decimal
+// AppliedRatesResponse, DeliveryChangeResponse, ClosingRequest and ClosingResponse). Every amount, rate and percentage is a decimal
 // string: it is displayed as received and never converted to a number.
 
 export type DecimalString = string;
@@ -42,6 +42,24 @@ export interface MarginTotals {
   /** How many flights below carry each warning. */
   gross_differs_count: number;
   data_cost_count: number;
+  /** How many closed flights below had their delivery changed after closing («Cambió tras el cierre»). */
+  delivery_changed_count: number;
+}
+
+/**
+ * A closed flight compared with the delivery stored now, by the server: each difference is the current value less
+ * the frozen one. Informative: the current margin uses the closing's rebate and rates, and no total adds it.
+ */
+export interface DeliveryChange {
+  /** In the unit of the flight's `delivery_metric`, four decimals. */
+  delivered_difference: string;
+  delivered_impressions_difference: number;
+  media_cost_difference: DecimalString;
+  /** A target flight's only; null for a committed one. */
+  reported_revenue_difference: DecimalString | null;
+  buyer_spend_difference: DecimalString | null;
+  current_margin: DecimalString;
+  margin_difference: DecimalString;
 }
 
 export interface AppliedRates {
@@ -92,6 +110,10 @@ export interface FlightMargin {
   gross_differs_from_buyer_spend: boolean;
   /** The DSP reports a third-party or audience data cost («Coste de datos»); never subtracted. */
   data_cost_reported: boolean;
+  /** A closed flight whose delivery stored now moved beyond the tolerances («Cambió tras el cierre»). */
+  delivery_changed: boolean;
+  /** Null until the flight is closed. */
+  delivery_change: DeliveryChange | null;
 }
 
 export interface LineMargin {
@@ -135,6 +157,8 @@ export interface ClosingResponse {
   month: number;
   closed: number;
   already_closed: number;
+  /** The closing headers the month holds after the request: more than one when a late flight was closed later. */
+  closings: number;
 }
 
 export function marginPath(filters: MarginFilters): string {
@@ -145,7 +169,7 @@ export function getMargin(client: ApiClient, filters: MarginFilters): Promise<Ma
   return client.get<MarginResponse>(marginPath(filters));
 }
 
-/** Freezes the rates of the flights that ended in a month. Idempotent on the server. */
+/** Freezes the flights that ended in a month: their rates and their figures. Idempotent on the server. */
 export function closeMonth(client: ApiClient, request: ClosingRequest): Promise<ClosingResponse> {
   return client.post<ClosingResponse>("/margin/closings", request);
 }

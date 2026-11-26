@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { GENERIC_CLOSING_ERROR, closingErrorMessage, deliveryLegend, monthName, monthOfYear } from "@/features/margin/messages";
+import {
+  GENERIC_CLOSING_ERROR, closingErrorMessage, closingsMessage, deliveryLegend, monthName, monthOfYear,
+} from "@/features/margin/messages";
 
 describe("the months in Spanish", () => {
   it("names the twelve months", () => {
@@ -75,6 +77,22 @@ describe("the closing of a month whose delivery is not loaded up to its last day
     expect(closingErrorMessage("month_delivery_not_loaded", undefined, november)).toBe(
       "No se puede cerrar noviembre de 2026: falta cargar la entrega de su último día. "
       + "Espera a la ingesta de ese día y vuelve a cerrar el mes.",
+    );
+  });
+});
+
+describe("the closings a month holds", () => {
+  const closing = { year: 2026, month: 8 };
+
+  it("says nothing of a month closed once, or not closed", () => {
+    expect(closingsMessage(1, closing)).toBeNull();
+    expect(closingsMessage(0, closing)).toBeNull();
+  });
+
+  it("warns when a month holds more than one closing", () => {
+    expect(closingsMessage(2, closing)).toBe(
+      "agosto de 2026 tiene 2 cierres: se cerró un flight dado de alta después de un cierre anterior. Las cifras de "
+      + "los cierres anteriores no cambian.",
     );
   });
 });

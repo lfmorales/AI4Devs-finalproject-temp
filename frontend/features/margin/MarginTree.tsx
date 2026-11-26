@@ -1,8 +1,17 @@
 import { useId } from "react";
 
 import { AdformName } from "@/features/linking/AdformName";
-import type { CampaignMargin, FlightMargin, FlightState, LineMargin, MarginResponse } from "@/lib/api/margin";
-import { formatMoney, formatPercent } from "@/lib/format/decimal";
+import type {
+  CampaignMargin,
+  DeliveryChange,
+  FlightMargin,
+  FlightState,
+  LineMargin,
+  MarginResponse,
+} from "@/lib/api/margin";
+import { formatMoney, formatPercent, formatQuantity } from "@/lib/format/decimal";
+import { metricLabel, type DeliveryMetric } from "@/lib/format/delivery-metric";
+import { formatInteger } from "@/lib/format/integer";
 import { Figures } from "./Figures";
 import { TotalsFlags } from "./Flags";
 import {
@@ -10,6 +19,9 @@ import {
   ACCRUED_LABEL,
   DATA_COST_HELP,
   DATA_COST_LABEL,
+  DELIVERY_CHANGED_HELP,
+  DELIVERY_CHANGED_LABEL,
+  DELIVERY_CHANGE_NOTE,
   GROSS_DIFFERS_HELP,
   GROSS_DIFFERS_LABEL,
   GROSS_LABEL,
@@ -36,7 +48,7 @@ function twoDigits(month: number): string {
   return month < 10 ? `0${month}` : `${month}`;
 }
 
-/** A warning of a target flight, with what to check as its accessible description. */
+/** A warning of a flight, with what to check as its accessible description. */
 function Warning({ label, help, className }: { label: string; help: string; className: string }) {
   const helpId = useId();
   return (
@@ -44,6 +56,34 @@ function Warning({ label, help, className }: { label: string; help: string; clas
       <span className={className} aria-describedby={helpId} title={help}>{label}</span>
       <span id={helpId} hidden>{help}</span>
     </>
+  );
+}
+
+/** What changed after the closing, as the server computed it: the current margin and each difference. */
+function DeliveryChangeDetail({ change, metric }: { change: DeliveryChange; metric: DeliveryMetric }) {
+  const entries: [string, string][] = [
+    ["Margen informativo", formatMoney(change.current_margin)],
+    ["Diferencia de margen", formatMoney(change.margin_difference)],
+    ["Diferencia de entrega", `${formatQuantity(change.delivered_difference)} ${metricLabel(metric)}`],
+    ["Diferencia de impresiones", formatInteger(change.delivered_impressions_difference)],
+    ["Diferencia de coste de medios", formatMoney(change.media_cost_difference)],
+  ];
+  if (change.reported_revenue_difference !== null) {
+    entries.push(["Diferencia de ingreso comunicado", formatMoney(change.reported_revenue_difference)]);
+  }
+  if (change.buyer_spend_difference !== null) {
+    entries.push(["Diferencia de gasto del comprador", formatMoney(change.buyer_spend_difference)]);
+  }
+  return (
+    <span className="delivery-change">
+      {entries.map(([label, value]) => (
+        <span key={label} className="change-figure">
+          <span className="change-label">{label}</span>{" "}
+          <span className="change-value">{value}</span>
+        </span>
+      ))}
+      <span className="change-note">{DELIVERY_CHANGE_NOTE}</span>
+    </span>
   );
 }
 
@@ -74,6 +114,12 @@ function FlightRow({ flight, showGross }: { flight: FlightMargin; showGross: boo
           <Warning label={GROSS_DIFFERS_LABEL} help={GROSS_DIFFERS_HELP} className="tag tag-warning" />
         )}
         {flight.data_cost_reported && <Warning label={DATA_COST_LABEL} help={DATA_COST_HELP} className="tag tag-info" />}
+        {flight.delivery_changed && flight.delivery_change !== null && (
+          <>
+            <Warning label={DELIVERY_CHANGED_LABEL} help={DELIVERY_CHANGED_HELP} className="tag tag-warning" />
+            <DeliveryChangeDetail change={flight.delivery_change} metric={flight.delivery_metric} />
+          </>
+        )}
       </td>
       <td>{deliveryLegend(flight.delivered, flight.contracted_impressions, flight.delivery_metric)}</td>
     </tr>

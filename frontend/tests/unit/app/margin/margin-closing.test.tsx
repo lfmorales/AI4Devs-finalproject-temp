@@ -62,7 +62,7 @@ describe("the close-month button", () => {
     await waitFor(() => expect(button).toBeEnabled());
   });
 
-  it("opens the shared native dialog that explains that closing freezes the rates and cannot be undone", async () => {
+  it("opens the shared native dialog that explains what closing freezes and that it cannot be undone", async () => {
     const requests = installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 3, already_closed: 0 })));
     const user = userEvent.setup();
 
@@ -71,7 +71,10 @@ describe("the close-month button", () => {
 
     expect(dialog.tagName).toBe("DIALOG");
     expect(dialog).toHaveAccessibleName("Cerrar agosto de 2026");
-    expect(within(dialog).getByText(/congela las tasas/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/congela todas las cifras de cada flight terminado y la entrega con que se calcularon/))
+      .toBeInTheDocument();
+    expect(within(dialog).getByText(/Una reexpresión posterior no las mueve: solo activa el aviso «Cambió tras el cierre»/))
+      .toBeInTheDocument();
     expect(within(dialog).getByText(/no se puede deshacer/)).toBeInTheDocument();
     expect(within(dialog).getByText(/de todas las campañas del mes/)).toBeInTheDocument();
     expect(requests.some((request) => request.method === "POST")).toBe(false);
@@ -139,6 +142,30 @@ describe("the close-month button", () => {
 
     expect(await screen.findByText("No hay flights terminados en este mes")).toBeInTheDocument();
     expect(screen.getByText("Ya estaban cerrados: 4")).toBeInTheDocument();
+  });
+
+  it("warns when the month now holds more than one closing", async () => {
+    installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 1, already_closed: 3, closings: 2 })));
+    const user = userEvent.setup();
+
+    renderAuthenticated(<MarginPage />);
+    const dialog = await openDialog(user);
+    await user.click(within(dialog).getByRole("button", { name: "Confirmar cierre" }));
+
+    expect(await screen.findByText("Se cerró 1 flight de agosto de 2026")).toBeInTheDocument();
+    expect(screen.getByText(/agosto de 2026 tiene 2 cierres/)).toBeInTheDocument();
+  });
+
+  it("says nothing of the closings of a month closed once", async () => {
+    installRoutes(routes(() => reply(200, { year: 2026, month: 8, closed: 3, already_closed: 0, closings: 1 })));
+    const user = userEvent.setup();
+
+    renderAuthenticated(<MarginPage />);
+    const dialog = await openDialog(user);
+    await user.click(within(dialog).getByRole("button", { name: "Confirmar cierre" }));
+
+    expect(await screen.findByText("Se cerraron 3 flights de agosto de 2026")).toBeInTheDocument();
+    expect(screen.queryByText(/cierres/)).not.toBeInTheDocument();
   });
 
   it("cannot be confirmed twice while the request is in flight", async () => {

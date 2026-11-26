@@ -54,8 +54,8 @@
 
 ## 8. Screens
 
-- [ ] 8.1 Write failing Vitest tests in `frontend/tests/unit/features/margin/`: a flight with `delivery_changed` shows «Cambió tras el cierre», the current margin and the differences of the response and the note that the rebate and the rates are the closing's; a line, a campaign and the period show the count; a flight with `delivery_changed` false shows no label; `no-arithmetic.test.ts` still passes
-- [ ] 8.2 Add the fields to `frontend/lib/api/margin.ts`, the tag and its detail to `Flags.tsx` and `TotalsFlags`, and the text to `messages.ts`; update `frontend/tests/helpers/margin-data.ts`; verify 8.1 and the frontend suite
+- [x] 8.1 Write failing Vitest tests in `frontend/tests/unit/features/margin/`: a flight with `delivery_changed` shows «Cambió tras el cierre», the current margin and the differences of the response and the note that the rebate and the rates are the closing's; a line, a campaign and the period show the count; a flight with `delivery_changed` false shows no label; `no-arithmetic.test.ts` still passes
+- [x] 8.2 Add the fields to `frontend/lib/api/margin.ts`, the tag and its detail to `Flags.tsx` and `TotalsFlags`, and the text to `messages.ts`; update `frontend/tests/helpers/margin-data.ts`; verify 8.1 and the frontend suite
 
 ## 9. Remove the Unused Gross Input
 

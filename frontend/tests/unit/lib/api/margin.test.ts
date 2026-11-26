@@ -51,7 +51,7 @@ describe("the margin calls", () => {
   });
 
   it("closes a month by posting its year and month", async () => {
-    const fetchMock = stubFetch(200, { year: 2026, month: 8, closed: 3, already_closed: 0 });
+    const fetchMock = stubFetch(200, { year: 2026, month: 8, closed: 3, already_closed: 0, closings: 1 });
 
     const result = await closeMonth(createApiClient({ baseUrl: "http://api" }), { year: 2026, month: 8 });
 
@@ -59,6 +59,7 @@ describe("the margin calls", () => {
       "http://api/margin/closings",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ year: 2026, month: 8 }) }),
     );
-    expect(result).toEqual({ year: 2026, month: 8, closed: 3, already_closed: 0 });
+    expect(result).toEqual({ year: 2026, month: 8, closed: 3, already_closed: 0, closings: 1 });
+    expect(result.closings).toBe(1);
   });
 });

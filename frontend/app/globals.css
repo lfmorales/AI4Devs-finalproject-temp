@@ -648,6 +648,33 @@ button:disabled {
   padding: 0 12px 12px;
 }
 
+/* A closed flight whose delivery changed after closing: its current margin and differences, under its tag. */
+.delivery-change {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  font-size: 0.8125rem;
+}
+
+.change-figure {
+  white-space: nowrap;
+}
+
+.change-label,
+.change-note {
+  color: var(--color-muted);
+}
+
+.change-value {
+  font-weight: 600;
+}
+
+.change-note {
+  max-width: 24rem;
+  white-space: normal;
+}
+
 /* Dialogs: the native modal <dialog> opened with showModal(); the browser provides the top layer and the focus. */
 
 dialog {

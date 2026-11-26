@@ -15,9 +15,9 @@ export function CloseMonthDialog({ target, submitting, onConfirm, onCancel }: Cl
   return (
     <Modal title={`Cerrar ${monthOfYear(target.year, target.month)}`} closable={!submitting} onClose={onCancel}>
       <p>
-        Cerrar el mes congela las tasas de rebate y de plataforma de los flights terminados: sus cifras dejan de
-        depender de las tarifas vigentes. Se cerrarán los flights terminados de todas las campañas del mes. Esta acción
-        no se puede deshacer.
+        Cerrar el mes congela todas las cifras de cada flight terminado y la entrega con que se calcularon: dejan de
+        depender de las tarifas vigentes. Una reexpresión posterior no las mueve: solo activa el aviso «Cambió tras el
+        cierre». Se cerrarán los flights terminados de todas las campañas del mes. Esta acción no se puede deshacer.
       </p>
       <div className="dialog-actions">
         <button type="button" className="btn-primary" disabled={submitting} onClick={onConfirm}>

@@ -13,7 +13,7 @@ import { SessionExpiredPage } from "@/lib/components/SessionExpiredPage";
 import { CloseMonthDialog } from "./CloseMonthDialog";
 import { hasActiveFilter, NO_FILTERS, toFilters, type FilterFields } from "./filters";
 import { MarginTree } from "./MarginTree";
-import { closedFlightsMessage, closingErrorMessage, monthNames } from "./messages";
+import { closedFlightsMessage, closingErrorMessage, closingsMessage, monthNames } from "./messages";
 
 const NOTHING_TO_CLOSE = "No hay flights pendientes de cierre en este mes";
 const REMOVE_CAMPAIGN_FILTER = "Quita el filtro de campaña para cerrar el mes";
@@ -87,6 +87,8 @@ export function MarginPage() {
       setDialogOpen(false);
       const lines = [closedFlightsMessage(result.closed, target)];
       if (result.closed === 0 && result.already_closed > 0) lines.push(`Ya estaban cerrados: ${result.already_closed}`);
+      const closings = closingsMessage(result.closings, target);
+      if (closings !== null) lines.push(closings);
       setOutcome({ kind: "success", lines });
       setReloads((count) => count + 1);
     } catch (caught) {

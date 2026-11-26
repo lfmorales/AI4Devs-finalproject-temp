@@ -87,6 +87,13 @@ export function closedFlightsMessage(closed: number, target: ClosingTarget): str
   return `Se cerraron ${closed} flights de ${period}`;
 }
 
+/** Null for a month closed once or not at all; a warning when a flight registered late was closed by a later closing. */
+export function closingsMessage(closings: number, target: ClosingTarget): string | null {
+  if (closings <= 1) return null;
+  return `${monthOfYear(target.year, target.month)} tiene ${closings} cierres: se cerró un flight dado de alta después `
+    + "de un cierre anterior. Las cifras de los cierres anteriores no cambian.";
+}
+
 export function flightCount(count: number): string {
   return count === 1 ? "1 flight" : `${count} flights`;
 }
@@ -126,3 +133,12 @@ export const DATA_COST_LABEL = "Coste de datos";
 export const DATA_COST_HELP =
   "El DSP comunica costes de datos de terceros o de audiencia en este flight. No se restan del margen: revisa con el "
   + "comprador si deben repercutirse.";
+
+export const DELIVERY_CHANGED_LABEL = "Cambió tras el cierre";
+export const DELIVERY_CHANGED_HELP =
+  "La entrega guardada de este flight cambió después del cierre del mes: el DSP reexpresó sus cifras o se desvinculó "
+  + "la línea. El margen cerrado no cambia. El margen informativo usa la extraprima y las tarifas del cierre con la "
+  + "entrega de hoy. Revisa con el DSP si la nueva entrega es correcta. Si lo es, la diferencia se regulariza fuera de "
+  + "la aplicación: el mes cerrado no se reabre.";
+export const DELIVERY_CHANGE_NOTE =
+  "Margen informativo con la extraprima y las tarifas del cierre: solo cambia la entrega y no suma en ningún total.";
