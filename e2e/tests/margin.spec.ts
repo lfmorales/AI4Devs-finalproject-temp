@@ -260,7 +260,8 @@ test.describe("the real closing", () => {
     await chooseMonth(page, previous);
     await page.getByRole("button", { name: "Cerrar mes" }).click();
     const dialog = page.getByRole("dialog", { name: `Cerrar ${monthOfYear(previous)}` });
-    await expect(dialog).toContainText("congela las tasas");
+    await expect(dialog).toContainText("congela todas las cifras de cada flight terminado y la entrega con que se calcularon");
+    await expect(dialog).toContainText("solo activa el aviso «Cambió tras el cierre»");
     await expect(dialog).toContainText("no se puede deshacer");
     await expect(dialog).toContainText("de todas las campañas del mes");
     await dialog.getByRole("button", { name: "Confirmar cierre" }).click();
