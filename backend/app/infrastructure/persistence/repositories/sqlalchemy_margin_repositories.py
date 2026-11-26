@@ -16,9 +16,11 @@ from app.domain.repositories.margin_repositories import (
     MarginFlightRepository,
     MarginMastersTransaction,
     MarginReadRepository,
+    MonthClosingRepository,
     PlatformRateRepository,
     RebateScheduleRepository,
 )
+from app.domain.services.closed_flight import snapshot_of
 from app.domain.value_objects.margin_report import FrozenRates
 from app.domain.value_objects.platform_rate import NewPlatformRateSetting, PlatformRateLevel, PlatformRateSetting
 from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight, ReadFlight
@@ -34,6 +36,9 @@ from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord, 
 from app.infrastructure.persistence.models.margin import (
     AppliedRateBracketRecord,
     AppliedRateRecord,
+    ClosedFlightSnapshotRecord,
+    MonthClosingBatchRecord,
+    MonthClosingRecord,
     PlatformRateSettingRecord,
     RebateBracketRecord,
     RebateScheduleRecord,
@@ -394,7 +399,9 @@ class SqlAlchemyAppliedRateRepository(AppliedRateRepository):
             .where(CampaignPeriodRecord.period_year == year, CampaignPeriodRecord.period_month == month)
         ) or 0)
 
-    def save(self, priced: Sequence[PricedFlight], closed_at: datetime, closed_by: int) -> None:
+    def save(
+        self, priced: Sequence[PricedFlight], closed_at: datetime, closed_by: int, month_closing_id: int
+    ) -> None:
         for item in priced:
             rebate = item.rebate
             # A target flight's revenue and gross are what its DSP reported as of closing: frozen with its rates. A
@@ -428,7 +435,81 @@ class SqlAlchemyAppliedRateRepository(AppliedRateRepository):
                     applied_rate_id=row.id, position=position, lower=charge.lower, upper=charge.upper,
                     rate=charge.rate, amount=charge.amount, rebate=charge.rebate,
                 ))
+            self._session.add(_snapshot_record(item, row.id, month_closing_id))
             self._session.flush()
+
+
+def _snapshot_record(item: PricedFlight, applied_rate_id: int, month_closing_id: int) -> ClosedFlightSnapshotRecord:
+    """The snapshot the domain builds from the priced flight, column for field: nothing is computed here."""
+    snapshot = snapshot_of(item)
+    return ClosedFlightSnapshotRecord(
+        applied_rate_id=applied_rate_id,
+        month_closing_id=month_closing_id,
+        revenue=snapshot.revenue,
+        contracted_revenue=snapshot.contracted_revenue,
+        media_cost=snapshot.media_cost,
+        rebate=snapshot.rebate,
+        platform_cost=snapshot.platform_cost,
+        margin=snapshot.margin,
+        gross_revenue=snapshot.gross_revenue,
+        delivered_impressions=snapshot.delivered_impressions,
+        delivered=snapshot.delivered,
+        window_media_cost=snapshot.window_media_cost,
+        window_reported_revenue=snapshot.window_reported_revenue,
+        window_buyer_spend=snapshot.window_buyer_spend,
+        window_data_cost=snapshot.window_data_cost,
+        gross_differs_from_buyer_spend=snapshot.gross_differs_from_buyer_spend,
+        data_cost_reported=snapshot.data_cost_reported,
+        delivery_metric=snapshot.delivery_metric,
+        sale_cpm=snapshot.sale_cpm,
+        contracted_impressions=snapshot.contracted_impressions,
+        volume_commitment=snapshot.volume_commitment.value,
+    )
+
+
+class SqlAlchemyMonthClosingRepository(MonthClosingRepository):
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add_closing(
+        self, year: int, month: int, closed_at: datetime, closed_by: int, as_of: date, flight_ids: Sequence[int]
+    ) -> int:
+        header = MonthClosingRecord(
+            period_year=year, period_month=month, closed_at=closed_at, closed_by=closed_by, as_of=as_of
+        )
+        self._session.add(header)
+        self._session.flush()
+        dsps_of_the_flights = (
+            select(CampaignLineRecord.dsp_id)
+            .join(CampaignLinePeriodRecord, CampaignLinePeriodRecord.campaign_line_id == CampaignLineRecord.id)
+            .where(CampaignLinePeriodRecord.id.in_(list(flight_ids)))
+        )
+        latest_succeeded = (
+            select(IngestionBatchRecord.dsp_id, IngestionBatchRecord.id)
+            .where(
+                IngestionBatchRecord.status == "succeeded",
+                IngestionBatchRecord.dsp_id.in_(dsps_of_the_flights),
+            )
+            .ext(postgresql.distinct_on(IngestionBatchRecord.dsp_id))
+            .order_by(
+                IngestionBatchRecord.dsp_id,
+                IngestionBatchRecord.finished_at.desc().nulls_last(),
+                IngestionBatchRecord.id.desc(),
+            )
+        )
+        for dsp_id, batch_id in self._session.execute(latest_succeeded):
+            self._session.add(MonthClosingBatchRecord(
+                month_closing_id=header.id, dsp_id=dsp_id, ingestion_batch_id=batch_id,
+            ))
+        self._session.flush()
+        return header.id
+
+    def count_closings(self, year: int, month: int) -> int:
+        return int(self._session.scalar(
+            select(func.count())
+            .select_from(MonthClosingRecord)
+            .where(MonthClosingRecord.period_year == year, MonthClosingRecord.period_month == month)
+        ) or 0)
 
 
 class SqlAlchemyMarginClosingTransaction(MarginClosingTransaction):
@@ -440,6 +521,7 @@ class SqlAlchemyMarginClosingTransaction(MarginClosingTransaction):
         self.platform_rates = SqlAlchemyPlatformRateRepository(session)
         self.flights = SqlAlchemyMarginFlightRepository(session)
         self.applied_rates = SqlAlchemyAppliedRateRepository(session)
+        self.closings = SqlAlchemyMonthClosingRepository(session)
 
     def lock_month(self, year: int, month: int) -> None:
         self._session.execute(

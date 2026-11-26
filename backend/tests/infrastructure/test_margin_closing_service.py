@@ -1,5 +1,6 @@
 """Closing a month: it freezes the rates of the flights that ended in it, once, in order, and all or nothing."""
 
+import dataclasses
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
@@ -11,15 +12,21 @@ from app.application.services import margin_closing_service
 from app.application.services.margin_query_service import MarginQueryService
 from app.application.services.margin_closing_service import MarginClosingService
 from app.domain.exceptions import MonthDeliveryNotLoadedError, PreviousMonthOpenError
+from app.domain.services.closed_flight import margin_from_snapshot, snapshot_of
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.priced_flights import price_flights
+from app.domain.value_objects.closed_flight import ClosedFlightSnapshot
 from app.domain.value_objects.margin import FlightMargin
+from app.domain.value_objects.volume_commitment import VolumeCommitment
 from app.infrastructure.dsp.equativ_delivery_client import EquativDeliveryClient
 from app.infrastructure.persistence.models.campaign import CampaignLinePeriodRecord, CampaignLineRecord, CampaignRecord
 from app.infrastructure.persistence.models.delivery import IngestionBatchRecord
 from app.infrastructure.persistence.models.margin import (
     AppliedRateBracketRecord,
     AppliedRateRecord,
+    ClosedFlightSnapshotRecord,
+    MonthClosingBatchRecord,
+    MonthClosingRecord,
     PlatformRateSettingRecord,
     RebateBracketRecord,
     RebateScheduleRecord,
@@ -78,6 +85,19 @@ def _rows(session) -> list[AppliedRateRecord]:
     return list(session.scalars(select(AppliedRateRecord).order_by(AppliedRateRecord.id)))
 
 
+def _headers(session: Session) -> list[MonthClosingRecord]:
+    return list(session.scalars(select(MonthClosingRecord).order_by(MonthClosingRecord.id)))
+
+
+def _snapshots(session: Session) -> list[ClosedFlightSnapshotRecord]:
+    return list(session.scalars(select(ClosedFlightSnapshotRecord).order_by(ClosedFlightSnapshotRecord.id)))
+
+
+def _snapshot_of_record(record: ClosedFlightSnapshotRecord) -> ClosedFlightSnapshot:
+    columns = {field.name: getattr(record, field.name) for field in dataclasses.fields(ClosedFlightSnapshot)}
+    return ClosedFlightSnapshot(**{**columns, "volume_commitment": VolumeCommitment(record.volume_commitment)})
+
+
 def _august_lines(session, count: int = 3) -> list[int]:
     first = insert_campaign_line(session)
     lines = [first] + [add_line_to_campaign(session, first, number) for number in range(2, count + 1)]
@@ -100,6 +120,23 @@ def test_closing_freezes_one_row_per_ended_flight(rolled_back_session, user_id):
     assert len(rows) == 3
     assert {row.closed_by for row in rows} == {user_id}
     assert {row.closed_at for row in rows} == {datetime(2026, 9, 1, 8, 30)}
+
+
+def test_closing_writes_one_header_and_one_snapshot_per_frozen_flight_under_it(
+    rolled_back_session: Session, user_id: int
+) -> None:
+    _august_lines(rolled_back_session)
+
+    result = _service(rolled_back_session).close_month(2026, 8, user_id)
+
+    assert result.closings == 1
+    (header,) = _headers(rolled_back_session)
+    assert (header.period_year, header.period_month, header.closed_at, header.closed_by, header.as_of) == (
+        2026, 8, datetime(2026, 9, 1, 8, 30), user_id, date(2026, 8, 31),
+    )
+    snapshots = _snapshots(rolled_back_session)
+    assert sorted(snapshot.applied_rate_id for snapshot in snapshots) == [row.id for row in _rows(rolled_back_session)]
+    assert {snapshot.month_closing_id for snapshot in snapshots} == {header.id}
 
 
 def test_a_flight_that_has_not_ended_gets_no_row(rolled_back_session, user_id):
@@ -127,15 +164,63 @@ def test_closing_twice_neither_adds_nor_changes_a_row(rolled_back_session, user_
 
     second = _service(rolled_back_session, today=date(2026, 9, 20)).close_month(2026, 8, user_id)
 
-    assert (second.closed, second.already_closed) == (0, 3)
+    assert (second.closed, second.already_closed, second.closings) == (0, 3, 1)
     assert [(r.id, r.rebate_amount, r.closed_at, r.position_after) for r in _rows(rolled_back_session)] == before
+    assert len(_headers(rolled_back_session)) == 1
+    assert len(_snapshots(rolled_back_session)) == 3
 
 
 def test_a_month_with_no_ended_flights_closes_nothing_and_writes_nothing(rolled_back_session, user_id):
     result = _service(rolled_back_session).close_month(2026, 3, user_id)
 
-    assert (result.closed, result.already_closed) == (0, 0)
+    assert (result.closed, result.already_closed, result.closings) == (0, 0, 0)
     assert _rows(rolled_back_session) == []
+    assert _headers(rolled_back_session) == []
+    assert _snapshots(rolled_back_session) == []
+
+
+def test_a_closing_that_freezes_nothing_writes_no_header(rolled_back_session: Session, user_id: int) -> None:
+    line_id = insert_campaign_line(rolled_back_session, start_date=date(2026, 8, 1), end_date=date(2026, 8, 31))
+    replace_flights(rolled_back_session, line_id, [(date(2026, 8, 1), date(2026, 8, 31))])
+
+    result = _service(rolled_back_session, today=date(2026, 8, 31)).close_month(2026, 8, user_id)
+
+    assert (result.closed, result.closings) == (0, 0)
+    assert _headers(rolled_back_session) == []
+
+
+def test_a_flight_registered_in_a_closed_month_is_frozen_by_a_second_closing_under_a_second_header(
+    rolled_back_session: Session, user_id: int
+) -> None:
+    lines = _august_lines(rolled_back_session)
+    _service(rolled_back_session).close_month(2026, 8, user_id)
+    rolled_back_session.expire_all()
+    first = [
+        (row.id, row.rebate_amount, row.position_after, row.closed_at) for row in _rows(rolled_back_session)
+    ], [
+        (snapshot.id, snapshot.applied_rate_id, snapshot.month_closing_id, snapshot.margin)
+        for snapshot in _snapshots(rolled_back_session)
+    ], [(header.id, header.closed_at, header.as_of) for header in _headers(rolled_back_session)]
+    late = add_line_to_campaign(rolled_back_session, lines[0], 4)
+
+    second = MarginClosingService(
+        SqlAlchemyMarginClosingTransaction(rolled_back_session), today=lambda: date(2026, 9, 20),
+        now=lambda: datetime(2026, 9, 20, 10, 0),
+    ).close_month(2026, 8, user_id)
+    rolled_back_session.expire_all()
+
+    assert (second.closed, second.already_closed, second.closings) == (1, 3, 2)
+    headers = _headers(rolled_back_session)
+    assert [(h.closed_at, h.as_of) for h in headers[1:]] == [(datetime(2026, 9, 20, 10, 0), date(2026, 9, 19))]
+    (late_snapshot,) = [s for s in _snapshots(rolled_back_session) if s.month_closing_id == headers[1].id]
+    late_row = rolled_back_session.get(AppliedRateRecord, late_snapshot.applied_rate_id)
+    assert late_row is not None
+    late_flight = rolled_back_session.get(CampaignLinePeriodRecord, late_row.campaign_line_period_id)
+    assert late_flight is not None and late_flight.campaign_line_id == late
+    rows, snapshots = _rows(rolled_back_session), _snapshots(rolled_back_session)
+    assert [(r.id, r.rebate_amount, r.position_after, r.closed_at) for r in rows[:3]] == first[0]
+    assert [(s.id, s.applied_rate_id, s.month_closing_id, s.margin) for s in snapshots[:3]] == first[1]
+    assert [(h.id, h.closed_at, h.as_of) for h in headers[:1]] == first[2]
 
 
 def test_an_earlier_open_month_blocks_the_closing_and_is_named(rolled_back_session, user_id):
@@ -202,21 +287,29 @@ def test_the_month_is_locked_before_anything_is_read(rolled_back_session, user_i
 
 
 def test_a_failure_halfway_leaves_no_row(rolled_back_session, user_id, monkeypatch):
-    _august_lines(rolled_back_session)
+    lines = _august_lines(rolled_back_session)
+    _schedule(rolled_back_session, _group_of(rolled_back_session, lines[0]), ("0", "1000", "0.15"), ("1000", None, "0.2"))
+    insert_ingestion_batch(rolled_back_session)  # so that the header names a batch too
     rolled_back_session.commit()  # the fixtures stay; only the closing may be undone
     original_save = sqlalchemy_margin_repositories.SqlAlchemyAppliedRateRepository.save
+    written: list[int] = []
 
-    def failing_save(self, priced, closed_at, closed_by):
-        original_save(self, priced[:1], closed_at, closed_by)  # the first flight is written ...
-        raise RuntimeError("forced failure")                   # ... and then the closing fails
+    def failing_save(self, priced, closed_at, closed_by, month_closing_id):
+        original_save(self, priced[:1], closed_at, closed_by, month_closing_id)  # the header and one flight ...
+        written.append(len(_snapshots(rolled_back_session)))
+        raise RuntimeError("forced failure")                                    # ... and then the closing fails
 
     monkeypatch.setattr(sqlalchemy_margin_repositories.SqlAlchemyAppliedRateRepository, "save", failing_save)
 
     with pytest.raises(RuntimeError, match="forced failure"):
         _service(rolled_back_session).close_month(2026, 8, user_id)
 
+    assert written == [1]  # something was written before the failure
     assert _rows(rolled_back_session) == []
     assert rolled_back_session.scalar(select(func.count()).select_from(AppliedRateBracketRecord)) == 0
+    assert _snapshots(rolled_back_session) == []
+    assert _headers(rolled_back_session) == []
+    assert rolled_back_session.scalar(select(func.count()).select_from(MonthClosingBatchRecord)) == 0
 
 
 def test_the_next_closing_starts_from_the_frozen_position_and_does_not_price_frozen_flights_again(rolled_back_session, user_id):
@@ -318,6 +411,12 @@ def test_pending_close_figures_are_the_figures_closing_freezes(rolled_back_sessi
         assert margin_from_frozen == item.margin
         assert margin_from_frozen.margin == item.margin.margin
         assert row.position_before == item.rebate.position_before
+    snapshots = {snapshot.applied_rate_id: snapshot for snapshot in _snapshots(rolled_back_session)}
+    assert len(snapshots) == 3
+    for item in pending:
+        stored = _snapshot_of_record(snapshots[frozen[item.facts.flight_id].id])
+        assert stored == snapshot_of(item)
+        assert margin_from_snapshot(stored, item.facts.flight_start, item.facts.flight_end) == item.margin
 
 
 def test_changing_the_system_rate_after_closing_does_not_move_the_frozen_flight(rolled_back_session, user_id):

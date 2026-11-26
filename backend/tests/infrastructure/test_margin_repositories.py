@@ -1,5 +1,7 @@
 """The SQLAlchemy repositories behind the margin: schedules, platform rates, flights with delivery, frozen rates."""
 
+import dataclasses
+from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -7,15 +9,20 @@ import pytest
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from app.domain.services.closed_flight import snapshot_of
 from app.domain.services.platform_rate import resolve_platform_rate
 from app.domain.services.priced_flights import price_flights
-from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates
-from app.domain.value_objects.rebate import Bracket, CounterKey
+from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight
+from app.domain.value_objects.rebate import Bracket, CounterKey, RebateSchedule
 from app.domain.value_objects.volume_commitment import VolumeCommitment
-from app.infrastructure.persistence.models.campaign import CampaignLineRecord, CampaignRecord
+from app.infrastructure.persistence.models.campaign import CampaignLinePeriodRecord, CampaignLineRecord, CampaignRecord
+from app.infrastructure.persistence.models.delivery import IngestionBatchRecord
 from app.infrastructure.persistence.models.margin import (
     AppliedRateBracketRecord,
     AppliedRateRecord,
+    ClosedFlightSnapshotRecord,
+    MonthClosingBatchRecord,
+    MonthClosingRecord,
     PlatformRateSettingRecord,
     RebateBracketRecord,
     RebateScheduleRecord,
@@ -25,6 +32,7 @@ from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories 
     SqlAlchemyAppliedRateRepository,
     SqlAlchemyMarginFlightRepository,
     SqlAlchemyMarginReadRepository,
+    SqlAlchemyMonthClosingRepository,
     SqlAlchemyPlatformRateRepository,
     SqlAlchemyRebateScheduleRepository,
 )
@@ -36,6 +44,7 @@ from tests.fixtures.delivery_data import (
     insert_other_dsp,
     insert_user,
     replace_flights,
+    seeded_dsp_id,
 )
 
 AS_OF = date(2026, 9, 5)
@@ -198,7 +207,8 @@ def test_a_frozen_flight_is_no_longer_open(rolled_back_session):
     flights = SqlAlchemyMarginFlightRepository(rolled_back_session)
     (facts,) = flights.open_ended_flights(2026, 8, AS_OF)
     priced = price_flights([], PlatformRates(system=Decimal("1.00")), [facts], AS_OF)
-    SqlAlchemyAppliedRateRepository(rolled_back_session).save(priced, datetime(2026, 9, 5, 9, 0), user_id)
+    closing_id = _header(rolled_back_session, user_id, [facts.flight_id])
+    SqlAlchemyAppliedRateRepository(rolled_back_session).save(priced, datetime(2026, 9, 5, 9, 0), user_id, closing_id)
 
     assert flights.open_ended_flights(2026, 8, AS_OF) == []
     assert SqlAlchemyAppliedRateRepository(rolled_back_session).count_frozen(2026, 8) == 1
@@ -226,9 +236,25 @@ def test_a_month_that_has_not_ended_does_not_block(rolled_back_session):
 
 # ---------------------------------------------------------------- applied rates
 
-def _freeze(session, month_flights, schedules, user_id, as_of=AS_OF, opening=None):
+def _header(
+    session: Session, user_id: int, flight_ids: Sequence[int], year: int = 2026, month: int = 8, as_of: date = AS_OF
+) -> int:
+    return SqlAlchemyMonthClosingRepository(session).add_closing(
+        year, month, datetime(2026, 9, 5, 9, 0), user_id, as_of, flight_ids
+    )
+
+
+def _freeze(
+    session: Session,
+    month_flights: Sequence[FlightFacts],
+    schedules: Sequence[RebateSchedule],
+    user_id: int,
+    as_of: date = AS_OF,
+    opening: Mapping[CounterKey, Decimal] | None = None,
+) -> tuple[PricedFlight, ...]:
     priced = price_flights(schedules, PlatformRates(system=Decimal("1.00")), month_flights, as_of, opening)
-    SqlAlchemyAppliedRateRepository(session).save(priced, datetime(2026, 9, 5, 9, 0), user_id)
+    closing_id = _header(session, user_id, [item.facts.flight_id for item in priced], as_of=as_of)
+    SqlAlchemyAppliedRateRepository(session).save(priced, datetime(2026, 9, 5, 9, 0), user_id, closing_id)
     return priced
 
 
@@ -467,3 +493,131 @@ def test_the_target_flight_read_from_the_database_is_priced_on_what_equativ_repo
     assert priced.margin.contracted_revenue == Decimal("5000.00")
     assert priced.margin.gross_differs_from_buyer_spend is False
     assert priced.margin.data_cost_reported is True
+
+
+
+# ---------------------------------------------------------------- closing headers and snapshots
+
+def _batch(session: Session, dsp_id: int, status: str, finished_at: datetime | None) -> int:
+    batch = IngestionBatchRecord(
+        dsp_id=dsp_id, route="api", source_file=None, started_at=datetime(2026, 9, 1, 2, 0), finished_at=finished_at,
+        status=status, row_count=0, window_start=date(2026, 8, 25), window_end=date(2026, 8, 31),
+    )
+    session.add(batch)
+    session.flush()
+    return batch.id
+
+
+def test_a_closing_header_names_the_month_the_moment_the_user_the_as_of_and_the_latest_succeeded_batch_of_each_dsp(
+    rolled_back_session: Session,
+) -> None:
+    fixture_dsp = seeded_dsp_id(rolled_back_session)
+    equativ = insert_other_dsp(rolled_back_session, "Equativ")
+    without_batches = insert_other_dsp(rolled_back_session, "A DSP with only a failed batch")
+    unrelated = insert_other_dsp(rolled_back_session, "A DSP of no frozen flight")
+    lines = [
+        _line(rolled_back_session, campaign_name="On the fixture DSP"),
+        _line(rolled_back_session, campaign_name="On Equativ", dsp_id=equativ),
+        _line(rolled_back_session, campaign_name="On Equativ again", dsp_id=equativ),
+        _line(rolled_back_session, campaign_name="Without batches", dsp_id=without_batches),
+    ]
+    _line(rolled_back_session, campaign_name="Not frozen", dsp_id=unrelated)
+    _batch(rolled_back_session, fixture_dsp, "succeeded", datetime(2026, 8, 4, 2, 5))
+    latest_fixture = _batch(rolled_back_session, fixture_dsp, "succeeded", datetime(2026, 8, 31, 2, 5))
+    _batch(rolled_back_session, fixture_dsp, "failed", datetime(2026, 9, 1, 2, 5))  # later, but failed
+    _batch(rolled_back_session, fixture_dsp, "running", None)
+    _batch(rolled_back_session, equativ, "succeeded", datetime(2026, 9, 1, 6, 20))
+    latest_equativ = _batch(rolled_back_session, equativ, "succeeded", datetime(2026, 9, 1, 6, 20))  # same moment
+    _batch(rolled_back_session, without_batches, "failed", datetime(2026, 9, 1, 2, 5))
+    _batch(rolled_back_session, unrelated, "succeeded", datetime(2026, 9, 1, 2, 5))
+    user_id = insert_user(rolled_back_session)
+    facts = SqlAlchemyMarginFlightRepository(rolled_back_session).open_ended_flights(2026, 8, AS_OF)
+    frozen = [flight.flight_id for flight in facts if flight.campaign_line_id in lines]
+
+    closing_id = SqlAlchemyMonthClosingRepository(rolled_back_session).add_closing(
+        2026, 8, datetime(2026, 9, 5, 9, 0), user_id, AS_OF, frozen
+    )
+    rolled_back_session.expire_all()
+
+    header = rolled_back_session.get(MonthClosingRecord, closing_id)
+    assert header is not None
+    assert (header.period_year, header.period_month, header.closed_at, header.closed_by, header.as_of) == (
+        2026, 8, datetime(2026, 9, 5, 9, 0), user_id, AS_OF,
+    )
+    batches = rolled_back_session.scalars(
+        select(MonthClosingBatchRecord).where(MonthClosingBatchRecord.month_closing_id == closing_id)
+    ).all()
+    assert {(batch.dsp_id, batch.ingestion_batch_id) for batch in batches} == {
+        (fixture_dsp, latest_fixture), (equativ, latest_equativ),
+    }
+
+
+def test_the_headers_of_a_month_are_counted(rolled_back_session: Session) -> None:
+    user_id = insert_user(rolled_back_session)
+    closings = SqlAlchemyMonthClosingRepository(rolled_back_session)
+
+    assert closings.count_closings(2026, 8) == 0
+    _header(rolled_back_session, user_id, [])
+    _header(rolled_back_session, user_id, [])
+    _header(rolled_back_session, user_id, [], month=9)
+    _header(rolled_back_session, user_id, [], year=2025)
+
+    assert (closings.count_closings(2026, 8), closings.count_closings(2026, 9), closings.count_closings(2026, 7)) == (
+        2, 1, 0,
+    )
+
+
+def test_save_writes_one_snapshot_per_frozen_flight_under_its_header_holding_what_the_closing_priced(
+    rolled_back_session: Session,
+) -> None:
+    committed = _adform_committed_august(rolled_back_session)
+    target = _equativ_target_august(rolled_back_session)
+    dooh = _dooh_august(rolled_back_session)
+    user_id = insert_user(rolled_back_session)
+    facts = SqlAlchemyMarginFlightRepository(rolled_back_session).open_ended_flights(2026, 8, AS_OF)
+
+    priced = _freeze(rolled_back_session, facts, [], user_id)
+    rolled_back_session.expire_all()
+
+    rows = {row.campaign_line_period_id: row for row in rolled_back_session.scalars(select(AppliedRateRecord))}
+    snapshots = {
+        snapshot.applied_rate_id: snapshot for snapshot in rolled_back_session.scalars(select(ClosedFlightSnapshotRecord))
+    }
+    (header,) = rolled_back_session.scalars(select(MonthClosingRecord)).all()
+    assert len(snapshots) == len(rows) == len(priced) == 3
+    assert {line for line in (committed, target, dooh)} == {item.facts.campaign_line_id for item in priced}
+    for item in priced:
+        snapshot = snapshots[rows[item.facts.flight_id].id]
+        expected = dataclasses.asdict(snapshot_of(item))
+        expected["volume_commitment"] = item.facts.volume_commitment.value
+        assert snapshot.month_closing_id == header.id
+        assert {name: getattr(snapshot, name) for name in expected} == expected
+
+
+def test_a_target_snapshot_agrees_with_its_applied_rates_row_and_a_committed_one_has_no_gross(
+    rolled_back_session: Session,
+) -> None:
+    committed = _adform_committed_august(rolled_back_session)
+    target = _equativ_target_august(rolled_back_session)
+    user_id = insert_user(rolled_back_session)
+    facts = SqlAlchemyMarginFlightRepository(rolled_back_session).open_ended_flights(2026, 8, AS_OF)
+
+    _freeze(rolled_back_session, facts, [], user_id)
+    rolled_back_session.expire_all()
+
+    by_line = {
+        line_id: (row, snapshot)
+        for row, snapshot, line_id in rolled_back_session.execute(
+            select(AppliedRateRecord, ClosedFlightSnapshotRecord, CampaignLinePeriodRecord.campaign_line_id)
+            .join(ClosedFlightSnapshotRecord, ClosedFlightSnapshotRecord.applied_rate_id == AppliedRateRecord.id)
+            .join(CampaignLinePeriodRecord, CampaignLinePeriodRecord.id == AppliedRateRecord.campaign_line_period_id)
+        ).tuples()
+    }
+    target_row, target_snapshot = by_line[target]
+    assert (target_snapshot.revenue, target_snapshot.gross_revenue) == (
+        target_row.revenue_amount, target_row.rebate_base_amount,
+    ) == (Decimal("4400.00"), Decimal("5500.00"))
+    assert target_snapshot.volume_commitment == "target"
+    committed_row, committed_snapshot = by_line[committed]
+    assert (committed_snapshot.gross_revenue, committed_row.rebate_base_amount) == (None, None)
+    assert committed_snapshot.volume_commitment == "committed"

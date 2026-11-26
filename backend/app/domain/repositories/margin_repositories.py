@@ -61,8 +61,27 @@ class AppliedRateRepository(ABC):
         """How many flights of that calendar month already have frozen rates."""
 
     @abstractmethod
-    def save(self, priced: Sequence[PricedFlight], closed_at: datetime, closed_by: int) -> None:
-        """Freeze the rates of these flights, one row each with its bracket breakdown. Rows are only added."""
+    def save(
+        self, priced: Sequence[PricedFlight], closed_at: datetime, closed_by: int, month_closing_id: int
+    ) -> None:
+        """Freeze these flights: one row each with its rates and bracket breakdown, and its snapshot under the closing
+        header `month_closing_id`. Rows are only added."""
+
+
+class MonthClosingRepository(ABC):
+    @abstractmethod
+    def add_closing(
+        self, year: int, month: int, closed_at: datetime, closed_by: int, as_of: date, flight_ids: Sequence[int]
+    ) -> int:
+        """Record one closing run of the month and return its header's id.
+
+        The header names, for each DSP of the lines of `flight_ids`, the latest succeeded ingestion batch of that DSP
+        (latest `finished_at`, then highest id); a DSP without one is not named.
+        """
+
+    @abstractmethod
+    def count_closings(self, year: int, month: int) -> int:
+        """How many closing headers the month holds: closed when one or more."""
 
 
 class MarginClosingTransaction(ABC):
@@ -72,6 +91,7 @@ class MarginClosingTransaction(ABC):
     platform_rates: PlatformRateRepository
     flights: MarginFlightRepository
     applied_rates: AppliedRateRepository
+    closings: MonthClosingRepository
 
     @abstractmethod
     def lock_month(self, year: int, month: int) -> None:

@@ -14,7 +14,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.application.services.margin_closing_service import ClosingResult, MarginClosingService
-from app.infrastructure.persistence.models.margin import AppliedRateRecord
+from app.infrastructure.persistence.models.margin import AppliedRateRecord, ClosedFlightSnapshotRecord, MonthClosingRecord
 from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories import (
     SqlAlchemyMarginClosingTransaction,
 )
@@ -77,6 +77,10 @@ def test_two_concurrent_closings_of_one_month_leave_one_row_per_flight(scratch_e
 
     assert all(isinstance(result, ClosingResult) for result in results), results
     assert sorted(result.closed for result in results) == [0, LINES]
+    assert [result.closings for result in results if isinstance(result, ClosingResult)] == [1, 1]
     with Session(scratch_engine) as check:
         assert check.scalar(select(func.count()).select_from(AppliedRateRecord)) == LINES
         assert check.scalar(select(func.count(func.distinct(AppliedRateRecord.campaign_line_period_id)))) == LINES
+        assert check.scalar(select(func.count()).select_from(ClosedFlightSnapshotRecord)) == LINES
+        assert check.scalar(select(func.count(func.distinct(ClosedFlightSnapshotRecord.applied_rate_id)))) == LINES
+        assert check.scalar(select(func.count()).select_from(MonthClosingRecord)) == 1

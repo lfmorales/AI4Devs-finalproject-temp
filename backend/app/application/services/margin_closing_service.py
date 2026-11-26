@@ -9,16 +9,20 @@ from app.domain.services.priced_flights import price_flights
 
 @dataclass(frozen=True)
 class ClosingResult:
+    """`closed` flights were frozen by this request, `already_closed` before it; the month holds `closings` headers."""
+
     year: int
     month: int
     closed: int
     already_closed: int
+    closings: int
 
 
 class MarginClosingService:
-    """Freezes the rates of the flights that ended in a month, once, in order, and all or nothing.
+    """Freezes the flights that ended in a month, once, in order, and all or nothing.
 
-    It prices the flights with the same domain function the reads use, and only writes what it returns.
+    It prices the flights with the same domain function the reads use, and only writes what it returns: their rates,
+    their snapshots and one header for the run, in one transaction. A run that freezes nothing writes nothing.
     """
 
     def __init__(
@@ -51,7 +55,7 @@ class MarginClosingService:
         already_closed = self._transaction.applied_rates.count_frozen(year, month)
         flights = self._transaction.flights.open_ended_flights(year, month, as_of)
         if not flights:
-            return ClosingResult(year, month, closed=0, already_closed=already_closed)
+            return self._result(year, month, closed=0, already_closed=already_closed)
 
         priced = price_flights(
             self._transaction.schedules.list_schedules(),
@@ -60,5 +64,14 @@ class MarginClosingService:
             as_of,
             self._transaction.applied_rates.opening_positions(year),
         )
-        self._transaction.applied_rates.save(priced, self._now(), closed_by)
-        return ClosingResult(year, month, closed=len(priced), already_closed=already_closed)
+        if priced:
+            closed_at = self._now()
+            closing_id = self._transaction.closings.add_closing(
+                year, month, closed_at, closed_by, as_of, [item.facts.flight_id for item in priced]
+            )
+            self._transaction.applied_rates.save(priced, closed_at, closed_by, closing_id)
+        return self._result(year, month, closed=len(priced), already_closed=already_closed)
+
+    def _result(self, year: int, month: int, closed: int, already_closed: int) -> ClosingResult:
+        closings = self._transaction.closings.count_closings(year, month)
+        return ClosingResult(year, month, closed=closed, already_closed=already_closed, closings=closings)

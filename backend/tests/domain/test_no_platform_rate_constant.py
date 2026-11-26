@@ -39,16 +39,16 @@ def _tolerances(tree: ast.AST) -> set[int]:
 def _one_euro_decimals(source: str) -> list[int]:
     tree = ast.parse(source)
     tolerances = _tolerances(tree)
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
     return [
-        node.lineno
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and getattr(node.func, "id", None) == "Decimal"
-        and node.args
-        and isinstance(node.args[0], ast.Constant)
-        and isinstance(node.args[0].value, str)
-        and ONE_EURO.match(node.args[0].value)
-        and id(node) not in tolerances
+        call.lineno
+        for call in calls
+        if getattr(call.func, "id", None) == "Decimal"
+        and call.args
+        and isinstance(call.args[0], ast.Constant)
+        and isinstance(call.args[0].value, str)
+        and ONE_EURO.match(call.args[0].value)
+        and id(call) not in tolerances
     ]
 
 
@@ -57,7 +57,7 @@ def test_no_module_builds_a_decimal_of_one_euro_as_a_rate(path: Path):
     assert _one_euro_decimals(path.read_text()) == []
 
 
-def test_only_a_tolerance_assigned_on_its_own_may_be_one_euro():
+def test_only_a_tolerance_assigned_on_its_own_may_be_one_euro() -> None:
     source = (
         'MARGIN_CHANGE_TOLERANCE = Decimal("1.00")\n'
         'RATE = Decimal("1.00")\n'
