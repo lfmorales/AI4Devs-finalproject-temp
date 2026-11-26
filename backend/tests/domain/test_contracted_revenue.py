@@ -1,4 +1,8 @@
-"""contracted_revenue (the sale of the whole flight) and the accrued/window days next to the accrued revenue."""
+"""contracted_revenue (the sale of the whole flight) and the accrued/window days next to the revenue.
+
+Since committed-billing-and-review a committed flight's revenue is its billing, the lesser of delivered and contracted,
+so the contracted sale is an informative figure that the revenue reaches only when the whole volume was delivered.
+"""
 
 from datetime import date
 from decimal import Decimal
@@ -11,32 +15,46 @@ from tests.fixtures.flight_inputs import flight_economics
 AS_OF = date(2026, 8, 10)
 
 
-def _flight(start: date = date(2026, 8, 1), end: date = date(2026, 8, 31), contracted: int = 1_000_000, cpm: str = "5.00"):
+def _flight(
+    start: date = date(2026, 8, 1), end: date = date(2026, 8, 31), contracted: int = 1_000_000, cpm: str = "5.00",
+    delivered: int = 0,
+):
     return calculate_flight_margin(
         flight_economics(
             flight_start=start, flight_end=end, contracted_impressions=contracted, sale_cpm=Decimal(cpm),
-            delivered_impressions=0, media_cost=Decimal("0"), rebate_amount=Decimal("0"), platform_rate=Decimal("1.00"),
+            delivered_impressions=delivered, media_cost=Decimal("0"), rebate_amount=Decimal("0"),
+            platform_rate=Decimal("1.00"),
         ),
         AS_OF,
     )
 
 
+# Changed by committed-billing-and-review: the revenue of a running flight was 5000 x 10 / 31 = 1,612.90; it is now its
+# billing to date, 180,000 delivered at 5.00 € = 900.00, and the days drive no amount.
 def test_a_running_flight_has_the_whole_sale_and_fewer_accrued_days_than_window_days():
-    result = _flight()
+    result = _flight(delivered=180_000)
 
     assert result.status is FlightStatus.RUNNING
     assert result.contracted_revenue == Decimal("5000.00")
-    assert result.revenue == Decimal("1612.90")  # 5000 x 10 / 31
+    assert result.revenue == Decimal("900.00")
     assert (result.accrued_days, result.window_days) == (10, 31)
     assert result.accrued_days < result.window_days
 
 
-def test_a_closed_flight_accrues_all_of_it():
-    result = _flight(end=date(2026, 8, 10))
+# Changed: a closed flight accrued all of its contracted sale whatever it delivered; it now bills it all only when it
+# delivered its whole volume, and less when it under-delivered.
+def test_a_closed_flight_that_delivered_its_volume_bills_all_of_it():
+    result = _flight(end=date(2026, 8, 10), delivered=1_000_000)
 
     assert result.status is FlightStatus.CLOSED
     assert result.revenue == result.contracted_revenue == Decimal("5000.00")
     assert (result.accrued_days, result.window_days) == (10, 10)
+
+
+def test_a_closed_flight_that_under_delivered_bills_less_than_its_contracted_sale() -> None:
+    result = _flight(end=date(2026, 8, 10), delivered=700_000)
+
+    assert (result.contracted_revenue, result.revenue) == (Decimal("5000.00"), Decimal("3500.00"))
 
 
 def test_a_flight_that_has_not_started_has_none_of_them():
@@ -73,10 +91,11 @@ def test_a_flight_not_started_adds_nothing_to_the_contracted_revenue_of_a_line()
     assert line.contracted_revenue == Decimal("5000.00") and line.not_started_count == 1
 
 
-def test_a_running_flight_does_not_change_the_existing_amounts():
-    result = _flight()
-
-    assert (result.revenue, result.provisional) == (Decimal("1612.90"), True)
+# Changed: the running revenue was the pro-rated sale, 1,612.90; it is now the billing to date, nothing when nothing
+# was delivered, and still provisional.
+def test_a_running_flight_s_revenue_is_its_billing_to_date_and_provisional():
+    assert (_flight().revenue, _flight().provisional) == (Decimal("0.00"), True)
+    assert _flight(delivered=180_000).revenue == Decimal("900.00")
 
 
 # ---------------------------------------------------------------- the volumes behind the amounts

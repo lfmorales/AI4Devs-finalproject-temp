@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
+from app.domain.value_objects.billing import Billing, BillingAdjustment, BillingBasis
 from app.domain.value_objects.margin import FlightEconomics, FlightMargin, FlightStatus
 from app.domain.value_objects.priced_flight import FlightFacts
 from app.domain.value_objects.volume_commitment import VolumeCommitment
@@ -18,8 +19,40 @@ def round_amount(amount: Decimal) -> Decimal:
 
 
 def flight_revenue(contracted_impressions: int, sale_cpm: Decimal) -> Decimal:
-    """The revenue of a whole flight: contracted volume times the line's CPM, rounded once."""
+    """The contracted sale of a whole flight: contracted volume times the line's CPM, rounded once.
+
+    It is the flight's `contracted_revenue`, not its revenue: a committed flight earns its billing.
+    """
     return round_amount(Decimal(contracted_impressions) / _THOUSAND * sale_cpm)
+
+
+def committed_billing(
+    *,
+    contracted: int,
+    carryover: int,
+    carryover_billable: bool,
+    delivered: Decimal,
+    sale_cpm: Decimal,
+    adjustment: BillingAdjustment | None,
+) -> Billing:
+    """What a committed flight bills: the lesser of its delivered volume and its cap, times the CPM, rounded once.
+
+    The cap is the contracted volume, plus the carry-over when the carry-over is billable. An adjustment in force
+    replaces the rule: `delivered` bills the delivered volume with no cap, `contracted` the cap, `custom` its amount,
+    and `minimum` is the rule itself. Every volume is in the unit of the delivery metric; `delivered` keeps its decimals.
+    """
+    cap = Decimal(contracted + (carryover if carryover_billable else 0))
+    basis = BillingBasis.MINIMUM if adjustment is None else adjustment.basis
+    if basis is BillingBasis.CUSTOM:
+        assert adjustment is not None and adjustment.amount is not None
+        return Billing(billable=None, amount=adjustment.amount, basis=basis)
+    if basis is BillingBasis.DELIVERED:
+        billable = delivered
+    elif basis is BillingBasis.CONTRACTED:
+        billable = cap
+    else:
+        billable = min(delivered, cap)
+    return Billing(billable=billable, amount=round_amount(billable / _THOUSAND * sale_cpm), basis=basis)
 
 
 def gross_revenue(delivered_impressions: int, sale_cpm: Decimal) -> Decimal:
@@ -28,13 +61,18 @@ def gross_revenue(delivered_impressions: int, sale_cpm: Decimal) -> Decimal:
 
 
 def rebate_base(facts: FlightFacts) -> Decimal:
-    """The amount the rebate is a percentage of: the sale of a committed flight, the served gross of a target one.
+    """The amount the rebate is a percentage of: the billing of a committed flight, to date while it runs, and the
+    served gross of a target one.
 
     The rebate engine, the counters and the frozen positions advance by it without knowing which it is.
     """
     if facts.volume_commitment is VolumeCommitment.TARGET:
         return gross_revenue(facts.delivered_impressions, facts.sale_cpm)
-    return flight_revenue(facts.contracted_impressions, facts.sale_cpm)
+    return committed_billing(
+        contracted=facts.contracted_impressions, carryover=facts.carryover,
+        carryover_billable=facts.carryover_billable, delivered=facts.delivered, sale_cpm=facts.sale_cpm,
+        adjustment=facts.adjustment,
+    ).amount
 
 
 def _gross_differs_from_buyer_spend(gross: Decimal, buyer_spend: Decimal) -> bool:
@@ -54,16 +92,16 @@ def flight_status(flight: FlightEconomics, as_of: date) -> FlightStatus:
 
 
 def calculate_flight_margin(flight: FlightEconomics, as_of: date) -> FlightMargin:
-    """The margin of one flight as of D-1. The revenue of a committed flight never reads the delivered volume.
+    """The margin of one flight as of D-1.
 
-    A committed flight earns on the contracted volume, in the unit of the metric (300,000 OTS at 5.00 € earn
-    1,500.00 €). A target flight earns the revenue its DSP reports inside its window, and has a gross, its served
-    impressions times the CPM, that its rebate was computed on. The platform cost is on the real delivered impressions,
-    never on OTS.
+    A committed flight earns its billing (`committed_billing`), in the unit of the metric: 280,000.50 OTS delivered of
+    300,000 contracted at 5.00 € bill 1,400.00 €. A target flight earns the revenue its DSP reports inside its window,
+    and has a gross, its served impressions times the CPM, that its rebate was computed on. The platform cost is on the
+    real delivered impressions, never on OTS.
 
-    A running committed flight pro-rates revenue and rebate by elapsed contract days of its own window; a running
-    target flight is not pro-rated, since what it reports is already what it earned to date. Media cost and platform
-    cost come from what was delivered and are not pro-rated.
+    Nothing is pro-rated by elapsed days: a running committed flight earns its billing to date and its rebate is the
+    engine's, computed on that billing; a running target flight earns what was reported to date. Media cost and
+    platform cost come from what was delivered.
     """
     status = flight_status(flight, as_of)
     if status is FlightStatus.NOT_STARTED:
@@ -76,22 +114,21 @@ def calculate_flight_margin(flight: FlightEconomics, as_of: date) -> FlightMargi
     accrued_days = (min(as_of, flight.flight_end) - flight.flight_start).days + 1
     gross: Decimal | None = None
     gross_differs = False
+    billable: Decimal | None = None
     if flight.volume_commitment is VolumeCommitment.TARGET:
         revenue = round_amount(flight.reported_revenue)
-        rebate = round_amount(flight.rebate_amount)
+        billing_basis = BillingBasis.REPORTED
         # What was served, at the CPM. A closed flight is never priced again: it is read from its snapshot.
         gross = gross_revenue(flight.delivered_impressions, flight.sale_cpm)
         gross_differs = _gross_differs_from_buyer_spend(gross, flight.buyer_spend)
     else:
-        full_revenue = Decimal(flight.contracted_impressions) / _THOUSAND * flight.sale_cpm
-        full_rebate = flight.rebate_amount
-        if status is FlightStatus.RUNNING:
-            elapsed_days = (as_of - flight.flight_start).days + 1
-            full_revenue = full_revenue * elapsed_days / flight.total_days
-            full_rebate = full_rebate * elapsed_days / flight.total_days
-        # A closed flight accrues all of its sale, so its revenue is the contracted revenue, rounded once.
-        revenue = contracted_revenue if status is FlightStatus.CLOSED else round_amount(full_revenue)
-        rebate = round_amount(full_rebate)
+        billing = committed_billing(
+            contracted=flight.contracted_impressions, carryover=flight.carryover,
+            carryover_billable=flight.carryover_billable, delivered=flight.delivered, sale_cpm=flight.sale_cpm,
+            adjustment=flight.adjustment,
+        )
+        revenue, billable, billing_basis = billing.amount, billing.billable, billing.basis
+    rebate = round_amount(flight.rebate_amount)
     media_cost = round_amount(flight.media_cost)
     platform_cost = round_amount(Decimal(flight.delivered_impressions) / _THOUSAND * flight.platform_rate)
     margin = revenue - media_cost - rebate - platform_cost
@@ -117,4 +154,6 @@ def calculate_flight_margin(flight: FlightEconomics, as_of: date) -> FlightMargi
         gross_revenue=gross,
         gross_differs_from_buyer_spend=gross_differs,
         data_cost_reported=flight.data_cost > 0,
+        billable=billable,
+        billing_basis=billing_basis,
     )

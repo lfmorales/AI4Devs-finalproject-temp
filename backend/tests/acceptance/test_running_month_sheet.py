@@ -4,14 +4,26 @@
 order and subtracts the costs of what was served. `margin_pct_full_month` is not replicated (it subtracts partial
 costs from the sale of the whole month); that is a known difference of the source sheet. Nothing here knows a figure
 of the sheet. A row that does not match is reported with its numbers, never fixed by touching the code.
+
+Known difference with the sheet (committed-billing-and-review, confirmed by the business on 2026-11-26). The sheet
+accrues each row's sale and rebate by days served over days of the purchase order; a committed flight now earns its
+billing to date, the lesser of served and contracted, with no pro-rating of the revenue or the rebate. The expected
+figures are the sheet's own columns with that rule applied (`expected_revenue`, `expected_rebate`, `expected_margin` in
+running_month_sheet.py). The rows that depart from the sheet are the running ones, and among the closed ones exactly
+those that served less than they contracted (Campaign 18 on the sheet of 2026-11-26); the closed rows that served their
+volume still match the sheet. Over the 35 rows compared, the revenue to date is 17,847.17 € below the sheet's accrual
+and the margin 11,906.44 € below it, nearly all of it in the 23 running rows. The tests under «the known difference
+with the sheet» check it and record the aggregate difference with `record_property`.
 """
 
+from collections.abc import Callable
 from decimal import Decimal
 
 import pytest
 
 from app.domain.services.margin_totals import total_flights
-from app.domain.value_objects.margin import FlightStatus
+from app.domain.value_objects.margin import FlightStatus, MarginTotals
+from app.domain.value_objects.priced_flight import PricedFlight
 from tests.acceptance.running_month_sheet import (
     MANUAL_ADJUSTMENT_REASON,
     MANUAL_ADJUSTMENT_ROW,
@@ -110,13 +122,13 @@ def test_every_state_is_provisional_when_running_and_closed_when_the_days_are_al
     assert any(row.is_closed for row in compared) and any(not row.is_closed for row in compared)
 
 
-def test_each_amount_of_each_row_matches_the_sheet(compared, priced):
+def test_each_amount_of_each_row_matches_the_sheet_billed_to_date(compared, priced):
     failures: list[str] = []
     for row in compared:
         margin = priced[row.number].margin
         checks = [
-            ("revenue", margin.revenue, row.accrued_revenue, CENT),
-            ("rebate", margin.rebate, row.accrued_rebate, CENT),
+            ("revenue", margin.revenue, row.expected_revenue, CENT),
+            ("rebate", margin.rebate, row.expected_rebate, CENT),
             ("media cost", margin.media_cost, row.purchase_cost, CENT),
             ("platform cost", margin.platform_cost, row.platform_cost, CENT),
             ("margin", margin.margin, row.expected_margin, MARGIN_TOLERANCE),
@@ -125,22 +137,77 @@ def test_each_amount_of_each_row_matches_the_sheet(compared, priced):
     assert not failures, "\n".join(failures)
 
 
-def test_each_margin_percentage_matches_the_actual_one_of_the_sheet(compared, priced):
+def test_each_margin_percentage_matches_the_sheet_billed_to_date(compared, priced):
     failures: list[str] = []
     for row in compared:
         ours = priced[row.number].margin.margin_pct
-        assert row.margin_pct_actual is not None, row.campaign
-        sheet = row.margin_pct_actual * HUNDRED
-        if ours is None or abs(ours - sheet) > PCT_TOLERANCE:
-            failures.append(_report(row, "margin_pct", ours, sheet))
+        if row.expected_revenue == 0:
+            if ours is not None:
+                failures.append(f"{row.campaign} (row {row.number}): margin_pct ours={ours}, no revenue to divide by")
+            continue
+        expected = row.expected_margin / row.expected_revenue * HUNDRED
+        if ours is None or abs(ours - expected) > PCT_TOLERANCE:
+            failures.append(_report(row, "margin_pct", ours, expected))
     assert not failures, "\n".join(failures)
 
 
-def test_a_row_is_below_cost_exactly_when_the_sheet_percentage_is_negative(compared, priced):
+def test_a_row_is_below_cost_exactly_when_its_expected_margin_is_negative(compared, priced):
     ours = {row.number for row in compared if priced[row.number].margin.below_cost}
-    sheet = {row.number for row in compared if row.margin_pct_actual < 0}
+    expected = {row.number for row in compared if row.expected_margin < 0}
 
-    assert ours == sheet, f"ours only: {sorted(ours - sheet)}, sheet only: {sorted(sheet - ours)}"
+    assert ours == expected, f"ours only: {sorted(ours - expected)}, expected only: {sorted(expected - ours)}"
+
+
+# ---------------------------------------------------------------- the known difference with the sheet
+
+def _departs(row: SheetRow) -> bool:
+    return abs(row.expected_revenue - row.accrued_revenue) > CENT
+
+
+def test_the_closed_rows_that_depart_from_the_sheet_are_exactly_those_that_served_less_than_they_contracted(
+    compared: list[SheetRow], priced: dict[int, PricedFlight], record_property: Callable[[str, object], None]
+) -> None:
+    closed = [row for row in compared if row.is_closed]
+    departing = [row for row in closed if _departs(row)]
+    record_property("closed_rows_billed_below_the_sheet", [row.campaign for row in departing])
+    print(f"\n[acceptance] closed rows billed below the sheet: {', '.join(row.campaign for row in departing)}")
+
+    assert {row.number for row in departing} == {row.number for row in closed if row.served_less_than_contracted}
+    # The closed rows that served their volume still match the sheet itself.
+    failures: list[str] = []
+    for row in closed:
+        if row in departing:
+            continue
+        margin = priced[row.number].margin
+        assert row.margin_pct_actual is not None, row.campaign
+        for name, ours, sheet, tolerance in (
+            ("revenue", margin.revenue, row.accrued_revenue, CENT),
+            ("rebate", margin.rebate, row.accrued_rebate, CENT),
+            ("margin", margin.margin, row.sheet_margin, MARGIN_TOLERANCE),
+            ("margin_pct", margin.margin_pct, row.margin_pct_actual * HUNDRED, PCT_TOLERANCE),
+        ):
+            if ours is None or abs(ours - sheet) > tolerance:
+                failures.append(_report(row, name, ours, sheet))
+    assert not failures, "\n".join(failures)
+
+
+def test_the_known_difference_with_the_sheet_s_accrual_is_recorded(
+    compared: list[SheetRow], totals: MarginTotals, record_property: Callable[[str, object], None]
+) -> None:
+    running = [row for row in compared if not row.is_closed]
+    revenue_difference = totals.revenue - _sum(compared, lambda row: row.accrued_revenue)
+    margin_difference = totals.margin - _sum(compared, lambda row: row.sheet_margin)
+    record_property("running_rows", len(running))
+    record_property("revenue_difference", str(revenue_difference.quantize(CENT)))
+    record_property("margin_difference", str(margin_difference.quantize(CENT)))
+    print(f"\n[acceptance] against the sheet's accrual: {len(running)} running rows, revenue "
+          f"{revenue_difference.quantize(CENT)}, margin {margin_difference.quantize(CENT)}")
+
+    assert running
+    assert revenue_difference.quantize(CENT) == _sum(
+        compared, lambda row: row.expected_revenue - row.accrued_revenue
+    ).quantize(CENT)
+    assert revenue_difference < 0 and margin_difference < 0
 
 
 # ---------------------------------------------------------------- aggregate over the compared rows
@@ -154,24 +221,24 @@ def _sum(compared, attribute) -> Decimal:
     return sum((attribute(row) for row in compared), Decimal(0))
 
 
-def test_the_accrued_revenue_matches_the_sheet(compared, totals):
-    sheet = _sum(compared, lambda row: row.accrued_revenue)
+def test_the_revenue_to_date_matches_the_sheet_billed_to_date(compared, totals):
+    expected = _sum(compared, lambda row: row.expected_revenue)
 
-    assert abs(totals.revenue - sheet) <= AGGREGATE_TOLERANCE, f"ours={totals.revenue} sheet={sheet}"
+    assert abs(totals.revenue - expected) <= AGGREGATE_TOLERANCE, f"ours={totals.revenue} expected={expected}"
 
 
-def test_the_provisional_margin_matches_the_sheet(compared, totals):
-    sheet = _sum(compared, lambda row: row.expected_margin)
+def test_the_provisional_margin_matches_the_sheet_billed_to_date(compared, totals):
+    expected = _sum(compared, lambda row: row.expected_margin)
 
-    assert abs(totals.margin - sheet) <= AGGREGATE_TOLERANCE, f"ours={totals.margin} sheet={sheet}"
+    assert abs(totals.margin - expected) <= AGGREGATE_TOLERANCE, f"ours={totals.margin} expected={expected}"
     assert totals.provisional is True
 
 
-def test_the_percentage_on_the_accrued_revenue_matches_the_sheet(compared, totals):
-    sheet = _sum(compared, lambda row: row.expected_margin) / _sum(compared, lambda row: row.accrued_revenue) * HUNDRED
+def test_the_percentage_on_the_revenue_to_date_matches_the_sheet_billed_to_date(compared, totals):
+    expected = _sum(compared, lambda row: row.expected_margin) / _sum(compared, lambda row: row.expected_revenue) * HUNDRED
 
-    assert abs(totals.margin_pct - sheet) <= AGGREGATE_PCT_TOLERANCE, f"ours={totals.margin_pct} sheet={sheet}"
+    assert abs(totals.margin_pct - expected) <= AGGREGATE_PCT_TOLERANCE, f"ours={totals.margin_pct} expected={expected}"
 
 
-def test_the_number_of_negative_margin_flights_matches_the_sheet(compared, totals):
-    assert totals.below_cost_count == sum(1 for row in compared if row.margin_pct_actual < 0)
+def test_the_number_of_negative_margin_flights_matches_the_sheet_billed_to_date(compared, totals):
+    assert totals.below_cost_count == sum(1 for row in compared if row.expected_margin < 0)

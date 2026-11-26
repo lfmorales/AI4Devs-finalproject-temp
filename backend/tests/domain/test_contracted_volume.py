@@ -17,14 +17,18 @@ def test_contracted_volume_decimal_arithmetic():
     assert revenue == Decimal("25500.00")  # 1M * 25.50 / 1000
 
 
-def test_revenue_from_contracted_not_delivered():
-    """Test that revenue always derives from contracted, never delivered."""
+def test_the_contracted_sale_reads_the_contracted_volume_not_the_delivery():
+    """The line's contracted sale is the purchase order's value, whatever is delivered.
+
+    Not inverted by committed-billing-and-review: this value object has no delivery, and its figure is the contracted
+    sale, not a flight's revenue, which is now its billing (tests/domain/test_billing.py).
+    """
     volume = ContractedVolume(
         contracted_impressions=1_000_000,
         sale_cpm=Decimal("30.00")
     )
 
-    # Revenue should be 30k regardless of what was delivered
+    # The contracted sale is 30k whatever is delivered
     revenue = volume.revenue()
     assert revenue == Decimal("30000.00")
 

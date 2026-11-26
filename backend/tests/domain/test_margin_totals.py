@@ -18,20 +18,26 @@ def _flight(
     flight_end: date,
     contracted_impressions: int = 1000,
     sale_cpm: str = "10.00",
-    delivered_impressions: int = 0,
+    delivered_impressions: int | None = None,
     media_cost: str = "0.00",
     rebate_amount: str = "0",
+    platform_rate: str = "0",
 ) -> FlightMargin:
+    """A committed flight that, left out, delivered its contracted volume and pays no platform cost.
+
+    A committed flight earns its billing (committed-billing-and-review), so a flight that delivered nothing would earn
+    nothing: delivering its volume keeps its revenue its contracted sale, the arithmetic these totals are about.
+    """
     return calculate_flight_margin(
         flight_economics(
             flight_start=flight_start,
             flight_end=flight_end,
             contracted_impressions=contracted_impressions,
             sale_cpm=Decimal(sale_cpm),
-            delivered_impressions=delivered_impressions,
+            delivered_impressions=contracted_impressions if delivered_impressions is None else delivered_impressions,
             media_cost=Decimal(media_cost),
             rebate_amount=Decimal(rebate_amount),
-            platform_rate=Decimal("1.00"),
+            platform_rate=Decimal(platform_rate),
         ),
         as_of=AS_OF,
     )
@@ -54,19 +60,21 @@ def test_a_line_total_is_the_sum_of_the_rounded_amounts_not_the_rounded_sum():
 
 
 def test_the_total_has_every_term_and_the_margin_is_their_difference():
+    # The worked example under-delivers, 700,000 of 726,202: it bills 3,500.00 €, with a rebate of 25 % of that.
     flights = [
         _closed(contracted_impressions=726_202, sale_cpm="5.00", delivered_impressions=700_000,
-                media_cost="1200.00", rebate_amount="907.7525"),
-        _closed(contracted_impressions=1000, sale_cpm="10.00", delivered_impressions=1000, media_cost="2.50"),
+                media_cost="1200.00", rebate_amount="875", platform_rate="1.00"),
+        _closed(contracted_impressions=1000, sale_cpm="10.00", delivered_impressions=1000, media_cost="2.50",
+                platform_rate="1.00"),
     ]
 
     total = total_flights(flights)
 
-    assert total.revenue == Decimal("3641.01")
+    assert total.revenue == Decimal("3510.00")
     assert total.media_cost == Decimal("1202.50")
-    assert total.rebate == Decimal("907.75")
+    assert total.rebate == Decimal("875.00")
     assert total.platform_cost == Decimal("701.00")
-    assert total.margin == Decimal("829.76")
+    assert total.margin == Decimal("731.50")
     assert total.margin == total.revenue - total.media_cost - total.rebate - total.platform_cost
 
 
@@ -89,7 +97,8 @@ def test_a_line_without_flights_totals_zero():
 
 def test_a_line_with_a_closed_flight_a_running_one_and_one_not_started():
     closed = _closed()  # August, closed: revenue 10.00
-    running = _flight(date(2026, 9, 1), date(2026, 9, 30), contracted_impressions=3000)  # 30 EUR x 10/30 = 10.00
+    # Running: 1,000 of 3,000 delivered to date, billed 10.00
+    running = _flight(date(2026, 9, 1), date(2026, 9, 30), contracted_impressions=3000, delivered_impressions=1000)
     not_started = _flight(date(2026, 10, 1), date(2026, 10, 31), contracted_impressions=5000)
 
     total = total_flights([closed, running, not_started])

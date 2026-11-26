@@ -1,9 +1,10 @@
 """The margin of one flight: revenue, media cost, rebate and platform cost, each rounded once, half up.
 
-Worked example (docs/product-description.md §5.8, flight model): 726,202 contracted impressions at a
-sale CPM of 5.00 € give revenue 3,631.01 €; the rebate is 25 % of it, 907.7525 € exact, 907.75 € rounded;
-700,000 delivered impressions at 1.00 € per thousand give a platform cost of 700.00 €. The media cost of
-1,200.00 € is a placeholder, since real cost only exists in Adform.
+Worked example (docs/product-description.md §5.8, flight model): 726,202 contracted impressions at a sale CPM of
+5.00 €, a contracted sale of 3,631.01 €, of which 700,000 were delivered. A committed flight earns its billing, the
+lesser of delivered and contracted (committed-billing-and-review): 700,000 / 1000 × 5.00 = 3,500.00 €; the rebate is
+25 % of it, 875.00 €; 700,000 delivered impressions at 1.00 € per thousand give a platform cost of 700.00 €; the margin
+is 725.00 €. The media cost of 1,200.00 € is a placeholder, since real cost only exists in Adform.
 """
 
 from dataclasses import fields, replace
@@ -14,6 +15,7 @@ import pytest
 
 from app.domain.services import flight_margin
 from app.domain.services.flight_margin import calculate_flight_margin, rebate_base, round_amount
+from app.domain.value_objects.billing import BillingAdjustment, BillingBasis
 from app.domain.value_objects.margin import FlightEconomics, FlightStatus
 from app.domain.value_objects.priced_flight import FlightFacts
 from app.domain.value_objects.volume_commitment import VolumeCommitment
@@ -29,7 +31,7 @@ def _flight(
     sale_cpm: str = "5.00",
     delivered_impressions: int = 700_000,
     media_cost: str = "1200.00",
-    rebate_amount: str = "907.7525",
+    rebate_amount: str = "875",
     platform_rate: str = "1.00",
     flight_start: date = AUGUST_START,
     flight_end: date = AUGUST_END,
@@ -50,11 +52,12 @@ def test_a_closed_flight_applies_the_four_terms():
     result = calculate_flight_margin(_flight(), as_of=AFTER_AUGUST)
 
     assert result.status is FlightStatus.CLOSED
-    assert result.revenue == Decimal("3631.01")
+    assert result.contracted_revenue == Decimal("3631.01")
+    assert result.revenue == Decimal("3500.00")
     assert result.media_cost == Decimal("1200.00")
-    assert result.rebate == Decimal("907.75")
+    assert result.rebate == Decimal("875.00")
     assert result.platform_cost == Decimal("700.00")
-    assert result.margin == Decimal("823.26")
+    assert result.margin == Decimal("725.00")
     assert result.provisional is False
     assert result.below_cost is False
 
@@ -78,7 +81,7 @@ def test_the_rebate_is_rounded_before_the_margin_is_subtracted():
     result = calculate_flight_margin(_flight(rebate_amount="0.125"), as_of=AFTER_AUGUST)
 
     assert result.rebate == Decimal("0.13")
-    assert result.margin == Decimal("3631.01") - Decimal("1200.00") - Decimal("0.13") - Decimal("700.00")
+    assert result.margin == Decimal("3500.00") - Decimal("1200.00") - Decimal("0.13") - Decimal("700.00")
 
 
 def test_each_amount_is_rounded_exactly_once(monkeypatch: pytest.MonkeyPatch):
@@ -93,7 +96,9 @@ def test_each_amount_is_rounded_exactly_once(monkeypatch: pytest.MonkeyPatch):
 
     calculate_flight_margin(_flight(), as_of=AFTER_AUGUST)
 
-    assert len(calls) == 4
+    # The contracted sale, the billing, the media cost, the rebate and the platform cost: the billing is no longer the
+    # contracted sale reused, so a committed flight rounds five amounts, each once.
+    assert len(calls) == 5
 
 
 def test_a_float_input_is_refused():
@@ -110,18 +115,26 @@ def test_a_float_input_is_refused():
         )
 
 
-def test_under_delivery_does_not_reduce_revenue():
+# Inverted by committed-billing-and-review: under-delivery reduced nothing while revenue was the contracted sale; a
+# committed flight now earns its billing, the lesser of delivered and contracted (finance/margin-calculation).
+def test_under_delivery_reduces_revenue_to_the_billing():
     result = calculate_flight_margin(_flight(delivered_impressions=700_000), as_of=AFTER_AUGUST)
 
-    assert result.revenue == Decimal("3631.01")
+    assert result.revenue == Decimal("3500.00")
+    assert result.contracted_revenue == Decimal("3631.01")
+    assert (result.billable, result.billing_basis) == (Decimal("700000"), BillingBasis.MINIMUM)
     assert result.platform_cost == Decimal("700.00")
 
 
-@pytest.mark.parametrize("delivered", [0, 700_000, 726_202, 900_000])
-def test_revenue_is_the_same_whatever_was_delivered(delivered: int):
+# Inverted for the same reason: revenue no longer is the same whatever was delivered, it is capped by the contract.
+@pytest.mark.parametrize(
+    ("delivered", "revenue"),
+    [(0, "0.00"), (700_000, "3500.00"), (726_202, "3631.01"), (900_000, "3631.01")],
+)
+def test_revenue_is_the_lesser_of_delivered_and_contracted(delivered: int, revenue: str):
     result = calculate_flight_margin(_flight(delivered_impressions=delivered), as_of=AFTER_AUGUST)
 
-    assert result.revenue == Decimal("3631.01")
+    assert result.revenue == Decimal(revenue)
 
 
 SEPTEMBER_START = date(2026, 9, 1)
@@ -129,13 +142,14 @@ SEPTEMBER_END = date(2026, 9, 30)
 
 
 def _september_flight(**overrides: object) -> FlightEconomics:
-    """A 30-day flight: 300,000 contracted at 5.00 € is 1,500.00 € in full, with a flat 20 % rebate of 300.00 €."""
+    """A 30-day flight: 300,000 contracted at 5.00 €, 1,500.00 € in full; 90,000 delivered by the 10th bill 450.00 €,
+    and a flat 20 % rebate on that billing is 90.00 €."""
     values: dict[str, object] = {
         "contracted_impressions": 300_000,
         "sale_cpm": "5.00",
         "delivered_impressions": 90_000,
         "media_cost": "150.00",
-        "rebate_amount": "300.00",
+        "rebate_amount": "90.00",
         "platform_rate": "1.00",
         "flight_start": SEPTEMBER_START,
         "flight_end": SEPTEMBER_END,
@@ -144,49 +158,58 @@ def _september_flight(**overrides: object) -> FlightEconomics:
     return _flight(**values)  # type: ignore[arg-type]
 
 
-def test_a_running_flight_is_pro_rated_by_elapsed_days_of_its_window():
-    # Ten of thirty days have elapsed on September 10th:
-    #   revenue  1,500.00 x 10 / 30 = 500.00
-    #   rebate     300.00 x 10 / 30 = 100.00
-    #   media cost and platform cost come from what was delivered, so they are not pro-rated:
+# Inverted by committed-billing-and-review: a running committed flight was pro-rated by elapsed days; it now bills its
+# delivery to date, and neither its revenue nor its rebate is pro-rated (option B of the business, 2026-11-26).
+def test_a_running_flight_bills_its_delivery_to_date():
+    # 90,000 delivered by September 10th, of 300,000 contracted at 5.00 €:
+    #   revenue  90,000 / 1000 x 5.00 = 450.00, not 1,500.00 x 10 / 30 = 500.00
+    #   rebate   20 % of 450.00 = 90.00, the engine's, not pro-rated
     #   media cost 150.00; platform cost 90,000 / 1000 x 1.00 = 90.00
-    #   margin 500.00 - 150.00 - 100.00 - 90.00 = 160.00
+    #   margin 450.00 - 150.00 - 90.00 - 90.00 = 120.00
     result = calculate_flight_margin(_september_flight(), as_of=date(2026, 9, 10))
 
     assert result.status is FlightStatus.RUNNING
-    assert result.revenue == Decimal("500.00")
-    assert result.rebate == Decimal("100.00")
+    assert result.revenue == Decimal("450.00")
+    assert result.rebate == Decimal("90.00")
     assert result.media_cost == Decimal("150.00")
     assert result.platform_cost == Decimal("90.00")
-    assert result.margin == Decimal("160.00")
+    assert result.margin == Decimal("120.00")
+    assert (result.billable, result.billing_basis) == (Decimal("90000"), BillingBasis.MINIMUM)
     assert result.provisional is True
 
 
-def test_a_running_flight_with_no_delivery_still_accrues_revenue():
+# Inverted: a running flight with no delivery accrued its elapsed days; it now earns nothing.
+def test_a_running_flight_with_no_delivery_earns_nothing():
     result = calculate_flight_margin(
-        _september_flight(delivered_impressions=0, media_cost="0.00"), as_of=date(2026, 9, 10)
+        _september_flight(delivered_impressions=0, media_cost="0.00", rebate_amount="0"), as_of=date(2026, 9, 10)
     )
 
     assert result.status is FlightStatus.RUNNING
-    assert result.revenue == Decimal("500.00")
+    assert result.revenue == Decimal("0.00")
     assert result.platform_cost == Decimal("0.00")
-    assert result.margin == Decimal("400.00")
+    assert result.margin == Decimal("0.00")
     assert result.provisional is True
 
 
-@pytest.mark.parametrize("delivered", [0, 90_000, 400_000])
-def test_pro_rating_does_not_depend_on_what_was_delivered(delivered: int):
+# Inverted: the revenue of a running flight depended only on its days; it now follows its delivery, up to its cap.
+@pytest.mark.parametrize(("delivered", "revenue"), [(0, "0.00"), (90_000, "450.00"), (310_000, "1500.00")])
+def test_a_running_flight_s_billing_follows_its_delivery_up_to_its_cap(delivered: int, revenue: str):
     result = calculate_flight_margin(_september_flight(delivered_impressions=delivered), as_of=date(2026, 9, 10))
 
-    assert result.revenue == Decimal("500.00")
-    assert result.rebate == Decimal("100.00")
+    assert result.revenue == Decimal(revenue)
+
+
+def test_a_running_flight_s_rebate_is_the_engine_s_not_pro_rated() -> None:
+    result = calculate_flight_margin(_september_flight(rebate_amount="90.00"), as_of=date(2026, 9, 10))
+
+    assert result.rebate == Decimal("90.00")
 
 
 def test_the_flight_is_closed_on_the_day_its_last_day_is_counted():
     result = calculate_flight_margin(_september_flight(), as_of=SEPTEMBER_END)
 
     assert result.status is FlightStatus.CLOSED
-    assert result.revenue == Decimal("1500.00")
+    assert result.revenue == Decimal("450.00")  # the billing of its whole window, 90,000 delivered
     assert result.provisional is False
 
 
@@ -194,7 +217,8 @@ def test_the_day_before_the_end_is_still_running():
     result = calculate_flight_margin(_september_flight(), as_of=date(2026, 9, 29))
 
     assert result.status is FlightStatus.RUNNING
-    assert result.revenue == Decimal("1450.00")  # 1,500.00 x 29 / 30
+    assert (result.accrued_days, result.window_days) == (29, 30)
+    assert result.revenue == Decimal("450.00")  # its billing to date; the days drive no amount
     assert result.provisional is True
 
 
@@ -202,7 +226,8 @@ def test_the_first_day_of_a_flight_is_one_elapsed_day():
     result = calculate_flight_margin(_september_flight(), as_of=SEPTEMBER_START)
 
     assert result.status is FlightStatus.RUNNING
-    assert result.revenue == Decimal("50.00")  # 1,500.00 x 1 / 30
+    assert result.accrued_days == 1
+    assert result.revenue == Decimal("450.00")  # its billing to date, not 1,500.00 x 1 / 30
 
 
 def test_a_flight_that_has_not_started_has_no_margin():
@@ -220,22 +245,22 @@ def test_a_flight_that_has_not_started_has_no_margin():
     assert result.below_cost is False
 
 
-def test_a_pro_rated_amount_is_rounded_once_after_pro_rating():
-    # 1,001 impressions at 5.00 € is exactly 5.005 €. Over two days, one elapsed, the exact figure is 2.5025,
-    # which rounds to 2.50; rounding the full amount first (5.01) and halving it would give 2.51.
+# Replaced: there is no pro-rating left to round after. The billing to date is rounded once, half up.
+def test_a_billing_to_date_is_rounded_once_half_up():
+    # 1,001 impressions delivered at 5.00 € is exactly 5.005 €, which rounds to 5.01.
     flight = _flight(
-        contracted_impressions=1001,
+        contracted_impressions=2002,
         rebate_amount="5.005",
         flight_start=date(2026, 9, 1),
         flight_end=date(2026, 9, 2),
-        delivered_impressions=0,
+        delivered_impressions=1001,
         media_cost="0.00",
     )
 
     result = calculate_flight_margin(flight, as_of=date(2026, 9, 1))
 
-    assert result.revenue == Decimal("2.50")
-    assert result.rebate == Decimal("2.50")
+    assert result.revenue == Decimal("5.01")
+    assert result.rebate == Decimal("5.01")
 
 
 def test_a_running_flight_also_rounds_each_amount_exactly_once(monkeypatch: pytest.MonkeyPatch):
@@ -245,7 +270,7 @@ def test_a_running_flight_also_rounds_each_amount_exactly_once(monkeypatch: pyte
 
     calculate_flight_margin(_september_flight(), as_of=date(2026, 9, 10))
 
-    # The contracted revenue, the accrued revenue, the media cost, the rebate and the platform cost.
+    # The contracted sale, the billing to date, the media cost, the rebate and the platform cost.
     assert len(calls) == 5
 
 
@@ -253,13 +278,13 @@ def test_a_flight_whose_media_cost_exceeds_its_revenue_is_below_cost():
     result = calculate_flight_margin(_flight(media_cost="4000.00", rebate_amount="0"), as_of=AFTER_AUGUST)
 
     assert result.below_cost is True
-    assert result.margin == Decimal("3631.01") - Decimal("4000.00") - Decimal("700.00")
+    assert result.margin == Decimal("3500.00") - Decimal("4000.00") - Decimal("700.00")
 
 
 def test_a_margin_of_exactly_zero_is_not_below_cost():
-    # Revenue 3,631.01 = media cost, no rebate, no platform cost: the final margin is 0.00.
+    # Revenue 3,500.00 = media cost, no rebate, no platform cost: the final margin is 0.00.
     result = calculate_flight_margin(
-        _flight(media_cost="3631.01", rebate_amount="0", platform_rate="0"), as_of=AFTER_AUGUST
+        _flight(media_cost="3500.00", rebate_amount="0", platform_rate="0"), as_of=AFTER_AUGUST
     )
 
     assert result.margin == Decimal("0.00")
@@ -289,17 +314,18 @@ def test_a_cent_under_zero_is_below_cost():
 
 
 def test_a_flight_with_media_cost_under_revenue_is_below_cost_when_the_rebate_and_platform_take_it_under_zero():
-    # Media cost 2,100.00 against revenue 3,631.01, but the rebate (907.75) and the platform cost (700.00) follow.
+    # Media cost 2,100.00 against revenue 3,500.00, but the rebate (875.00) and the platform cost (700.00) follow.
     result = calculate_flight_margin(_flight(media_cost="2100.00"), as_of=AFTER_AUGUST)
 
     assert result.media_cost < result.revenue
-    assert result.margin == Decimal("-76.74")
+    assert result.margin == Decimal("-175.00")
     assert result.below_cost is True
 
 
 def test_a_flight_whose_media_cost_equals_its_revenue_is_below_cost_once_the_other_costs_are_counted():
-    result = calculate_flight_margin(_flight(media_cost="3631.01"), as_of=AFTER_AUGUST)
+    result = calculate_flight_margin(_flight(media_cost="3500.00"), as_of=AFTER_AUGUST)
 
+    assert result.media_cost == result.revenue
     assert result.below_cost is True
 
 
@@ -308,7 +334,7 @@ def test_a_positive_margin_is_not_below_cost_even_with_a_high_media_cost():
         _flight(media_cost="3000.00", rebate_amount="0", platform_rate="0.10"), as_of=AFTER_AUGUST
     )
 
-    assert result.margin == Decimal("3631.01") - Decimal("3000.00") - Decimal("70.00")
+    assert result.margin == Decimal("3500.00") - Decimal("3000.00") - Decimal("70.00")
     assert result.below_cost is False
 
 
@@ -328,17 +354,21 @@ def _dooh_flight() -> FlightEconomics:
     )
 
 
-def test_a_closed_dooh_flight_earns_the_revenue_of_its_contracted_ots() -> None:
+# Inverted by committed-billing-and-review: the DOOH flight earned its 300,000 contracted OTS, 1,500.00 €; it now bills
+# the 280,000.50 OTS it delivered, 1,400.0025 € rounded once to 1,400.00 €, and never reads its impressions for it.
+def test_a_closed_dooh_flight_bills_its_delivered_ots() -> None:
     result = calculate_flight_margin(_dooh_flight(), as_of=AFTER_AUGUST)
 
-    assert result.revenue == Decimal("1500.00")
+    assert result.revenue == Decimal("1400.00")
+    assert result.contracted_revenue == Decimal("1500.00")
+    assert result.billable == Decimal("280000.5000")
 
 
 def test_the_platform_cost_of_a_dooh_flight_is_on_its_real_impressions_not_on_its_ots() -> None:
     result = calculate_flight_margin(_dooh_flight(), as_of=AFTER_AUGUST)
 
     assert result.platform_cost == Decimal("12.00")  # 12,000 impressions at 1.00 € per thousand, not 280.00 €
-    assert result.margin == Decimal("1488.00")
+    assert result.margin == Decimal("1388.00")
 
 
 def test_the_margin_carries_the_delivered_volume_in_the_metric_and_the_real_impressions() -> None:
@@ -493,12 +523,12 @@ def test_a_committed_flight_ignores_the_reported_revenue_the_spend_and_has_no_gr
 
     assert with_reports == plain
     assert plain.volume_commitment is VolumeCommitment.COMMITTED
-    assert plain.revenue == Decimal("3631.01")
+    assert plain.revenue == Decimal("3500.00")
     assert plain.gross_revenue is None
     assert plain.gross_differs_from_buyer_spend is False
 
 
-def test_a_running_committed_flight_is_still_pro_rated_whatever_is_reported() -> None:
+def test_a_running_committed_flight_bills_its_delivery_whatever_is_reported() -> None:
     plain = calculate_flight_margin(_september_flight(), as_of=date(2026, 9, 10))
     with_reports = calculate_flight_margin(
         replace(_september_flight(), reported_revenue=Decimal("1.00"), buyer_spend=Decimal("2.00")),
@@ -506,7 +536,7 @@ def test_a_running_committed_flight_is_still_pro_rated_whatever_is_reported() ->
     )
 
     assert with_reports == plain
-    assert plain.revenue == Decimal("500.00")
+    assert plain.revenue == Decimal("450.00")
 
 
 # --- The gross is compared with the buyer's spend; a data cost is flagged, never subtracted --------------------------
@@ -572,7 +602,7 @@ def test_a_float_reported_amount_is_refused(field: str) -> None:
         replace(_target_flight(), **{field: 1.5})  # type: ignore[arg-type]
 
 
-# --- The base of the rebate: the sale of a committed flight, the served gross of a target one ------------------------
+# --- The base of the rebate: the billing of a committed flight, the served gross of a target one ---------------------
 
 def _facts(volume_commitment: VolumeCommitment, delivered_impressions: int) -> FlightFacts:
     return flight_facts(
@@ -584,8 +614,33 @@ def _facts(volume_commitment: VolumeCommitment, delivered_impressions: int) -> F
     )
 
 
-def test_the_rebate_base_of_a_committed_flight_is_its_contracted_revenue() -> None:
+# Renamed by committed-billing-and-review: the base of a committed flight is its billing, which caps an over-delivery at
+# the contracted sale (as before) and follows an under-delivery (not before).
+def test_the_rebate_base_of_a_committed_flight_is_its_billing() -> None:
     assert rebate_base(_facts(VolumeCommitment.COMMITTED, 1_100_000)) == Decimal("5000.00")
+    assert rebate_base(_facts(VolumeCommitment.COMMITTED, 700_000)) == Decimal("3500.00")
+
+
+def test_a_target_flight_bills_what_was_reported_and_has_no_billable_volume() -> None:
+    result = calculate_flight_margin(_target_flight(), as_of=AFTER_NOVEMBER)
+
+    assert (result.billable, result.billing_basis) == (None, BillingBasis.REPORTED)
+
+
+def test_a_flight_that_has_not_started_has_no_billing() -> None:
+    result = calculate_flight_margin(_flight(), as_of=date(2026, 7, 31))
+
+    assert (result.billable, result.billing_basis) == (None, None)
+
+
+def test_an_adjustment_in_force_prices_the_flight() -> None:
+    adjusted = replace(_flight(rebate_amount="0"), adjustment=BillingAdjustment(BillingBasis.CONTRACTED, None))
+
+    result = calculate_flight_margin(adjusted, as_of=AFTER_AUGUST)
+
+    assert (result.revenue, result.billable, result.billing_basis) == (
+        Decimal("3631.01"), Decimal("726202"), BillingBasis.CONTRACTED,
+    )
 
 
 def test_the_rebate_base_of_a_target_flight_is_its_served_gross() -> None:

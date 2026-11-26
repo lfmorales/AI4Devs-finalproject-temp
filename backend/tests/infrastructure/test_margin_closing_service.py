@@ -124,9 +124,15 @@ def _flight_reports(report: MarginReport, line_id: int) -> list[FlightReport]:
     ]
 
 
-def _august_lines(session, count: int = 3) -> list[int]:
+def _august_lines(session, count: int = 3, deliver_the_contract: bool = True) -> list[int]:
+    """Lines of one August flight each. Left out, each delivers its 1,000,000 contracted impressions and so bills its
+    contracted sale, 5,000.00 EUR (committed-billing-and-review); a test that stores its own delivery passes False."""
     first = insert_campaign_line(session)
     lines = [first] + [add_line_to_campaign(session, first, number) for number in range(2, count + 1)]
+    if deliver_the_contract:
+        batch = insert_ingestion_batch(session)
+        for line_id in lines:
+            insert_delivery(session, line_id, date(2026, 8, 10), 1_000_000, batch)
     return lines
 
 
@@ -341,6 +347,10 @@ def test_a_failure_halfway_leaves_no_row(rolled_back_session, user_id, monkeypat
 def test_the_next_closing_starts_from_the_frozen_position_and_does_not_price_frozen_flights_again(rolled_back_session, user_id):
     line_id = insert_campaign_line(rolled_back_session, start_date=date(2026, 7, 1), end_date=date(2026, 8, 31))
     replace_flights(rolled_back_session, line_id, [(date(2026, 7, 1), date(2026, 7, 31)), (date(2026, 8, 1), date(2026, 8, 31))])
+    # Each flight delivers its 1,000,000 contracted impressions, so each bills 5,000.00 EUR (committed-billing-and-review).
+    batch = insert_ingestion_batch(rolled_back_session)
+    insert_delivery(rolled_back_session, line_id, date(2026, 7, 10), 1_000_000, batch)
+    insert_delivery(rolled_back_session, line_id, date(2026, 8, 10), 1_000_000, batch)
     group_id = _group_of(rolled_back_session, line_id)
     schedule = RebateScheduleRecord(holding_group_id=group_id, valid_from=date(2026, 1, 1))
     rolled_back_session.add(schedule)
@@ -393,8 +403,11 @@ def test_the_platform_rate_in_force_is_frozen_with_its_override(rolled_back_sess
 
 
 def test_pending_close_figures_are_the_figures_closing_freezes(rolled_back_session, user_id, monkeypatch):
-    """Three flights of one counter, read as a pending-close read would, then closed: the same to the cent."""
-    lines = _august_lines(rolled_back_session, count=3)
+    """Three flights of one counter, read as a pending-close read would, then closed: the same to the cent.
+
+    They deliver 100,000 to 300,000 of their 1,000,000 contracted, so each bills its delivery, not its contract.
+    """
+    lines = _august_lines(rolled_back_session, count=3, deliver_the_contract=False)
     group_id = _group_of(rolled_back_session, lines[0])
     schedule = RebateScheduleRecord(holding_group_id=group_id, valid_from=date(2026, 1, 1))
     rolled_back_session.add(schedule)
@@ -442,7 +455,11 @@ def test_pending_close_figures_are_the_figures_closing_freezes(rolled_back_sessi
     for item in pending:
         stored = _snapshot_of_record(snapshots[frozen[item.facts.flight_id].id])
         assert stored == snapshot_of(item)
-        assert margin_from_snapshot(stored, item.facts.flight_start, item.facts.flight_end) == item.margin
+        # The snapshot does not hold the billable volume and the billing basis until task 9.3 of
+        # committed-billing-and-review; every other field must be the pending-close one.
+        assert margin_from_snapshot(stored, item.facts.flight_start, item.facts.flight_end) == replace(
+            item.margin, billable=None, billing_basis=None
+        )
 
 
 def test_changing_the_system_rate_after_closing_does_not_move_the_frozen_flight(rolled_back_session, user_id):
@@ -587,6 +604,10 @@ def test_closing_the_worked_examples_month_freezes_its_revenue_and_its_gross_and
     november: _November, user_id: int
 ) -> None:
     november.ingest_the_month()
+    # The committed flight delivers its 1,000,000 contracted impressions, so it bills its 5,000.00 € contracted sale
+    # (committed-billing-and-review) and the Deal counter stands there before the target flight.
+    insert_delivery(november.session, november.committed, date(2026, 11, 10), 1_000_000,
+                    insert_ingestion_batch(november.session))
 
     result = _service(november.session, today=DECEMBER_FIRST).close_month(2026, 11, user_id)
 
@@ -760,10 +781,11 @@ def test_the_committed_example_keeps_its_closed_margin_after_the_restatement_and
     report = _read_margin(rolled_back_session, date(2026, 12, 4))
     (after,) = _flight_reports(report, line_id)
 
-    assert (before.margin.margin, before.margin.delivery_changed) == (Decimal("1850.00"), False)
+    # It bills the 700,000 it delivered, 3,500.00 €, with a 25 % rebate of 875.00 € (committed-billing-and-review).
+    assert (before.margin.margin, before.margin.delivery_changed) == (Decimal("725.00"), False)
     assert after.state is FlightState.CLOSED
-    assert (after.margin.media_cost, after.margin.platform_cost, after.margin.margin) == (
-        Decimal("1200.00"), Decimal("700.00"), Decimal("1850.00"),
+    assert (after.margin.revenue, after.margin.media_cost, after.margin.platform_cost, after.margin.margin) == (
+        Decimal("3500.00"), Decimal("1200.00"), Decimal("700.00"), Decimal("725.00"),
     )
     assert after.margin.delivered_impressions == 700_000
     assert replace(after.margin, delivery_changed=False) == before.margin
@@ -771,12 +793,14 @@ def test_the_committed_example_keeps_its_closed_margin_after_the_restatement_and
     assert after.delivery_change == ClosedDeliveryCheck(
         delivered_difference=Decimal("500000.0000"), delivered_impressions_difference=500_000,
         media_cost_difference=Decimal("1800.00"), reported_revenue_difference=None, buyer_spend_difference=None,
-        current_margin=Decimal("-450.00"), margin_difference=Decimal("-2300.00"), changed=True,
+        # Until task 9.4 the check keeps the frozen revenue: 3,500.00 - 3,000.00 - 875.00 - 1,200.00. Task 9.4 compares
+        # with the current billing, 5,000.00, for a current margin of -75.00.
+        current_margin=Decimal("-1575.00"), margin_difference=Decimal("-2300.00"), changed=True,
     )
     (campaign,) = [c for c in report.campaigns if any(line.campaign_line_id == line_id for line in c.lines)]
     for totals in (campaign.lines[0].totals, campaign.totals):
         assert (totals.margin, totals.media_cost, totals.delivery_changed_count) == (
-            Decimal("1850.00"), Decimal("1200.00"), 1,
+            Decimal("725.00"), Decimal("1200.00"), 1,
         )
     assert report.totals.delivery_changed_count == 1
 
@@ -794,9 +818,10 @@ def test_a_closed_flight_read_with_no_change_to_its_delivery_equals_its_pending_
     (closed,) = _flight_reports(_read_margin(rolled_back_session, DECEMBER_FIRST), line_id)
 
     assert pending.state is FlightState.PENDING_CLOSE and closed.state is FlightState.CLOSED
-    assert closed.margin == replace(pending.margin, provisional=False)
+    # The snapshot does not hold the billable volume and the billing basis until task 9.3 of committed-billing-and-review.
+    assert closed.margin == replace(pending.margin, provisional=False, billable=None, billing_basis=None)
     assert closed.delivery_change is not None and closed.delivery_change.changed is False
-    assert closed.delivery_change.current_margin == closed.margin.margin == Decimal("1850.00")
+    assert closed.delivery_change.current_margin == closed.margin.margin == Decimal("725.00")
 
 
 def test_unlinking_a_line_with_a_closed_flight_keeps_its_closed_figures(rolled_back_session: Session, user_id: int) -> None:
@@ -810,8 +835,10 @@ def test_unlinking_a_line_with_a_closed_flight_keeps_its_closed_figures(rolled_b
     assert replace(after.margin, delivery_changed=False) == before.margin
     assert after.margin.delivery_changed is True
     assert after.delivery_change is not None
+    # Until task 9.4 the current margin keeps the frozen revenue: 3,500.00 - 0.00 - 875.00 - 0.00. Task 9.4 compares
+    # with the current billing, nothing once the delivery is gone, for a current margin of -875.00.
     assert (after.delivery_change.delivered_impressions_difference, after.delivery_change.current_margin) == (
-        -700_000, Decimal("3750.00"),
+        -700_000, Decimal("2625.00"),
     )
 
 

@@ -149,8 +149,12 @@ test.describe("the margin of the current month, running", () => {
         }
       }
     }
-    // The API gives a null percentage only for the flights without a sale, and the screen shows a dash there.
-    expect(flights.filter((flight) => flight.margin_pct === null).every((flight) => flight.zero_sale)).toBe(true);
+    // The API gives a null percentage only for the flights with no revenue, and the screen shows a dash there: a flight
+    // without a sale, or a committed flight that has billed nothing yet, since a committed flight earns its billing, the
+    // lesser of delivered and contracted (committed-billing-and-review). The running demo flights with no delivery, such
+    // as the exceptions demo's, are of the second kind.
+    expect(flights.filter((flight) => flight.margin_pct === null).every((flight) => flight.revenue === "0.00")).toBe(true);
+    expect(flights.filter((flight) => flight.zero_sale).every((flight) => flight.margin_pct === null)).toBe(true);
   });
 });
 

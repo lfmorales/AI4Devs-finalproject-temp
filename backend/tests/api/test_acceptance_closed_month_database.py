@@ -121,11 +121,13 @@ def test_each_real_row_reads_back_with_the_amounts_of_the_domain_and_of_the_shee
         margin = expected[row.number].margin
         assert flight["state"] == "closed", label
         assert [flight[name] for name in AMOUNTS] == [str(getattr(margin, name)) for name in AMOUNTS], label
-        assert abs(Decimal(flight["revenue"]) - row.sale) <= CENT, label
+        # The sheet billed at the lesser of served and contracted (committed-billing-and-review): the "normal" row
+        # served less than it contracted, so it departs from the sheet's own sale; the others still match it.
+        assert abs(Decimal(flight["revenue"]) - row.expected_revenue) <= CENT, label
         assert abs(Decimal(flight["media_cost"]) - row.purchase_cost) <= CENT, label
-        assert abs(Decimal(flight["rebate"]) - row.sheet_rebate) <= CENT, label
+        assert abs(Decimal(flight["rebate"]) - row.expected_rebate) <= CENT, label
         assert abs(Decimal(flight["platform_cost"]) - row.sheet_platform_cost) <= CENT, label
-        assert abs(Decimal(flight["margin"]) - row.margin) <= Decimal("0.04"), label
+        assert abs(Decimal(flight["margin"]) - row.expected_margin) <= Decimal("0.04"), label
 
 
 def test_the_percentage_and_the_flags_of_the_real_rows(month, chosen):
@@ -134,9 +136,10 @@ def test_the_percentage_and_the_flags_of_the_real_rows(month, chosen):
 
     for label, row in chosen.items():
         _, line, flight = _flight_of(body, row.campaign)
-        assert abs(Decimal(flight["margin_pct"]) - row.margin_pct * 100) <= Decimal("0.05"), label
+        expected_pct = row.expected_margin / row.expected_revenue * 100
+        assert abs(Decimal(flight["margin_pct"]) - expected_pct) <= Decimal("0.05"), label
         assert flight["zero_sale"] is False and line["zero_sale"] is False, label
-        assert flight["below_cost"] is (row.margin < 0), label
+        assert flight["below_cost"] is (row.expected_margin < 0), label
 
 
 def test_the_row_without_a_rebate_schedule_has_an_explicit_zero(month, chosen):

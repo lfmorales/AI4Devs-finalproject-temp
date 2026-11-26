@@ -8,6 +8,7 @@ from the stored line and delivery.
 from datetime import date
 from decimal import Decimal
 
+from app.domain.value_objects.billing import BillingAdjustment
 from app.domain.value_objects.margin import FlightEconomics
 from app.domain.value_objects.priced_flight import FlightFacts
 from app.domain.value_objects.volume_commitment import VolumeCommitment
@@ -29,6 +30,9 @@ def flight_economics(
     reported_revenue: Decimal = Decimal(0),
     buyer_spend: Decimal = Decimal(0),
     data_cost: Decimal = Decimal(0),
+    carryover: int = 0,
+    carryover_billable: bool = False,
+    adjustment: BillingAdjustment | None = None,
 ) -> FlightEconomics:
     return FlightEconomics(
         flight_start=flight_start, flight_end=flight_end, contracted_impressions=contracted_impressions,
@@ -36,7 +40,7 @@ def flight_economics(
         rebate_amount=rebate_amount, platform_rate=platform_rate, delivery_metric=delivery_metric,
         delivered=Decimal(delivered_impressions) if delivered is None else delivered,
         volume_commitment=volume_commitment, reported_revenue=reported_revenue, buyer_spend=buyer_spend,
-        data_cost=data_cost,
+        data_cost=data_cost, carryover=carryover, carryover_billable=carryover_billable, adjustment=adjustment,
     )
 
 
@@ -63,6 +67,9 @@ def flight_facts(
     reported_revenue: Decimal = Decimal(0),
     buyer_spend: Decimal = Decimal(0),
     data_cost: Decimal = Decimal(0),
+    carryover: int = 0,
+    carryover_billable: bool = False,
+    adjustment: BillingAdjustment | None = None,
 ) -> FlightFacts:
     return FlightFacts(
         flight_id=flight_id, campaign_line_id=campaign_line_id, campaign_id=campaign_id, flight_start=flight_start,
@@ -72,5 +79,5 @@ def flight_facts(
         delivery_metric=delivery_metric,
         delivered=Decimal(delivered_impressions) if delivered is None else delivered,
         volume_commitment=volume_commitment, reported_revenue=reported_revenue, buyer_spend=buyer_spend,
-        data_cost=data_cost,
+        data_cost=data_cost, carryover=carryover, carryover_billable=carryover_billable, adjustment=adjustment,
     )

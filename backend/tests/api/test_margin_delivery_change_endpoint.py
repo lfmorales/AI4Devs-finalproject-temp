@@ -1,8 +1,9 @@
 """GET /margin reports a closed flight whose delivery changed after its closing; no figure moves (finance/margin-reporting).
 
 The committed example: November, 1,000,000 contracted at 5.00 €, a flat rebate of 25 %, closed on 1 December with
-700,000 impressions and 1,200.00 € of media cost, a margin of 1,850.00 €; restated with 1,200,000 impressions and
-3,000.00 € of media cost. The Deal example: a target of 1,000,000 at 5.00 € on Equativ, closed with 1,100,000 served,
+700,000 impressions and 1,200.00 € of media cost; it bills the 700,000 it delivered, 3,500.00 €, with a rebate of
+875.00 € and a margin of 725.00 € (committed-billing-and-review); restated with 1,200,000 impressions and 3,000.00 € of
+media cost. The Deal example: a target of 1,000,000 at 5.00 € on Equativ, closed with 1,100,000 served,
 4,400.00 € reported and 5,500.00 € spent, a flat rebate of 10 % on its gross, a margin of 2,750.00 €; restated with
 1,300,000 served, 5,200.00 € reported and 6,500.00 € spent.
 """
@@ -122,18 +123,20 @@ def test_the_restated_committed_flight_reports_its_change_and_keeps_its_frozen_f
 
     campaign, line, flight = _by_name(closed_month.read(), "Adform committed")
 
-    assert (flight["state"], flight["margin"], flight["media_cost"], flight["platform_cost"]) == (
-        "closed", "1850.00", "1200.00", "700.00",
+    assert (flight["state"], flight["revenue"], flight["margin"], flight["media_cost"], flight["platform_cost"]) == (
+        "closed", "3500.00", "725.00", "1200.00", "700.00",
     )
     assert flight["delivered_impressions"] == 700_000
     assert flight["delivery_changed"] is True
     assert flight["delivery_change"] == {
         "delivered_difference": "500000.0000", "delivered_impressions_difference": 500_000,
         "media_cost_difference": "1800.00", "reported_revenue_difference": None, "buyer_spend_difference": None,
-        "current_margin": "-450.00", "margin_difference": "-2300.00",
+        # Until task 9.4 the check keeps the frozen revenue of a committed flight: 3,500.00 - 3,000.00 - 875.00 -
+        # 1,200.00. Task 9.4 compares with the current billing instead (5,000.00, a current margin of -75.00).
+        "current_margin": "-1575.00", "margin_difference": "-2300.00",
     }
     for totals in (line["totals"], campaign["totals"]):
-        assert (totals["delivery_changed_count"], totals["margin"]) == (1, "1850.00")
+        assert (totals["delivery_changed_count"], totals["margin"]) == (1, "725.00")
 
 
 def test_the_restated_target_flight_reports_its_revenue_and_spend_differences(

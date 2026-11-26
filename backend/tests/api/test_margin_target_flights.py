@@ -94,7 +94,8 @@ def test_a_committed_flight_has_no_gross_and_no_flag_raised_by_it(
     assert flight["volume_commitment"] == "committed"
     assert flight["gross_revenue"] is None
     assert flight["gross_differs_from_buyer_spend"] is False
-    assert flight["revenue"] == "5000.00"
+    # It delivered nothing, so it bills nothing (committed-billing-and-review); its contracted sale is still 5,000.00 €.
+    assert (flight["revenue"], flight["contracted_revenue"]) == ("0.00", "5000.00")
 
 
 def test_a_line_carries_its_commitment_and_a_campaign_of_both_carries_none_and_the_gross_of_its_target_line(

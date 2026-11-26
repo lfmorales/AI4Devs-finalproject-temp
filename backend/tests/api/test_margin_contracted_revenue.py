@@ -3,6 +3,8 @@
 from datetime import date
 from decimal import Decimal
 
+from sqlalchemy.orm import Session
+
 from app.domain.services.flight_margin import round_amount
 from app.presentation.dependencies import providers
 from tests.fixtures.delivery_data import (
@@ -34,20 +36,27 @@ def _flights(body: dict) -> list[dict]:
     return [f for c in body["campaigns"] for l in c["lines"] for f in l["flights"]]
 
 
+def _bill(session: Session, line_id: int, impressions: int, day: date = date(2026, 8, 5)) -> None:
+    """A committed flight earns its billing (committed-billing-and-review): give it the delivery it bills."""
+    insert_delivery(session, line_id, day, impressions, insert_ingestion_batch(session))
+
+
 def test_a_running_flight_returns_the_whole_sale_and_fewer_accrued_days_than_window_days(client_for_roles, test_db_session):
-    insert_campaign_line(test_db_session)
+    _bill(test_db_session, insert_campaign_line(test_db_session), 180_000)
 
     (flight,) = _flights(_get(_client(client_for_roles, AUGUST_11)))
 
     assert flight["state"] == "running"
     assert flight["contracted_revenue"] == "5000.00"
-    assert Decimal(flight["revenue"]) == round_amount(Decimal("5000") * 10 / 31)
+    # Its billing to date, 180,000 at 5.00 €, not 5,000 x 10 / 31 pro-rated (committed-billing-and-review).
+    assert Decimal(flight["revenue"]) == round_amount(Decimal("180000") / 1000 * 5) == Decimal("900.00")
     assert (flight["accrued_days"], flight["window_days"]) == (10, 31)
     assert flight["accrued_days"] < flight["window_days"]
 
 
 def test_a_pending_close_flight_accrues_all_of_it(client_for_roles, test_db_session):
-    insert_campaign_line(test_db_session)
+    # It delivered its whole volume: a committed flight bills all of its contract only then.
+    _bill(test_db_session, insert_campaign_line(test_db_session), 1_000_000)
 
     (flight,) = _flights(_get(_client(client_for_roles, SEPTEMBER_FIRST)))
 
@@ -57,7 +66,7 @@ def test_a_pending_close_flight_accrues_all_of_it(client_for_roles, test_db_sess
 
 
 def test_a_closed_flight_accrues_all_of_it_and_closing_changes_none_of_the_three(client_for_roles, test_db_session):
-    insert_campaign_line(test_db_session)
+    _bill(test_db_session, insert_campaign_line(test_db_session), 1_000_000)
     client = _client(client_for_roles, SEPTEMBER_FIRST)
     (before,) = _flights(_get(client))
     assert client.post("/margin/closings", json={"year": 2026, "month": 8}).status_code == 200

@@ -21,7 +21,7 @@ from app.domain.services.closed_flight import (
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.priced_flights import price_flights
 from app.domain.value_objects.closed_flight import ClosedDeliveryCheck, ClosedFlightSnapshot
-from app.domain.value_objects.margin import FlightEconomics, FlightStatus, WindowDelivery
+from app.domain.value_objects.margin import FlightEconomics, FlightMargin, FlightStatus, WindowDelivery
 from app.domain.value_objects.platform_rate import PlatformRateLevel, ResolvedPlatformRate
 from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight
 from app.domain.value_objects.rebate import Bracket, CounterKey, FlightRebate, LadderStep, RebateSchedule
@@ -60,7 +60,8 @@ def _priced(facts: FlightFacts, schedules: list[RebateSchedule], as_of: date) ->
 
 
 def committed_flight() -> PricedFlight:
-    # 25 % of 3,631.01 € is a rebate of 907.7525 €; the media cost is stored with more decimals than a cent.
+    # 700,000 delivered of 726,202 bill 3,500.00 € (committed-billing-and-review); 25 % of it is a rebate of 875.00 €;
+    # the media cost is stored with more decimals than a cent.
     return _priced(_facts(data_cost=Decimal("0.75")), [_schedule("0.25")], CLOSING_OF_AUGUST)
 
 
@@ -98,12 +99,12 @@ def test_the_snapshot_of_a_committed_flight_copies_its_amounts_its_delivery_and_
     snapshot = snapshot_of(committed_flight())
 
     assert snapshot == ClosedFlightSnapshot(
-        revenue=Decimal("3631.01"),
+        revenue=Decimal("3500.00"),
         contracted_revenue=Decimal("3631.01"),
         media_cost=Decimal("1200.00"),
-        rebate=Decimal("907.75"),
+        rebate=Decimal("875.00"),
         platform_cost=Decimal("700.00"),
-        margin=Decimal("823.26"),
+        margin=Decimal("725.00"),
         gross_revenue=None,
         delivered_impressions=700_000,
         delivered=Decimal(700_000),
@@ -139,10 +140,11 @@ def test_the_snapshot_of_a_dooh_flight_holds_its_ots_and_its_real_impressions() 
     assert (snapshot.delivered, snapshot.delivered_impressions, snapshot.delivery_metric) == (
         Decimal("280000.5000"), 12_000, "ots",
     )
+    # It bills the 280,000.50 OTS it delivered (committed-billing-and-review), not its 300,000 contracted.
     assert (snapshot.contracted_impressions, snapshot.revenue, snapshot.rebate) == (
-        300_000, Decimal("1500.00"), Decimal("0.00"),
+        300_000, Decimal("1400.00"), Decimal("0.00"),
     )
-    assert (snapshot.platform_cost, snapshot.margin) == (Decimal("12.00"), Decimal("1488.00"))
+    assert (snapshot.platform_cost, snapshot.margin) == (Decimal("12.00"), Decimal("1388.00"))
 
 
 # The closing freezes the flights ending on or before its `as_of` (`open_ended_flights`), and prices them with
@@ -152,7 +154,7 @@ def test_the_snapshot_of_a_dooh_flight_holds_its_ots_and_its_real_impressions() 
 def test_a_flight_ending_on_the_closing_s_as_of_has_a_snapshot() -> None:
     last_day = _priced(_facts(), [_schedule("0.25")], AUGUST_END)
 
-    assert snapshot_of(last_day).margin == Decimal("823.26")
+    assert snapshot_of(last_day).margin == Decimal("725.00")
 
 
 def test_a_running_flight_has_no_snapshot() -> None:
@@ -217,10 +219,10 @@ def test_a_closed_flight_read_from_its_snapshot_carries_every_figure_of_the_snap
     assert margin.provisional is False
     assert (margin.accrued_days, margin.window_days) == (31, 31)
     assert (margin.revenue, margin.contracted_revenue, margin.media_cost, margin.rebate, margin.platform_cost) == (
-        Decimal("3631.01"), Decimal("3631.01"), Decimal("1200.00"), Decimal("907.75"), Decimal("700.00"),
+        Decimal("3500.00"), Decimal("3631.01"), Decimal("1200.00"), Decimal("875.00"), Decimal("700.00"),
     )
-    assert margin.margin == Decimal("823.26")
-    assert margin.margin_pct == Decimal("22.67")
+    assert margin.margin == Decimal("725.00")
+    assert margin.margin_pct == Decimal("20.71")
     assert (margin.delivered_impressions, margin.contracted_impressions, margin.delivered, margin.delivery_metric) == (
         700_000, 726_202, Decimal(700_000), "impressions",
     )
@@ -237,7 +239,7 @@ def test_the_figures_are_the_snapshot_s_and_are_never_computed_again() -> None:
     margin = margin_from_snapshot(snapshot, AUGUST_START, AUGUST_END)
 
     assert (margin.margin, margin.platform_cost, margin.revenue) == (
-        Decimal("-0.01"), Decimal("123.45"), Decimal("3631.01"),
+        Decimal("-0.01"), Decimal("123.45"), Decimal("3500.00"),
     )
     assert margin.below_cost is True
     assert margin.margin_pct == Decimal("0.00")
@@ -260,11 +262,23 @@ def test_the_flags_of_a_target_flight_come_from_the_snapshot() -> None:
     assert (margin.accrued_days, margin.window_days) == (30, 30)
 
 
+def _without_billing(margin: FlightMargin) -> FlightMargin:
+    """The margin without its billable volume and billing basis.
+
+    The snapshot does not hold them until task 9.3 of committed-billing-and-review adds them to it, so a margin read
+    from a snapshot carries neither; every other field must still be the closing's. Task 9.3 removes this helper and
+    compares whole margins again.
+    """
+    return dataclasses.replace(margin, billable=None, billing_basis=None)
+
+
 @pytest.mark.parametrize("priced", [committed_flight(), target_flight(), zero_sale_flight(), dooh_flight()])
 def test_a_flight_read_from_its_snapshot_is_the_flight_its_closing_priced(priced: PricedFlight) -> None:
     snapshot = snapshot_of(priced)
 
-    assert margin_from_snapshot(snapshot, priced.facts.flight_start, priced.facts.flight_end) == priced.margin
+    assert margin_from_snapshot(snapshot, priced.facts.flight_start, priced.facts.flight_end) == _without_billing(
+        priced.margin
+    )
 
 
 def _economics_at_closing(commitment: VolumeCommitment) -> FlightEconomics:
@@ -274,7 +288,7 @@ def _economics_at_closing(commitment: VolumeCommitment) -> FlightEconomics:
         delivered_impressions=812_345, media_cost=Decimal("1534.567891"), rebate_amount=Decimal("473.218765432109"),
         platform_rate=Decimal("1.37"), delivery_metric="impressions", delivered=Decimal(812_345),
         volume_commitment=commitment, reported_revenue=Decimal("3412.344999"), buyer_spend=Decimal("2999.99"),
-        data_cost=Decimal("0.000001"),
+        data_cost=Decimal("0.000001"), carryover=0, carryover_billable=False, adjustment=None,
     )
 
 
@@ -309,7 +323,7 @@ def test_the_margin_read_from_a_snapshot_is_the_margin_calculate_flight_margin_g
     )
 
     assert at_closing.status is FlightStatus.CLOSED
-    assert read == at_closing
+    assert read == _without_billing(at_closing)
     assert read.margin_pct == at_closing.margin_pct
     if commitment is VolumeCommitment.TARGET:
         assert (read.gross_differs_from_buyer_spend, read.data_cost_reported) == (True, True)

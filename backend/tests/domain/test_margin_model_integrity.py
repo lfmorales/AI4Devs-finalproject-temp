@@ -11,6 +11,7 @@ import pytest
 from app.domain.services import closed_flight, flight_delivery, flight_margin, margin_totals, platform_rate, priced_flights
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.margin_totals import total_flights, total_lines
+from app.domain.value_objects import billing
 from app.domain.value_objects import closed_flight as closed_flight_snapshot
 from app.domain.value_objects import margin
 from app.domain.value_objects.margin import FlightEconomics
@@ -19,6 +20,7 @@ from tests.fixtures.flight_inputs import flight_economics
 
 MARGIN_MODULES = (
     margin, flight_margin, margin_totals, flight_delivery, platform_rate, closed_flight_snapshot, closed_flight,
+    billing,
 )
 # The pricing function carries the channel as data for the rebate rules; it never branches on it.
 FLOAT_FREE_MODULES = (*MARGIN_MODULES, priced_flights)
@@ -71,7 +73,8 @@ def test_no_margin_module_branches_on_a_channel(module: object):
 
 
 @pytest.mark.parametrize(
-    ("commitment", "revenue"), [(VolumeCommitment.COMMITTED, "3631.01"), (VolumeCommitment.TARGET, "3400.00")]
+    # The committed flight bills 700,000 delivered of 726,202 contracted (committed-billing-and-review).
+    ("commitment", "revenue"), [(VolumeCommitment.COMMITTED, "3500.00"), (VolumeCommitment.TARGET, "3400.00")]
 )
 def test_a_deal_flight_and_a_directo_flight_with_the_same_commitment_and_numbers_have_the_same_margin(
     commitment: VolumeCommitment, revenue: str

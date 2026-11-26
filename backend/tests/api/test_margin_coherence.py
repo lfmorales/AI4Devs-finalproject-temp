@@ -40,9 +40,11 @@ def scenario(client_for_roles, test_db_session):
     set_volume(session, line_c, 6_000_000)        # 30,000 EUR: it crosses the 100,000 cut of the counter
     schedule_id = add_schedule(session, group_of(session, line_a), ("0", "100000", "0.15"), ("100000", None, "0.2"))
     batch = insert_ingestion_batch(session)
-    insert_delivery(session, line_a, date(2026, 7, 10), 1_234_567, batch, Decimal("812.345678"))
-    insert_delivery(session, line_b, date(2026, 7, 20), 7_654_321, batch, Decimal("2468.135791"))
-    insert_delivery(session, line_c, date(2026, 8, 15), 3_333_333, batch, Decimal("999.999999"))
+    # Each line delivers its contracted volume, so each bills its contracted sale (committed-billing-and-review) and the
+    # counter receives 30,000, 60,000 and 30,000 EUR as before; the costs keep their decimals.
+    insert_delivery(session, line_a, date(2026, 7, 10), 6_000_000, batch, Decimal("812.345678"))
+    insert_delivery(session, line_b, date(2026, 7, 20), 12_000_000, batch, Decimal("2468.135791"))
+    insert_delivery(session, line_c, date(2026, 8, 15), 6_000_000, batch, Decimal("999.999999"))
     user_id = insert_user(session, "platform-rate-author@example.com")
     client = client_for_roles("finance")
     client.app.dependency_overrides[providers.get_today] = lambda: date(2026, 9, 1)

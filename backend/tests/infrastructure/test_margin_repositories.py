@@ -54,6 +54,14 @@ def _line(session, **kwargs) -> int:
     return insert_campaign_line(session, **kwargs)
 
 
+def _deliver_the_contract(session: Session, line_id: int, *days: date) -> None:
+    """Each flight, one per day given, delivers its 1,000,000 contracted impressions, so it bills its contracted sale
+    (committed-billing-and-review) and its counter advances by 5,000 EUR as before."""
+    batch = insert_ingestion_batch(session)
+    for day in days:
+        insert_delivery(session, line_id, day, 1_000_000, batch)
+
+
 def _group_and_agency(session, line_id: int) -> tuple[int, int]:
     line = session.get(CampaignLineRecord, line_id)
     campaign = session.get(CampaignRecord, line.campaign_id)
@@ -260,6 +268,7 @@ def _freeze(
 
 def test_saved_rates_keep_every_decision_and_the_breakdown(rolled_back_session):
     line_id = _line(rolled_back_session)
+    _deliver_the_contract(rolled_back_session, line_id, date(2026, 8, 10))
     group_id, agency_id = _group_and_agency(rolled_back_session, line_id)
     user_id = insert_user(rolled_back_session)
     schedule = RebateScheduleRecord(holding_group_id=group_id, valid_from=date(2026, 1, 1))
@@ -312,6 +321,7 @@ def test_opening_positions_are_the_position_after_the_latest_frozen_flight_of_ea
     replace_flights(rolled_back_session, line_id, [
         (date(2026, 6, 1), date(2026, 6, 30)), (date(2026, 7, 1), date(2026, 7, 31)), (date(2026, 8, 1), date(2026, 8, 31)),
     ])
+    _deliver_the_contract(rolled_back_session, line_id, date(2026, 6, 10), date(2026, 7, 10), date(2026, 8, 10))
     group_id, _ = _group_and_agency(rolled_back_session, line_id)
     user_id = insert_user(rolled_back_session)
     schedule = RebateScheduleRecord(holding_group_id=group_id, valid_from=date(2026, 1, 1))
@@ -337,6 +347,7 @@ def test_opening_positions_are_the_position_after_the_latest_frozen_flight_of_ea
 def test_the_opening_position_feeds_the_next_closing(rolled_back_session):
     line_id = _line(rolled_back_session, start_date=date(2026, 7, 1), end_date=date(2026, 8, 31))
     replace_flights(rolled_back_session, line_id, [(date(2026, 7, 1), date(2026, 7, 31)), (date(2026, 8, 1), date(2026, 8, 31))])
+    _deliver_the_contract(rolled_back_session, line_id, date(2026, 7, 10), date(2026, 8, 10))
     group_id, _ = _group_and_agency(rolled_back_session, line_id)
     user_id = insert_user(rolled_back_session)
     schedule = RebateScheduleRecord(holding_group_id=group_id, valid_from=date(2026, 1, 1))

@@ -31,7 +31,9 @@ def _only_flight(body: dict) -> dict:
 def test_a_closed_month_gives_the_margin_of_the_specs_worked_example(operations, test_db_session):
     """726,202 impressions at 5.00 EUR; 25 % rebate; 700,000 delivered at 1.00 EUR per thousand; media cost 1,200.00.
 
-    The media cost is a placeholder: real cost only exists in Adform.
+    It bills the 700,000 it delivered, 3,500.00 EUR, with a rebate of 875.00 and a margin of 725.00
+    (committed-billing-and-review; docs/product-description.md §5.8). The media cost is a placeholder: real cost only
+    exists in Adform.
     """
     line_id = insert_campaign_line(test_db_session)
     set_volume(test_db_session, line_id, 726_202, "5.00")
@@ -45,10 +47,10 @@ def test_a_closed_month_gives_the_margin_of_the_specs_worked_example(operations,
 
     assert flight["state"] == "closed" and flight["provisional"] is False
     assert (flight["revenue"], flight["media_cost"], flight["rebate"], flight["platform_cost"], flight["margin"]) == (
-        "3631.01", "1200.00", "907.75", "700.00", "823.26")
+        "3500.00", "1200.00", "875.00", "700.00", "725.00")
     for totals in (body["campaigns"][0]["lines"][0]["totals"], body["campaigns"][0]["totals"], body["totals"]):
         assert (totals["revenue"], totals["media_cost"], totals["rebate"], totals["platform_cost"], totals["margin"]) == (
-            "3631.01", "1200.00", "907.75", "700.00", "823.26")
+            "3500.00", "1200.00", "875.00", "700.00", "725.00")
 
 
 def test_the_same_figures_are_read_before_the_month_is_closed(operations, test_db_session):
@@ -61,14 +63,15 @@ def test_the_same_figures_are_read_before_the_month_is_closed(operations, test_d
     flight = _only_flight(operations.get("/margin").json())
 
     assert flight["state"] == "pending_close" and flight["provisional"] is True
-    assert flight["margin"] == "823.26"
+    assert flight["margin"] == "725.00"
 
 
-def test_a_running_flight_ten_days_into_thirty_is_pro_rated_and_provisional(operations, test_db_session):
+def test_a_running_flight_ten_days_into_thirty_bills_its_delivery_to_date_and_is_provisional(operations, test_db_session):
     """300,000 impressions at 5.00 EUR over 1-30 September; a flat 20 % rebate; 90,000 delivered, media cost 150.00.
 
-    On the 10th (as_of): revenue 1,500.00 x 10 / 30 = 500.00; rebate 300.00 x 10 / 30 = 100.00; platform
-    90,000 / 1000 x 1.00 = 90.00; margin 500.00 - 150.00 - 100.00 - 90.00 = 160.00.
+    On the 10th (as_of) it bills its delivery to date, nothing pro-rated (committed-billing-and-review): revenue
+    90,000 / 1000 x 5.00 = 450.00; rebate 20 % of it, 90.00; platform 90,000 / 1000 x 1.00 = 90.00; margin
+    450.00 - 150.00 - 90.00 - 90.00 = 120.00. Pro-rated it was 500.00, 100.00 and a margin of 160.00.
     """
     line_id = insert_campaign_line(test_db_session, start_date=date(2026, 9, 1), end_date=date(2026, 9, 30))
     replace_flights(test_db_session, line_id, [(date(2026, 9, 1), date(2026, 9, 30))])
@@ -82,7 +85,7 @@ def test_a_running_flight_ten_days_into_thirty_is_pro_rated_and_provisional(oper
 
     assert flight["state"] == "running" and flight["provisional"] is True
     assert (flight["revenue"], flight["media_cost"], flight["rebate"], flight["platform_cost"], flight["margin"]) == (
-        "500.00", "150.00", "100.00", "90.00", "160.00")
+        "450.00", "150.00", "90.00", "90.00", "120.00")
     assert body["totals"]["provisional"] is True
 
 
@@ -96,7 +99,7 @@ def test_the_margin_percentage_is_present_at_every_level_as_a_two_decimal_string
 
     body = operations.get("/margin").json()
 
-    assert _only_flight(body)["margin_pct"] == "22.67"  # 823.26 / 3,631.01
-    assert body["campaigns"][0]["lines"][0]["totals"]["margin_pct"] == "22.67"
-    assert body["campaigns"][0]["totals"]["margin_pct"] == "22.67"
-    assert body["totals"]["margin_pct"] == "22.67"
+    assert _only_flight(body)["margin_pct"] == "20.71"  # 725.00 / 3,500.00
+    assert body["campaigns"][0]["lines"][0]["totals"]["margin_pct"] == "20.71"
+    assert body["campaigns"][0]["totals"]["margin_pct"] == "20.71"
+    assert body["totals"]["margin_pct"] == "20.71"

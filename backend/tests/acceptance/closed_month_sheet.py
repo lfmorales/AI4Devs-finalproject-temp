@@ -2,6 +2,11 @@
 
 The file lives in tests/private/, which is ignored by git: it is read here with the csv module and never copied.
 Every figure of the comparison comes from the sheet's own columns; none is written in the tests.
+
+The sheet bills each row its whole contracted volume. Since committed-billing-and-review a committed flight earns its
+billing, the lesser of served and contracted, so the tests compare the domain with `expected_revenue`,
+`expected_rebate` and `expected_margin`: the sheet's own columns with that rule applied. The rows that served less than
+they contracted depart from the sheet's sale by construction; test_closed_month_sheet.py documents the difference.
 """
 
 import csv
@@ -28,6 +33,7 @@ AS_OF = date(2026, 9, 5)
 EXCLUDED_REASON = "sin volumen contratado: no contemplada en este corte; su entrega queda como entrega sin casar"
 
 _ZERO = Decimal(0)
+_CENT = Decimal("0.01")
 
 
 @dataclass(frozen=True)
@@ -59,6 +65,25 @@ class SheetRow:
     @property
     def sheet_platform_cost(self) -> Decimal:
         return Decimal(self.served_impressions) / Decimal(1000) * self.platform_cpm
+
+    @property
+    def served_less_than_contracted(self) -> bool:
+        return self.served_impressions < self.contracted_impressions
+
+    @property
+    def expected_revenue(self) -> Decimal:
+        """The billing: the lesser of served and contracted, at the row's CPM, rounded once to the cent, half up."""
+        billable = min(self.served_impressions, self.contracted_impressions)
+        return (Decimal(billable) / Decimal(1000) * self.oc_cpm).quantize(_CENT, rounding=ROUND_HALF_UP)
+
+    @property
+    def expected_rebate(self) -> Decimal:
+        """The sheet's rate on the billing, unrounded like `sheet_rebate`."""
+        return (self.rebate_rate or _ZERO) * self.expected_revenue
+
+    @property
+    def expected_margin(self) -> Decimal:
+        return self.expected_revenue - self.purchase_cost - self.expected_rebate - self.sheet_platform_cost
 
 
 def load_rows(path: Path = SHEET_PATH) -> list[SheetRow]:

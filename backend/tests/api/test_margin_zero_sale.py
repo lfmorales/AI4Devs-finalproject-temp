@@ -12,7 +12,11 @@ from tests.fixtures.margin_data import add_schedule, group_of, set_volume
 
 @pytest.fixture
 def world(client_for_roles, test_db_session):
-    """One campaign: a line without a price (cost 120.00, 400,000 delivered) and a priced sibling line."""
+    """One campaign: a line without a price (cost 120.00, 400,000 delivered) and a priced sibling line.
+
+    The priced line is the worked example: 700,000 delivered of 726,202 at 5.00 €, billed 3,500.00 € with a 25 % rebate
+    of 875.00 € and a margin of 725.00 € (committed-billing-and-review).
+    """
     free_line = insert_campaign_line(test_db_session)
     priced_line = add_line_to_campaign(test_db_session, free_line, 2)
     set_volume(test_db_session, free_line, 500_000, "0.00")
@@ -43,7 +47,7 @@ def test_the_priced_sibling_is_not_zero_sale(world):
     (priced,) = _lines(world.get("/margin").json())[2]["flights"]
 
     assert priced["zero_sale"] is False
-    assert priced["margin"] == "823.26"
+    assert priced["margin"] == "725.00"
 
 
 def test_zero_sale_reaches_the_line_the_campaign_and_the_counts(world):
@@ -61,8 +65,8 @@ def test_zero_sale_reaches_the_line_the_campaign_and_the_counts(world):
 def test_the_totals_keep_the_true_value_of_the_free_flight(world):
     body = world.get("/margin").json()
 
-    assert body["totals"]["revenue"] == "3631.01"
-    assert body["totals"]["margin"] == str(Decimal("823.26") + Decimal("-520.00"))
+    assert body["totals"]["revenue"] == "3500.00"
+    assert body["totals"]["margin"] == str(Decimal("725.00") + Decimal("-520.00"))
 
 
 def test_the_free_line_adds_nothing_to_the_counter_and_is_the_same_after_closing(world):
@@ -72,8 +76,8 @@ def test_the_free_line_adds_nothing_to_the_counter_and_is_the_same_after_closing
 
     (free,) = _lines(after)[1]["flights"]
     assert free["state"] == "closed" and free["zero_sale"] is True and free["rebate"] == "0.00"
-    # The priced line is priced as if the free one were not in its counter: 25 % of 3,631.01.
-    assert _lines(after)[2]["flights"][0]["rebate"] == "907.75"
+    # The priced line is priced as if the free one were not in its counter: 25 % of its billing, 3,500.00.
+    assert _lines(after)[2]["flights"][0]["rebate"] == "875.00"
     assert after["totals"]["margin"] == before["totals"]["margin"]
 
 
@@ -83,9 +87,9 @@ def test_a_line_without_revenue_has_no_percentage_and_the_levels_with_revenue_ha
 
     (free,) = lines[1]["flights"]
     assert free["margin_pct"] is None and lines[1]["totals"]["margin_pct"] is None
-    assert lines[2]["flights"][0]["margin_pct"] == "22.67"
-    # The campaign and the report divide their own sums: (823.26 - 520.00) / 3,631.01.
-    expected = str((Decimal("303.26") * 100 / Decimal("3631.01")).quantize(Decimal("0.01")))
+    assert lines[2]["flights"][0]["margin_pct"] == "20.71"
+    # The campaign and the report divide their own sums: (725.00 - 520.00) / 3,500.00.
+    expected = str((Decimal("205.00") * 100 / Decimal("3500.00")).quantize(Decimal("0.01")))
     assert body["campaigns"][0]["totals"]["margin_pct"] == body["totals"]["margin_pct"] == expected
 
 

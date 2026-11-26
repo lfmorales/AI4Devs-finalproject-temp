@@ -66,8 +66,14 @@ def _walk(value):
             yield from _walk(item)
 
 
+def _deliver(session: Session, line_id: int, impressions: int, day: date = date(2026, 8, 5)) -> None:
+    """A committed flight earns its billing (committed-billing-and-review): give it the delivery it bills."""
+    insert_delivery(session, line_id, day, impressions, insert_ingestion_batch(session))
+
+
 def test_a_flight_that_ended_and_is_not_closed_is_pending_close_and_provisional(client_for_roles, test_db_session):
-    insert_campaign_line(test_db_session)
+    # It delivered its whole volume, so its billing is its contracted sale.
+    _deliver(test_db_session, insert_campaign_line(test_db_session), 1_000_000)
 
     body = _get(_client(client_for_roles, SEPTEMBER_FIRST))
     (flight,) = _flights(body)
@@ -80,6 +86,7 @@ def test_a_flight_that_ended_and_is_not_closed_is_pending_close_and_provisional(
 
 def test_a_closed_flight_is_read_from_what_was_frozen_and_is_not_provisional(client_for_roles, test_db_session):
     line_id = insert_campaign_line(test_db_session)
+    _deliver(test_db_session, line_id, 1_000_000)  # billed 5,000.00 €, so a 25 % rebate of 1,250.00 €
     add_schedule(test_db_session, group_of(test_db_session, line_id), ("0", None, "0.25"))
     client = _client(client_for_roles, SEPTEMBER_FIRST)
     assert client.post("/margin/closings", json={"year": 2026, "month": 8}).status_code == 200
@@ -92,14 +99,16 @@ def test_a_closed_flight_is_read_from_what_was_frozen_and_is_not_provisional(cli
     assert flight["rates"]["rebate_step"] == 6 and flight["rates"]["platform_rate"] == "1.000000"
 
 
-def test_a_running_flight_is_calculated_pro_rated_and_provisional(client_for_roles, test_db_session):
-    insert_campaign_line(test_db_session)
+# Changed by committed-billing-and-review: a running flight was pro-rated, 5,000 x 10 / 31; it now bills its delivery
+# to date, 180,000 at 5.00 € = 900.00 €.
+def test_a_running_flight_bills_its_delivery_to_date_and_is_provisional(client_for_roles, test_db_session):
+    _deliver(test_db_session, insert_campaign_line(test_db_session), 180_000)
 
     (flight,) = _flights(_get(_client(client_for_roles, AUGUST_11)))
 
     assert flight["state"] == "running"
     assert flight["provisional"] is True
-    assert Decimal(flight["revenue"]) == round_amount(Decimal("5000") * 10 / 31)
+    assert Decimal(flight["revenue"]) == round_amount(Decimal("180000") / 1000 * 5) == Decimal("900.00")
 
 
 def test_a_flight_that_has_not_started_does_not_appear(client_for_roles, test_db_session):
@@ -178,6 +187,7 @@ def test_inactive_campaigns_are_included(client_for_roles, test_db_session):
 
 def test_every_amount_is_a_decimal_string_and_no_float_appears_anywhere(client_for_roles, test_db_session):
     first = insert_campaign_line(test_db_session)
+    _deliver(test_db_session, first, 1_000_000)  # a billing to put a rebate on
     add_schedule(test_db_session, group_of(test_db_session, first), ("0", "1000", "0.15"), ("1000", None, "0.2"))
     client = _client(client_for_roles, SEPTEMBER_FIRST)
     client.post("/margin/closings", json={"year": 2026, "month": 8})

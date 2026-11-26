@@ -14,7 +14,7 @@ AS_OF = date(2026, 9, 5)
 
 
 def _flight(contracted_impressions: int = 726_202, sale_cpm: str = "5.00", media_cost: str = "1200.00",
-            rebate_amount: str = "907.7525", delivered: int = 700_000, start=date(2026, 8, 1), end=date(2026, 8, 31)):
+            rebate_amount: str = "875", delivered: int = 700_000, start=date(2026, 8, 1), end=date(2026, 8, 31)):
     return calculate_flight_margin(
         flight_economics(
             flight_start=start, flight_end=end, contracted_impressions=contracted_impressions,
@@ -25,12 +25,14 @@ def _flight(contracted_impressions: int = 726_202, sale_cpm: str = "5.00", media
     )
 
 
-def test_the_worked_example_is_22_67_points():
+# Changed by committed-billing-and-review: the worked example delivers 700,000 of 726,202 and bills 3,500.00 €, with a
+# rebate of 875.00 €, so its margin is 725.00 € and its percentage 20.71 points, not 823.26 € and 22.67 points.
+def test_the_worked_example_is_20_71_points():
     result = _flight()
 
-    assert result.margin == Decimal("823.26")
-    assert result.margin_pct == Decimal("22.67")
-    assert str(result.margin_pct) == "22.67"
+    assert result.margin == Decimal("725.00")
+    assert result.margin_pct == Decimal("20.71")
+    assert str(result.margin_pct) == "20.71"
 
 
 def test_a_negative_margin_has_a_negative_percentage():
@@ -64,30 +66,31 @@ def test_a_flight_that_has_not_started_has_no_percentage():
     assert _flight(start=date(2026, 10, 1), end=date(2026, 10, 31)).margin_pct is None
 
 
-def test_a_running_flight_has_the_percentage_of_its_pro_rated_figures():
+# Changed: a running flight's figures are no longer pro-rated; its percentage is over its billing to date.
+def test_a_running_flight_has_the_percentage_of_its_billing_to_date():
     running = calculate_flight_margin(
         flight_economics(
             flight_start=date(2026, 9, 1), flight_end=date(2026, 9, 30), contracted_impressions=300_000,
             sale_cpm=Decimal("5.00"), delivered_impressions=90_000, media_cost=Decimal("150.00"),
-            rebate_amount=Decimal("300.00"), platform_rate=Decimal("1.00"),
+            rebate_amount=Decimal("90.00"), platform_rate=Decimal("1.00"),
         ),
         date(2026, 9, 10),
     )
 
-    assert running.margin == Decimal("160.00") and running.revenue == Decimal("500.00")
-    assert running.margin_pct == Decimal("32.00")
+    assert running.margin == Decimal("120.00") and running.revenue == Decimal("450.00")
+    assert running.margin_pct == Decimal("26.67")
 
 
 def test_a_line_a_campaign_and_the_totals_divide_their_own_sums_not_the_flights_percentages():
-    big = _flight()  # revenue 3,631.01, margin 823.26
-    small = _flight(contracted_impressions=1000, sale_cpm="10.00", media_cost="1.00", rebate_amount="0", delivered=0)  # 10.00 / 9.00
+    big = _flight()  # revenue 3,500.00, margin 725.00
+    small = _flight(contracted_impressions=1000, sale_cpm="10.00", media_cost="1.00", rebate_amount="0", delivered=1000)  # 10.00 / 8.00
 
     line = total_flights([big, small])
     campaign = total_lines([line])
 
     expected = margin_percentage(big.margin + small.margin, big.revenue + small.revenue)
     assert line.margin_pct == campaign.margin_pct == expected
-    assert expected != Decimal("22.67")
+    assert expected != big.margin_pct
     assert expected != (big.margin_pct + small.margin_pct) / 2
 
 

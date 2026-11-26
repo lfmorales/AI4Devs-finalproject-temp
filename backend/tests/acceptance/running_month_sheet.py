@@ -6,6 +6,11 @@ the comparison comes from the sheet's own columns; none is written in the tests.
 How a row is built: one line with one flight of `days_oc` days from the first of October 2026, in its own holding
 group, and `as_of` set to the start plus `days_served` minus one, so that the contract days elapsed are the days the
 sheet says were served. A row whose `days_served` equals `days_oc` is a closed flight; one with fewer is running.
+
+The sheet accrues the sale by days served over days of the purchase order. Since committed-billing-and-review a
+committed flight earns its billing to date, the lesser of served and contracted, with no pro-rating, so the tests compare
+the domain with `expected_revenue`, `expected_rebate` and `expected_margin`: the sheet's own columns with that rule
+applied. test_running_month_sheet.py documents the difference with the sheet's accrual.
 """
 
 import csv
@@ -75,8 +80,29 @@ class SheetRow:
         return (self.rebate_rate or Decimal(0)) * self.accrued_revenue
 
     @property
-    def expected_margin(self) -> Decimal:
+    def sheet_margin(self) -> Decimal:
+        """The sheet's accrued margin: pro-rated sale and rebate, less the costs of what was served."""
         return self.accrued_revenue - self.purchase_cost - self.accrued_rebate - self.platform_cost
+
+    @property
+    def served_less_than_contracted(self) -> bool:
+        return self.served_impressions < self.contracted_impressions
+
+    @property
+    def expected_revenue(self) -> Decimal:
+        """The billing to date: the lesser of served and contracted, at the row's CPM, rounded once, half up."""
+        assert self.oc_cpm is not None
+        billable = min(self.served_impressions, self.contracted_impressions)
+        return (Decimal(billable) / Decimal(1000) * self.oc_cpm).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    @property
+    def expected_rebate(self) -> Decimal:
+        """The sheet's rate on the billing to date, unrounded, not pro-rated."""
+        return (self.rebate_rate or Decimal(0)) * self.expected_revenue
+
+    @property
+    def expected_margin(self) -> Decimal:
+        return self.expected_revenue - self.purchase_cost - self.expected_rebate - self.platform_cost
 
     @property
     def platform_rate(self) -> Decimal:

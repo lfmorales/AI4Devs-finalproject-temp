@@ -50,8 +50,9 @@ def calculate_rebates(
     A flight is closed when `flight_end <= as_of`, running when it started but has not ended, and a flight
     that has not started is left out. The closed flights of a counter are applied in order of `flight_start`,
     ties broken by flight id, so the result does not depend on the order of the input. A running flight reads
-    the position after every closed flight of its counter, charges its full revenue from there, and does not
-    advance the counter; the margin calculation pro-rates the rebate.
+    the position after every closed flight of its counter, charges its revenue to date from there (the billing to
+    date of a committed flight, the gross to date of a target one), and does not advance the counter; nothing is
+    pro-rated.
 
     `opening_positions` is where a counter already stands, for a closing that must not price frozen flights
     again; a counter absent from it opens at zero, and empty or None changes no result.

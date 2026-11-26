@@ -5,11 +5,11 @@ from decimal import Decimal
 @dataclass(frozen=True)
 class ContractedVolume:
     """
-    Immutable value object for contracted volume and pricing.
+    Immutable value object for the contracted volume and pricing of a campaign line.
 
-    Revenue is ALWAYS calculated from contracted impressions, never from
-    delivered impressions. This is a critical invariant: revenue is booked
-    when the contract is signed, not when the campaign runs.
+    `revenue()` is the line's contracted sale: the purchase order's value, which never reads
+    the delivery. It is not what a flight earns: a committed flight earns its billing, the
+    lesser of delivered and contracted (committed-billing-and-review).
     """
 
     contracted_impressions: int
@@ -22,9 +22,9 @@ class ContractedVolume:
 
     def revenue(self) -> Decimal:
         """
-        Calculate revenue from contracted volume.
+        The contracted sale of the line.
 
-        Revenue = contracted_impressions * sale_cpm / 1000
+        contracted sale = contracted_impressions * sale_cpm / 1000
 
         Returns Decimal rounded to 2 decimal places (EUR cents).
         """

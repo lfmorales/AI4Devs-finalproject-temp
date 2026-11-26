@@ -118,8 +118,9 @@ def test_each_real_row_reads_back_with_the_amounts_of_the_domain_and_of_the_shee
         _, _, flight = _flight_of(body, row.campaign)
         margin = price_row(row, flight_start=_start(row), as_of=AS_OF).margin
         assert [flight[name] for name in AMOUNTS] == [str(getattr(margin, name)) for name in AMOUNTS], label
-        assert abs(Decimal(flight["revenue"]) - row.accrued_revenue) <= CENT, label
-        assert abs(Decimal(flight["rebate"]) - row.accrued_rebate) <= CENT, label
+        # The sheet billed to date at the lesser of served and contracted, not pro-rated (committed-billing-and-review).
+        assert abs(Decimal(flight["revenue"]) - row.expected_revenue) <= CENT, label
+        assert abs(Decimal(flight["rebate"]) - row.expected_rebate) <= CENT, label
         assert abs(Decimal(flight["media_cost"]) - row.purchase_cost) <= CENT, label
         assert abs(Decimal(flight["platform_cost"]) - row.platform_cost) <= CENT, label
         assert abs(Decimal(flight["margin"]) - row.expected_margin) <= Decimal("0.04"), label
@@ -135,13 +136,15 @@ def test_the_state_and_the_provisional_flag_follow_the_days(month, chosen):
         assert flight["provisional"] is (not row.is_closed), label
 
 
-def test_the_percentage_matches_the_actual_one_of_the_sheet(month, chosen):
+def test_the_percentage_matches_the_sheet_billed_to_date(month, chosen):
+    # The sheet's own percentage is over its pro-rated sale; the expected one is over the billing to date.
     finance, _ = month
     body = finance.get("/margin").json()
 
     for label, row in chosen.items():
         _, _, flight = _flight_of(body, row.campaign)
-        assert abs(Decimal(flight["margin_pct"]) - row.margin_pct_actual * 100) <= Decimal("0.05"), label
+        expected_pct = row.expected_margin / row.expected_revenue * 100
+        assert abs(Decimal(flight["margin_pct"]) - expected_pct) <= Decimal("0.05"), label
         assert flight["zero_sale"] is False, label
 
 
@@ -162,7 +165,7 @@ def test_the_over_delivery_does_not_raise_the_accrued_revenue(month, chosen):
     _, _, flight = _flight_of(finance.get("/margin").json(), row.campaign)
 
     assert row.served_impressions > row.contracted_impressions
-    assert abs(Decimal(flight["revenue"]) - row.accrued_revenue) <= CENT
+    assert abs(Decimal(flight["revenue"]) - row.expected_revenue) <= CENT
 
 
 def test_the_line_without_a_price_accrues_no_revenue_and_stays_provisional(month):

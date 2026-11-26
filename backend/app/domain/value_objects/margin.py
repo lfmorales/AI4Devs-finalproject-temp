@@ -3,6 +3,7 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 
+from app.domain.value_objects.billing import BillingAdjustment, BillingBasis
 from app.domain.value_objects.volume_commitment import VolumeCommitment
 
 
@@ -36,7 +37,8 @@ class FlightEconomics:
     `media_cost` and `delivered_impressions` are the line's delivery inside the flight's window.
     `platform_rate` is euros per thousand delivered impressions: the platform cost is on the real impressions
     whichever the delivery metric. `delivered` is the delivery in the unit of the metric (`delivery_metric`: impressions or
-    OTS, with decimals). The revenue of a committed flight reads neither: it is the contracted volume's.
+    OTS, with decimals). The revenue of a committed flight is its billing: the lesser of `delivered` and its cap, the
+    contracted volume plus `carryover` when `carryover_billable`, unless `adjustment` replaces it.
 
     `volume_commitment` is declared on the line. A target flight earns `reported_revenue`, what its DSP reports inside the
     window, and its `buyer_spend` is only compared with its gross. `data_cost` is the third-party and audience data costs
@@ -58,6 +60,9 @@ class FlightEconomics:
     reported_revenue: Decimal
     buyer_spend: Decimal
     data_cost: Decimal
+    carryover: int
+    carryover_billable: bool
+    adjustment: BillingAdjustment | None
 
     def __post_init__(self) -> None:
         if self.flight_start > self.flight_end:
@@ -87,8 +92,8 @@ class FlightMargin:
     below_cost: bool
     # Sin venta: the line has a sale CPM of 0.00, so the flight has no revenue and no rebate but still has cost.
     zero_sale: bool = False
-    # The sale of the whole flight, the days counted up to `as_of` and the days of the whole window. A running flight's
-    # `revenue` is the accrued part of `contracted_revenue`; a closed one has them equal. None when not started.
+    # The sale contracted for the whole flight, the days counted up to `as_of` and the days of the whole window. The
+    # days drive no amount: a committed flight's `revenue` is its billing, to date while it runs. None when not started.
     contracted_revenue: Decimal | None = None
     accrued_days: int | None = None
     window_days: int | None = None
@@ -110,6 +115,11 @@ class FlightMargin:
     # A closed flight whose delivery stored now moved beyond the tolerances from the one it was closed with; no amount
     # changes. Always false for a flight that is not closed.
     delivery_changed: bool = False
+    # The volume a committed flight's revenue was billed on, in the unit of the metric, to date while it runs (None for
+    # a custom amount, a target flight and before the flight starts), and how its billing was reached: `reported` for
+    # a target flight.
+    billable: Decimal | None = None
+    billing_basis: BillingBasis | None = None
 
     @property
     def margin_pct(self) -> Decimal | None:

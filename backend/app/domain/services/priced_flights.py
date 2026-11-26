@@ -31,8 +31,8 @@ def price_flights(
                 RebateFlight(
                     flight_id=facts.flight_id, flight_start=facts.flight_start, flight_end=facts.flight_end,
                     group_id=facts.group_id, agency_id=facts.agency_id, channel=facts.channel, scope=facts.scope,
-                    # The sale of a committed flight, the served gross of a target one: the engine and the counters
-                    # advance by it without knowing which.
+                    # The billing of a committed flight, the served gross of a target one: the engine and the
+                    # counters advance by it without knowing which.
                     revenue=rebate_base(facts),
                 )
                 for facts in flights
@@ -60,7 +60,8 @@ def price_flights(
                 rebate_amount=rebate.rebate, platform_rate=platform.rate,
                 delivery_metric=facts.delivery_metric, delivered=facts.delivered,
                 volume_commitment=facts.volume_commitment, reported_revenue=facts.reported_revenue,
-                buyer_spend=facts.buyer_spend, data_cost=facts.data_cost,
+                buyer_spend=facts.buyer_spend, data_cost=facts.data_cost, carryover=facts.carryover,
+                carryover_billable=facts.carryover_billable, adjustment=facts.adjustment,
             ),
             as_of,
         )

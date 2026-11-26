@@ -50,24 +50,27 @@ AS_OF = date(2026, 9, 5)
 
 
 def test_a_closed_flight_is_priced_end_to_end_with_the_specs_example():
+    # The worked example of docs/product-description.md §5.8: 700,000 delivered of 726,202 bill 3,500.00 € and the
+    # rebate is 25 % of that billing (committed-billing-and-review), no longer of the 3,631.01 € contracted.
     (priced,) = price_flights([schedule()], PlatformRates(system=SYSTEM_RATE), [facts()], AS_OF)
 
     assert priced.margin.status is FlightStatus.CLOSED
-    assert priced.margin.revenue == Decimal("3631.01")
+    assert priced.margin.contracted_revenue == Decimal("3631.01")
+    assert priced.margin.revenue == Decimal("3500.00")
     assert priced.margin.media_cost == Decimal("1200.00")
-    assert priced.margin.rebate == Decimal("907.75")  # 907.7525 exact
+    assert priced.margin.rebate == Decimal("875.00")
     assert priced.margin.platform_cost == Decimal("700.00")
-    assert priced.margin.margin == Decimal("823.26")
-    assert priced.rebate.rebate == Decimal("907.7525")
+    assert priced.margin.margin == Decimal("725.00")
+    assert priced.rebate.rebate == Decimal("875.0000")
     assert priced.rebate.step is LadderStep.GROUP_CHANNEL_SCOPE
     assert priced.platform.rate == Decimal("1.00")
     assert priced.platform.level is PlatformRateLevel.SYSTEM
 
 
-def test_the_counter_is_fed_with_the_rounded_revenue_of_the_flight():
+def test_the_counter_is_fed_with_the_rounded_billing_of_the_flight():
     (priced,) = price_flights([schedule()], PlatformRates(system=SYSTEM_RATE), [facts()], AS_OF)
 
-    assert priced.rebate.position_after == Decimal("3631.01")
+    assert priced.rebate.position_after == Decimal("3500.00")
 
 
 def test_platform_rate_resolves_line_then_agency_then_campaign_type_then_system():
@@ -100,9 +103,11 @@ def test_the_platform_cost_uses_the_resolved_rate():
 
 
 def test_flights_of_a_counter_are_applied_in_order_whatever_the_input_order():
+    # Each delivered its volume, so each bills its contracted sale.
     first = facts(flight_id=1, flight_start=date(2026, 7, 1), flight_end=date(2026, 7, 31),
-                  contracted_impressions=18_000_000, sale_cpm="5.00")   # 90,000 EUR
-    second = facts(flight_id=2, contracted_impressions=6_000_000, sale_cpm="5.00")  # 30,000 EUR
+                  contracted_impressions=18_000_000, delivered_impressions=18_000_000, sale_cpm="5.00")   # 90,000 EUR
+    second = facts(flight_id=2, contracted_impressions=6_000_000, delivered_impressions=6_000_000,
+                   sale_cpm="5.00")  # 30,000 EUR
     schedules = [schedule(TWO_BRACKETS)]
 
     forward = price_flights(schedules, PlatformRates(system=SYSTEM_RATE), [first, second], AS_OF)
@@ -115,7 +120,7 @@ def test_flights_of_a_counter_are_applied_in_order_whatever_the_input_order():
 
 def test_opening_positions_start_the_counter_where_the_frozen_rows_left_it():
     key = CounterKey(GROUP, None, "Directo", 2026)
-    flight = facts(contracted_impressions=6_000_000, sale_cpm="5.00")
+    flight = facts(contracted_impressions=6_000_000, delivered_impressions=6_000_000, sale_cpm="5.00")
 
     (priced,) = price_flights(
         [schedule(TWO_BRACKETS)], PlatformRates(system=SYSTEM_RATE), [flight], AS_OF, opening_positions={key: Decimal(90_000)}
@@ -125,19 +130,21 @@ def test_opening_positions_start_the_counter_where_the_frozen_rows_left_it():
     assert priced.rebate.rebate == Decimal(5_500)
 
 
-def test_a_running_flight_is_pro_rated_by_the_margin_and_reads_the_full_rebate():
+# Inverted by committed-billing-and-review: the engine read the full 30,000 and the margin pro-rated revenue and rebate
+# by 10 of 30 days; a running committed flight is now priced on its billing to date and nothing is pro-rated.
+def test_a_running_flight_is_priced_on_its_billing_to_date_and_nothing_is_pro_rated():
     running = facts(
         flight_start=date(2026, 9, 1), flight_end=date(2026, 9, 30), contracted_impressions=6_000_000,
-        sale_cpm="5.00", delivered_impressions=90_000, media_cost="150.00",
+        sale_cpm="5.00", delivered_impressions=1_600_000, media_cost="150.00",
     )
 
     (priced,) = price_flights([schedule()], PlatformRates(system=SYSTEM_RATE), [running], date(2026, 9, 10))
 
     assert priced.margin.status is FlightStatus.RUNNING
     assert priced.margin.provisional is True
-    assert priced.rebate.rebate == Decimal(7_500)          # 25 % of the full 30,000
-    assert priced.margin.revenue == Decimal("10000.00")    # 30,000 x 10 / 30
-    assert priced.margin.rebate == Decimal("2500.00")      # 7,500 x 10 / 30
+    assert priced.rebate.rebate == Decimal(2_000)          # 25 % of the 8,000 billed to date, not of 30,000
+    assert priced.margin.revenue == Decimal("8000.00")     # 1,600,000 delivered, not 30,000 x 10 / 30
+    assert priced.margin.rebate == Decimal("2000.00")      # the engine's, not pro-rated
     assert priced.rebate.position_after == priced.rebate.position_before
 
 
@@ -152,7 +159,7 @@ def test_a_flight_with_no_schedule_is_an_explicit_zero_and_still_has_a_margin():
 
     assert priced.rebate.step is LadderStep.EXPLICIT_ZERO
     assert priced.margin.rebate == Decimal("0.00")
-    assert priced.margin.margin == Decimal("3631.01") - Decimal("1200.00") - Decimal("700.00")
+    assert priced.margin.margin == Decimal("3500.00") - Decimal("1200.00") - Decimal("700.00")
 
 
 # --- A target flight is priced on its served gross and accrues it on its channel's counter (finance/rebate-accrual) ---
@@ -246,7 +253,7 @@ def test_a_running_target_flight_is_priced_on_its_gross_to_date_and_does_not_adv
     assert second.rebate.position_before == second.rebate.position_after == Decimal("3000.00")
 
 
-def test_a_committed_flight_still_accrues_its_contracted_revenue_whatever_it_reports() -> None:
+def test_a_committed_flight_still_bills_its_delivery_whatever_it_reports() -> None:
     plain = price_flights([schedule()], PlatformRates(system=SYSTEM_RATE), [facts()], AS_OF)
     reporting = price_flights(
         [schedule()], PlatformRates(system=SYSTEM_RATE),
@@ -255,4 +262,4 @@ def test_a_committed_flight_still_accrues_its_contracted_revenue_whatever_it_rep
 
     assert reporting == tuple(replace(priced, facts=replace(priced.facts, reported_revenue=Decimal("1.00"),
                                                             buyer_spend=Decimal("99999.00"))) for priced in plain)
-    assert plain[0].rebate.position_after == Decimal("3631.01")
+    assert plain[0].rebate.position_after == Decimal("3500.00")

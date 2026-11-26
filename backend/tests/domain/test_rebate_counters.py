@@ -149,29 +149,34 @@ def test_a_running_flights_rebate_is_computed_on_its_full_revenue():
     assert result.rebate == Decimal(4_500)
 
 
-def test_the_margin_prorates_a_running_flights_full_rebate_by_elapsed_days():
-    # 6,000,000 impressions at 5.00 EUR are 30,000 EUR of revenue over a 30-day window.
+# Inverted by committed-billing-and-review: the engine charged a running flight its full contracted revenue and the
+# margin pro-rated that rebate by elapsed days; a running committed flight is now charged on its billing to date, from
+# the closed position, and the margin takes that rebate as it is.
+def test_a_running_flight_is_charged_on_its_billing_to_date_and_its_rebate_is_not_pro_rated():
+    # 6,000,000 contracted at 5.00 EUR over 30 days; 2,400,000 delivered by the 10th bill 12,000 EUR.
     september = RebateFlight(
         flight_id=2, flight_start=date(2026, 9, 1), flight_end=date(2026, 9, 30),
-        group_id=GROUP, agency_id=AGENCY, channel="Directo", scope="national", revenue=Decimal(30_000),
+        group_id=GROUP, agency_id=AGENCY, channel="Directo", scope="national", revenue=Decimal(12_000),
     )
     closed_august = replace(month_flight(1, 8, "90000"), flight_end=date(2026, 8, 31))
     as_of = date(2026, 9, 10)
 
     results = by_id(calculate_rebates([group_schedule()], [closed_august, september], as_of))
-    full_rebate = results[2].rebate
+    rebate = results[2].rebate
     margin = calculate_flight_margin(
         flight_economics(
             flight_start=date(2026, 9, 1), flight_end=date(2026, 9, 30),
             contracted_impressions=6_000_000, sale_cpm=Decimal("5.00"),
-            delivered_impressions=0, media_cost=Decimal(0), rebate_amount=full_rebate, platform_rate=Decimal("1.00"),
+            delivered_impressions=2_400_000, media_cost=Decimal(0), rebate_amount=rebate, platform_rate=Decimal("1.00"),
         ),
         as_of,
     )
 
-    assert full_rebate == Decimal(5_500)
-    assert margin.revenue == Decimal("10000.00")  # 30,000 x 10 / 30
-    assert margin.rebate == round_amount(full_rebate * 10 / 30) == Decimal("1833.33")
+    # From 90,000: 10,000 at 15 % and 2,000 at 20 %; the counter does not move.
+    assert rebate == Decimal(1_900)
+    assert results[2].position_after == results[2].position_before == Decimal(90_000)
+    assert margin.revenue == Decimal("12000.00")
+    assert margin.rebate == round_amount(rebate) == Decimal("1900.00")
 
 
 def test_a_flight_that_has_not_started_is_not_in_the_results():

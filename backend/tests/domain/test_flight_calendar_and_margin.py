@@ -69,13 +69,13 @@ def test_no_flight_ever_crosses_a_month_or_a_year(start_day: int, end_day: int):
     assert all(flight.flight_start.year == flight.flight_end.year for flight in flights)
 
 
-def _economics(window: FlightWindow, contracted_impressions: int) -> FlightEconomics:
+def _economics(window: FlightWindow, contracted_impressions: int, delivered_impressions: int) -> FlightEconomics:
     return flight_economics(
         flight_start=window.flight_start,
         flight_end=window.flight_end,
         contracted_impressions=contracted_impressions,
         sale_cpm=Decimal("10.00"),
-        delivered_impressions=0,
+        delivered_impressions=delivered_impressions,
         media_cost=Decimal("0.00"),
         rebate_amount=Decimal("0"),
         platform_rate=Decimal("1.00"),
@@ -86,8 +86,9 @@ def test_a_line_with_a_closed_flight_and_a_running_one_sums_both_and_is_provisio
     august, september = _flights(date(2026, 8, 1), date(2026, 9, 30))
     as_of = date(2026, 9, 15)  # August has ended; September is 15 days in, of 30.
     margins = [
-        calculate_flight_margin(_economics(august, 2000), as_of),     # closed: 20.00
-        calculate_flight_margin(_economics(september, 4000), as_of),  # running: 40.00 x 15 / 30 = 20.00
+        # A committed flight earns its billing (committed-billing-and-review), so each delivers what it bills:
+        calculate_flight_margin(_economics(august, 2000, 2000), as_of),     # closed: 2,000 delivered, 20.00
+        calculate_flight_margin(_economics(september, 4000, 2000), as_of),  # running: 2,000 delivered to date, 20.00
     ]
 
     total = total_flights(margins)

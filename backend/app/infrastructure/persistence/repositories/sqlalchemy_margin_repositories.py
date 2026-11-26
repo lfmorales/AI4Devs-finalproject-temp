@@ -234,6 +234,9 @@ def _flight_facts(row: Row[Any]) -> FlightFacts:
         volume_commitment=VolumeCommitment(values["volume_commitment"]),
         reported_revenue=Decimal(values["reported_revenue"]), buyer_spend=Decimal(values["buyer_spend"]),
         data_cost=Decimal(values["data_cost"]),
+        # No flight has a carry-over or an adjustment until their columns and table exist (tasks 4 and 7 of
+        # committed-billing-and-review), so every flight follows the rule of the lesser with its contracted volume.
+        carryover=0, carryover_billable=False, adjustment=None,
     )
 
 

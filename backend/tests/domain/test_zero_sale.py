@@ -66,7 +66,9 @@ def test_a_free_flight_without_cost_has_a_margin_of_zero_and_is_not_below_cost()
 def test_the_rebate_is_zero_even_under_a_flat_schedule_and_the_counter_does_not_move():
     free = facts(flight_id=1, flight_start=date(2026, 7, 1), flight_end=date(2026, 7, 31), contracted_impressions=500_000,
                  sale_cpm="0.00", delivered_impressions=400_000, media_cost="120.00")
-    priced = facts(flight_id=2, contracted_impressions=6_000_000, sale_cpm="5.00", delivered_impressions=0, media_cost="0")
+    # It delivered its volume: a committed flight earns its billing (committed-billing-and-review).
+    priced = facts(flight_id=2, contracted_impressions=6_000_000, sale_cpm="5.00", delivered_impressions=6_000_000,
+                   media_cost="0")
 
     first, second = price_flights([schedule()], PlatformRates(system=Decimal("1.00")), [free, priced], AS_OF)
 
