@@ -153,17 +153,27 @@ CommercialOffer (OF)                                            ← phase 3
        └─ PurchaseOrderVersion ← contracted volume, sale CPM, reason and date (§5.5)
             └─ Campaign
                  └─ CampaignPeriod    ← the monthly grain that exists today
+                      │  └─ CampaignPeriodReview ← reviewed / reopened events of the
+                      │                  campaign in that month, who and when (§5.11)
                       └─ CampaignLine ← DSP + channel + format + buy model + rate + volume
                            │            + volume commitment (committed | target, §5.3)
+                           ├─ Flight (CampaignLinePeriod) ← contracted volume of the
+                           │    │             month, and the carry-over it received
+                           │    │             with its reason and billable flag (§5.11)
+                           │    └─ BillingAdjustment ← basis, amount, reason, who and
+                           │                  when; only added, the latest wins (§5.11)
                            ├─ DspMapping    ← external campaign / line item id (§7)
                            ├─ AppliedRates  ← rebate rate and platform rate frozen at
-                           │    │             calculation time, with their provenance;
-                           │    │             for a target line also its revenue and
-                           │    │             rebate base
+                           │    │             calculation time, with their provenance,
+                           │    │             and the revenue and rebate base: the
+                           │    │             billing of a committed flight, the
+                           │    │             reported revenue and gross of a target one
                            │    └─ ClosedFlightSnapshot ← every figure of the closed
-                           │                  flight and the delivery it was computed
-                           │                  on, under its MonthClosing header (who,
-                           │                  when, as_of, latest batch per DSP)
+                           │                  flight, its billing (basis, billable
+                           │                  volume, carry-over, adjustment) and the
+                           │                  delivery it was computed on, under its
+                           │                  MonthClosing header (who, when, as_of,
+                           │                  latest batch per DSP)
                            └─ DailyDelivery ← impressions, clicks, media cost, measurable
                                               and viewable impressions, banner size,
                                               screen, line format, and the buyer's spend,
@@ -176,10 +186,10 @@ IngestionBatch                ← source, route (API / upload / email), file, ru
 Key modelling decisions:
 
 - **The monthly period is a first-class entity.** It is how the business thinks (`period` = `agosto`), how budgets are committed, how Finance rolls up, and how the Qlik app is organised — two parallel measure sets for a closed month and a running one (§5.1). Flattening it to a date range would lose the way the team works.
-- **Contracted volume and delivered volume are separate quantities.** For a committed line, revenue derives from the first, platform cost from the second, pacing from the ratio, and the credit-note trigger from the gap (§5.5). Conflating them breaks the financial model. A target line (every `Deal`, §5.3) keeps the two apart as well, but its volume is an objective: its revenue is what its DSP reports, and over-delivery is not a deviation.
-- **The purchase order is versioned, not overwritten.** A committed campaign line that stopped or under-delivered is billed at the lesser of contracted and served, via a revised order or a credit note. Revenue, rebate base and bracket accumulation all read the version in force. A target line is billed on what its DSP reports, with no lesser-of rule and no manual adjustment (§5.3).
+- **Contracted volume and delivered volume are separate quantities.** For a committed line, revenue is the billing, the lesser of the two (§5.5), platform cost comes from the delivered impressions, and pacing from the ratio of the delivered volume to the delivery target, the contracted volume plus any carry-over (§5.11). Conflating them breaks the financial model. A target line (every `Deal`, §5.3) keeps the two apart as well, but its volume is an objective: its revenue is what its DSP reports, and over-delivery is not a deviation.
+- **The purchase order is versioned, not overwritten, and billing does not rewrite it.** A committed campaign line that stopped or under-delivered is billed at the lesser of contracted and served, computed by the system per flight; neither the billing, a manual adjustment nor a carry-over changes the contracted volume or the order (§5.5, §5.11). A target line is billed on what its DSP reports, with no lesser-of rule and no manual adjustment (§5.3).
 - **The rebate is a bracket schedule, not a rate**, accumulating per holding group *and channel* over the year, attributed chronologically, and settled once in arrears. Accrual and settlement are distinct quantities the system must hold separately. The schedule is normally negotiated with the group, but **an individual agency may carry its own exception**, which overrides its group's schedule for that agency only (§5.9).
-- **Applied rates are frozen on the line.** Both the rebate rate and the platform rate are stored at calculation time with the step and source year that produced them (§5.9). A financial figure that silently changes when someone edits a master table is not auditable. Closing a month also freezes a snapshot of each flight: every amount it reports (revenue, media cost, rebate, platform cost, margin and, for a target line, its gross), the delivery those amounts were computed on, its flags and the line's metric, CPM, volume and commitment. A closed month is read only from it, so a later restatement by the DSP, an unlinked line or a changed master never moves it; the delivery keeps updating as information, and a flight whose current delivery would move its margin by 1.00 € or its delivered volume by 1 % is flagged «Cambió tras el cierre», with the differences and the margin they would give, and no total changes.
+- **Applied rates are frozen on the line.** Both the rebate rate and the platform rate are stored at calculation time with the step and source year that produced them (§5.9). A financial figure that silently changes when someone edits a master table is not auditable. Closing a month also freezes a snapshot of each flight: every amount it reports (revenue, media cost, rebate, platform cost, margin and, for a target line, its gross), its billing (basis, billable volume, carry-over and its flag, adjustment in force), the delivery those amounts were computed on, its flags and the line's metric, CPM, volume and commitment. A closed month is read only from it, so a later restatement by the DSP, an unlinked line or a changed master never moves it; the delivery keeps updating as information, and a flight whose current delivery would move its margin by 1.00 € or its delivered volume by 1 % is flagged «Cambió tras el cierre», with the differences and the margin they would give, and no total changes.
 - **`DspMapping` is a real foreign key**, not a parsed string. See §7 — the single highest risk in the project.
 - **The channel comes from the configuration**, never from the DSP's `line_format` (§5.10), because it is the accumulation key for the rebate brackets.
 - **Rates and volumes live on the line, not the campaign**, because `cpm_estandar` already varies per row (4.375, 5, 25, 31.25 observed).
@@ -190,16 +200,22 @@ Key modelling decisions:
 
 Reverse-engineered from the master measures inside `C.C.C. v2.qvf`, which is the authoritative statement of how Finance actually computes today. The Qlik expressions are quoted in §5.6.
 
-**Revenue is booked on contracted volume on a committed line, and on the reported revenue on a target line.** Every line declares its volume commitment (§5.3). On a **committed** line — the purchase order's volume is a commitment — revenue is the contracted volume, not the delivered volume. This is the single most important correction the Qlik app forced on this document: `venta_oc` multiplies `target_impressions_estandar` — the volume on the purchase order — by the sale CPM. Delivered impressions never enter that revenue figure; they drive the platform cost and nothing else. On a **target** line — every `Deal`, whose volume is an objective — revenue is the revenue its DSP reports, the curator margin of Equativ, not the contracted volume; its served impressions drive the platform cost and the rebate base (the served gross).
+**Revenue is the billing on a committed line, and the reported revenue on a target line.** Every line declares its volume commitment (§5.3). On a **committed** line — the purchase order's volume is a commitment — revenue is what GeoQ invoices for the flight: the lesser of the delivered and the contracted volume, times the sale CPM (§5.5). *(Confirmed by the business on 2026-11-26. Until then revenue was the contracted volume whatever was delivered, as Qlik's `venta_oc` computes it — `target_impressions_estandar`, the volume on the purchase order, times the sale CPM; the new figure departs from Qlik on every flight that under-delivered.)* On a **target** line — every `Deal`, whose volume is an objective — revenue is the revenue its DSP reports, the curator margin of Equativ, not the contracted volume; its served impressions drive the platform cost and the rebate base (the served gross).
 
 ```
 Committed line
-Revenue (closed month)  = contracted_impressions / 1000 × sale_cpm
+Billable volume         = min(delivered, cap)        (in the channel's unit; the cap is
+                                                      the contracted volume, or contracted
+                                                      + carry-over when the carry-over is
+                                                      billable, §5.11)
+Revenue (billing)       = billable volume / 1000 × sale_cpm, rounded once
+                          (or the manual adjustment in force, §5.11)
 Media cost              = actual spend reported by the DSP   (Adform's figure is all-in:
                                                               it already includes its
                                                               platform fee, so no separate
                                                               fee line is modelled)
-Agency rebate           = Revenue × rebate_rate     (a % of the SALE price, booked as a cost)
+Agency rebate           = Revenue × rebate_rate     (a % of the billing, booked as a cost;
+                                                      the counter advances by the billing)
 Platform cost           = delivered_impressions / 1000 × platform_cpm_rate   (1.00 €, adjustable)
 
 Margin                  = Revenue − Media cost − Agency rebate − Platform cost
@@ -216,7 +232,7 @@ Margin, Margin %        = as above
 
 The platform cost is part of the margin. Confirmed by the PO on 2026-09-14, and it is **the point on which this product's numbers will differ most visibly from the ones Finance reads today** — see §5.2.
 
-### 5.1 In-flight months are pro-rated by elapsed days
+### 5.1 In-flight months: Qlik pro-rates by elapsed days, the product bills to date
 
 Qlik keeps two parallel sets of measures — `venta_oc` / `coste_extraprima` for a closed month, and `venta_mes_actual` / `coste_extraprima_mes_actual` for a month still running — and the app has two corresponding sheets, `COSTES MES CERRADO` and `COSTES MES ACTUAL`. For an in-flight month:
 
@@ -227,9 +243,9 @@ Revenue       = (elapsed_days / period_days) × contracted_impressions / 1000 ×
 Agency rebate = Revenue × rebate_rate          (same pro-rating applied)
 ```
 
-Revenue is therefore recognised on **elapsed contract time**, not on delivery. A campaign that delivers nothing still accrues revenue in the current month. That is a deliberate revenue-recognition choice and the product must reproduce it, not "improve" it — but it also means the current-month view is an accrual, not a result, and should be labelled as such.
+Qlik therefore recognises revenue on **elapsed contract time**, not on delivery: a campaign that delivers nothing still accrues revenue in the current month.
 
-This pro-rating applies to **committed** lines, whose revenue comes from the contracted volume. A **target** line (§5.3) is not pro-rated: its revenue in a running month is the revenue its DSP has reported up to D-1, and its rebate is computed on its served gross up to D-1. A target line that delivers nothing earns nothing. Its figure is provisional all the same until the month is closed.
+**The product does not reproduce it.** Confirmed by the business on 2026-11-26: a running committed flight earns its **billing to date**, the lesser of what it delivered up to D-1 and its cap, times the sale CPM, and its rebate is computed on that billing. Neither is pro-rated by elapsed days, exactly as a **target** line (§5.3), whose revenue in a running month is the revenue its DSP has reported up to D-1 and whose rebate is computed on its served gross up to D-1. A flight that delivers nothing earns nothing. The figure is provisional until the month is closed, and the margin screen labels it «Facturable a la fecha» («Facturable» once the flight has ended). This settles the question of an accounting margin against an operational one: the running margin is the operational one, the billing so far, and it becomes the closed figure without a jump on the flight's last day. On the running-month sheet of Finance, the 23 running rows go down by 17,399.76 € of revenue and 11,615.61 € of margin against Qlik's pro-rating.
 
 ### 5.2 Confirmed defect: Qlik omits the platform cost from the margin
 
@@ -262,12 +278,12 @@ This is the single strongest argument for the project. A margin figure this far 
 
 Decided by the business on 2026-11-20, superseding the PO decisions of 2026-09-15 that priced `Deal` like `Directo`. Every line declares a **volume commitment**, and the commitment, never the channel, decides how the line earns:
 
-- **Committed** (`Directo`, `DOOH`, `CTV` as a rule): the buyer committed to the volume. Revenue is the contracted volume / 1,000 × the sale CPM, pro-rated by elapsed days while the month runs (§5.1); media cost from the DSP; rebate on that revenue; platform cost on delivered impressions; the lesser-of-contracted-and-served rule of §5.5 applies.
+- **Committed** (`Directo`, `DOOH`, `CTV` as a rule): the buyer committed to the volume. Revenue is the billing, the lesser of the delivered and the contracted volume / 1,000 × the sale CPM (§5.5), to date while the month runs and never pro-rated (§5.1); media cost from the DSP; rebate on that revenue; platform cost on delivered impressions; Operations and Finance may adjust the billing and Operations and Trading may carry undelivered volume to the next flight (§5.11).
 - **Target** (every `Deal`): the volume is an objective, not a commitment. The buyer may fall short or buy more, and there is no over-delivery. The buyer pays the purchase order's fixed sale CPM to the platform, and GeoQ's revenue is the **curator margin Equativ reports** — taken from the report, never from a constant; today it is 80 % of the buyer's spend. GeoQ invoices what Equativ reports, with no lesser-of rule and no manual adjustment, and the figure is not pro-rated. There is no media cost. The platform cost applies on served impressions. The package's data costs are stored, flagged when above zero and not subtracted (today they are zero). The rebate is paid on the **served gross**, served impressions / 1,000 × the sale CPM × the rate, not on the curator margin, and accrues on the `Deal` counter. The margin percentage is over revenue, and the margin view also shows the gross, flagging a gross that departs from the buyer's spend by more than 1 %.
 
 Worked example of a target line: a target of 1,000,000 impressions at a CPM of 5.00 € that served 1,100,000. The gross is 5,500.00 €; the curator margin, 4,400.00 €; a 10 % rebate, 550.00 €; the platform cost at 1.00 € per thousand, 1,100.00 €; the margin, 2,750.00 € (62.5 % of revenue).
 
-Over-delivery of a target line is never a deviation: the daily status flags it only when it falls more than 10 % below its target, and the check for lines without delivery applies to it like to any line. The form proposes `target` for a `Deal` line and `committed` otherwise, but the line declares it. Closing a month that holds a target line waits until its DSP's delivery of the month's last day is loaded, and then freezes its revenue and rebate base.
+Over-delivery of a target line is never a deviation: the daily status flags it only when it falls more than 10 % below its target, and the check for lines without delivery applies to it like to any line. The form proposes `target` for a `Deal` line and `committed` otherwise, but the line declares it. Closing a month waits until the delivery of its last day is loaded for the DSP of every line, target or committed (since 2026-11-26, when the committed revenue started to depend on the delivery), and then freezes the revenue and rebate base of every flight.
 
 Platform type still determines which DSP the campaign runs on:
 
@@ -278,7 +294,7 @@ Platform type still determines which DSP the campaign runs on:
 | `DOOH` | Displayce, or Adform | Measured in OTS |
 | `CTV` | Adform | Measured in impressions, like Display; priced in the rebate tables |
 
-**Each channel counts delivery in one unit.** `DOOH` is sold and measured in OTS (opportunity to see); `Directo`, `Deal` and `CTV` in impressions. The contracted volume of a line and its delivered volume are counted in the unit of its channel, its `delivery_metric`, and every screen that shows them names the unit. The revenue of a committed line is still the contracted volume / 1,000 × the sale CPM, so it never reads the delivered volume: 300,000 OTS at 5.00 € earn 1,500.00 €. The platform cost stays on the **real delivered impressions** of every channel: 12,000 impressions at 1.00 € per thousand cost 12.00 €, not 280.00 € on 280,000.50 OTS. OTS carry decimals, so the delivered volume is stored and compared as a decimal.
+**Each channel counts delivery in one unit.** `DOOH` is sold and measured in OTS (opportunity to see); `Directo`, `Deal` and `CTV` in impressions. The contracted volume of a line and its delivered volume are counted in the unit of its channel, its `delivery_metric`, and every screen that shows them names the unit. The billing of a committed line is counted in the same unit: 300,000 contracted OTS at 5.00 € that delivered 280,000.50 OTS bill 280,000.50 / 1,000 × 5.00 = 1,400.00 €, and with 300,000 or more delivered they bill 1,500.00 €. The platform cost stays on the **real delivered impressions** of every channel: 12,000 impressions at 1.00 € per thousand cost 12.00 €, not 280.00 € on 280,000.50 OTS. OTS carry decimals, so the delivered volume is stored and compared as a decimal.
 
 **A campaign does not mix units.** Its lines share one delivery metric, because the status, the pacing and the margin of a campaign add the volumes of its lines. A registration that mixes `DOOH` with another channel is refused, and a total over campaigns of different units carries no volume of its own.
 
@@ -391,13 +407,21 @@ So roughly 30 combinations a year would sit above the first bracket, where the t
 
 **Migration note.** None of the rate tables provided carry bracket columns — 2023, 2024 and 2026 all hold exactly one percentage per key. Tiering is therefore a forward-looking requirement, and historical rates migrate as a single bracket covering all volume. The free-text comments in the 2026 file (`"se baja desde el 35% porque no llega a volumen"`) are the manual approximation of what the bracket schedule will do automatically.
 
-### 5.5 Revenue follows the purchase order in force, and the order can be revised
+### 5.5 A committed flight is billed at the lesser of contracted and served
 
 This section applies to committed lines. A target line (§5.3) is invoiced on what its DSP reports: it has no lesser-of rule, needs no credit note or revised order for under-delivery, and its gap between target and served is not a billing trigger. The analysis of the 408 Deal campaigns below predates that decision and is kept as history.
 
-The pro-rating in §5.1 and the full-OC billing in the curator margin reports are not two competing revenue rules. Confirmed by the PO: a campaign that stopped early is invoiced at **the lesser of contracted and served**, and that reduction is made real either by a credit note or by a revised OC stating what was actually delivered. Qlik's elapsed-day pro-rating is an accrual view of an open month; the closing figure is the order in force.
+Confirmed by the PO (2026-09-17) and made concrete by the business (2026-11-26): a committed flight is invoiced at **the lesser of contracted and served**. The system computes it per flight, so that no revised order or credit note is needed to bring the figure down:
 
-**So the purchase order is a versioned entity, not a static field.** This was raised at the start of the analysis and left unanswered; it is now a confirmed requirement. Each campaign line carries an order version with its contracted volume, its sale CPM, and the reason and date of any revision. Revenue, rebate base and bracket accumulation all read the version in force.
+```
+billing = min(delivered, contracted) / 1000 × sale_cpm      (in the unit of the channel)
+```
+
+The rebate is computed on the billing and the annual counter advances by it. Before the month is closed, Operations and Finance may set a flight's billing to the minimum, the delivered or the contracted volume, or another amount, with a mandatory reason; and Operations and Trading may carry undelivered volume to the next flight of the line (§5.11). Closing freezes the billing in the snapshot. Target lines are invoiced as Equativ reports and do not change.
+
+On the closed-month sheet of Finance this rule changes 10 of the 51 rows compared, every one of them a row that served less than it contracted: their revenue goes down by 1,258.41 € and their margin by 1,040.18 €, and the margin over total revenue goes from 37.55 % to 37.22 %. The acceptance tests compute their expected values with this rule from the sheet's own columns, and the difference with the sheet is a known one.
+
+**The purchase order is still a versioned entity, not a static field.** Each campaign line carries an order version with its contracted volume, its sale CPM, and the reason and date of any revision. The billing never writes it: a revision remains a commercial event, not the mechanism of the lesser-of rule.
 
 **The scale of the adjustment is not marginal.** Across the 408 Deal campaigns of 2024–2026:
 
@@ -409,10 +433,10 @@ The pro-rating in §5.1 and the full-OC billing in the curator margin reports ar
 
 195 campaigns — 48% of them — served less than contracted. Taking each at the lesser of the two, the aggregate adjustment is 209,781 €, and because the rebate is a percentage of the sale price, it also carries **61,920 € of rebate accrued on revenue that should not have been billed**. The largest single case, `BEYUP_Moeve_D2S_2026`, contracted 50,502 € and served 14,060 € — across its full 26 contracted days, so this is under-delivery rather than an early stop.
 
-Two consequences for the design:
+Two consequences for the design, as the PO stated them on 2026-09-17 — both now answered by computing the billing per flight before the closing:
 
-1. **An order revision is a backdated correction**, and under chronological bracket attribution (§5.4) it cascades. Revising a March order in September lowers that agency's cumulative volume and can move every later campaign of that channel into a cheaper bracket. The rebate engine must replay the agency-year, and the margin history must be versioned so the restatement is visible.
-2. **The gap has to be detected, not waited for.** Today nothing compares served against contracted at close, which is why 195 campaigns carry the difference silently. Flagging *contracted versus served at period end* is a phase 1 requirement — it is the trigger for the credit note or the revised OC, and without it the correction depends on somebody remembering.
+1. **An order revision is a backdated correction**, and under chronological bracket attribution (§5.4) it cascades. Revising a March order in September lowers that agency's cumulative volume and can move every later campaign of that channel into a cheaper bracket. *Since 2026-11-26 the lesser-of rule is applied before the month is closed, so the counter advances by the billing from the start and no revision is needed for it.*
+2. **The gap has to be detected, not waited for.** Today nothing compares served against contracted at close, which is why 195 campaigns carry the difference silently. *Since 2026-11-26 the gap is the billing itself, every campaign of a month is reviewed before the month can be closed, and an adjustment or a carry-over is the documented decision when the rule is not what is invoiced (§5.11).*
 
 ### 5.6 Source expressions
 
@@ -459,14 +483,15 @@ A real closed-month row (`IPROSPECT / BM`, 726,202 contracted impressions at 5.0
 
 | Concept | Amount |
 |---|---:|
-| Revenue — contracted volume × CPM | 3,631.01 € |
+| Contracted sale — 726,202 contracted × 5.00 € CPM | 3,631.01 € |
+| Revenue — the billing: min(700,000 delivered, 726,202 contracted) × CPM | 3,500.00 € |
 | Media cost (DSP) | 1,200.00 € |
-| Agency rebate (25% of revenue) | 907.75 € |
+| Agency rebate (25% of revenue) | 875.00 € |
 | Platform cost (700,000 delivered × 1 €/CPM) | 700.00 € |
-| Margin as Qlik reports it today | 1,523.26 € (42.0%) |
-| **Margin as defined by the PO** | **823.26 € (22.7%)** |
+| Margin as Qlik reports it today (contracted sale, no platform cost) | 1,523.26 € (42.0%) |
+| **Margin as defined by the PO and the business** | **725.00 € (20.7%)** |
 
-19.3 points of margin on this campaign, 16.0 points across the whole 2023–2026 history (§5.2).
+Of the 21.3 points between the two, the platform cost is 19.3 points of Qlik's revenue — 16.0 points across the whole 2023–2026 history (§5.2) — and billing the 700,000 delivered instead of the 726,202 contracted is the rest. Had its billing been adjusted to the contracted volume (§5.11), with the same delivery, its revenue would be 3,631.01 €, its rebate 907.75 € and its margin 823.26 € (22.7%).
 
 ### 5.9 Rebate rate resolution
 
@@ -499,6 +524,18 @@ This matters more under the tiered rebate than it did before. The channel is the
 
 `line_format` is still ingested and stored, as a contrast value. Where it disagrees with the configured channel the row is flagged for review, never silently reclassified — the same treatment as any other unmatched key (§7).
 
+### 5.11 Billing adjustment, carry-over and monthly review
+
+Confirmed by the business on 2026-11-26. All three act on committed flights before their month is closed, and none changes the contracted volume or the purchase order.
+
+**Manual adjustment.** Operations and Finance may set the billing of a committed flight that has ended and is not yet frozen to the **minimum** (the rule), the **delivered** volume, the **contracted** volume (the flight's cap: contracted plus the carry-over when it is billable), or a **custom** amount of zero or more. The reason is mandatory, and the author and the moment are kept. Adjustments are only added and the latest one is in force; with the first three bases the billing is recomputed from the delivery until the closing, while a custom amount is fixed. The adjusted billing moves the rebate and the counter, and the closing freezes the adjustment in force. A target line is never adjusted, and nothing is adjusted after the closing.
+
+**Carry-over.** Operations and Trading decide, case by case, how much undelivered volume of a flight passes to the **next flight of the same line**, writing it on the receiving flight with a mandatory reason, its author and its moment. It is at most what the previous flight fell short of its own delivery target, never into a month already closed, and December to January is allowed. The **delivery target** of the receiving flight becomes its contracted volume plus the carry-over, and the pacing and the daily status read it; Trading sees the volumes and never an amount. A **billable** flag, false by default and set only by Operations or Finance, decides the billing: false keeps the cap at the contracted volume, true raises it to contracted plus carry-over. Example: an October flight of 500,000 impressions at 5.00 € delivers 400,000 and bills 2,000.00 €; 100,000 are carried to November, whose 500,000 become a delivery target of 600,000; November delivers 580,000 and bills 2,500.00 € with the flag false, or 2,900.00 € with it true — 4,500.00 € or 4,900.00 € for the line, against an order of 5,000.00 € that never changes. A billable carry-over into January bills on the new year's counter.
+
+**Monthly review.** Every campaign has, per month, a state: in progress (a flight still running), pending review, reviewed, or closed (every flight frozen). Operations and Finance mark it reviewed once all its flights of the month have ended, and may withdraw the mark; an adjustment, a carry-over or a change of its flag returns it to pending, an ingestion does not. A month closes only when every campaign with flights in it is reviewed or closed, so a month cannot be closed while one of its flights runs.
+
+**The billing for Finance.** Once a month is closed, Operations and Finance download a CSV with one row per flight, built from the closing's snapshot: client, agency, campaign, line, purchase order, delivered, contracted, carry-over, billable volume, CPM, amount, adjusted yes/no and reason.
+
 ## 6. Scope
 
 ### Phase 1 — MVP, Adform only
@@ -527,7 +564,7 @@ This matters more under the tiered rebate than it did before. The channel is the
 
 ### Phase 2
 
-The Displayce connector (the Adform connector defines the contract; the Equativ connector is delivered by the change `equativ-deals`, through the asynchronous report, with no CSV, upload or S3); immutable month-end snapshot (change `closing-snapshot`: closing stores every figure of each flight and the delivery it was computed on, a closed month is read only from that snapshot, the ingestion keeps updating the delivery as information, and a flight whose delivery moved after closing is flagged «Cambió tras el cierre» without changing any figure, so a month can be closed as soon as its last day is loaded); email/Teams alerting; rebate-rate versioning UI for Finance.
+The Displayce connector (the Adform connector defines the contract; the Equativ connector is delivered by the change `equativ-deals`, through the asynchronous report, with no CSV, upload or S3); immutable month-end snapshot (change `closing-snapshot`: closing stores every figure of each flight and the delivery it was computed on, a closed month is read only from that snapshot, the ingestion keeps updating the delivery as information, and a flight whose delivery moved after closing is flagged «Cambió tras el cierre» without changing any figure, so a month can be closed as soon as its last day is loaded); billing of committed lines (change `committed-billing-and-review`: a committed flight earns the lesser of delivered and contracted, to date while it runs, with manual adjustments, carry-overs to the next flight, a monthly review that gates the closing, and the CSV of a closed month for Finance, §5.11); email/Teams alerting; rebate-rate versioning UI for Finance.
 
 ### Phase 3
 
@@ -541,7 +578,7 @@ Retirement of Qlik Sense: native financial dashboards, roll-ups by sales rep and
 
 - Campaign creation or trafficking in the DSPs (excluded by the PO).
 - Reconciliation against the advertiser's own ad server (CM360, Sizmek).
-- Make-goods, under-delivery compensation, invoicing and ERP posting.
+- Make-goods beyond the carry-over of §5.11, invoicing and ERP posting: the system computes the billing and hands Finance its CSV, but issues no invoice or credit note.
 - Any external portal for agencies or advertisers.
 - Multi-tenant operation — this is an internal GeoQ system.
 - Multi-currency. Everything is EUR and billed from Spain today (§8). Amounts are stored with an explicit currency so the assumption is visible, but no conversion, rate table or conversion-date rule is built — despite campaigns running in France, Portugal, the UK, Italy, Mexico, Colombia, Canada and Morocco.
@@ -640,6 +677,7 @@ Ordered by how much they move the numbers.
 
 ### Resolved
 
+- **A committed flight earns its billing, the lesser of delivered and contracted, and every campaign is reviewed before its month closes.** The billable volume is `min(delivered, contracted)` in the unit of the channel and the revenue is that volume / 1,000 × the sale CPM; the rebate is on the billing and the annual counter advances by it. A running committed flight earns its billing to date, with no pro-rating of revenue or rebate, like a target line; the screen says «Facturable» on an ended flight and «Facturable a la fecha» on a running one, which settles the accounting-versus-operational margin question in favour of the operational one. A committed month, like a target one, waits for its DSP's last day before it can be closed. Before the closing, Operations and Finance may adjust a committed flight's billing to the minimum, the delivered, the contracted volume (its cap, with a billable carry-over) or a custom amount of zero or more, with a mandatory reason, its author and its moment; adjustments are only added, the latest wins, the first three bases follow the delivery until the closing and a custom amount is fixed; target and frozen flights are refused, and the adjusted billing moves the rebate and the counter. Operations and Trading may carry undelivered volume, case by case, to the next flight of the same line, on the receiving flight with a mandatory reason, author and moment, up to the previous flight's shortfall and never into a closed month (December to January allowed); the delivery target becomes contracted + carry-over and drives the pacing and the status, and Trading sees volumes, never amounts or the flag. A billable flag, false by default and set by Operations or Finance only, raises the cap of the billing to contracted + carry-over. Every campaign has a state per month (in progress, pending review, reviewed, closed); Operations and Finance mark it reviewed once its flights of the month have ended and may withdraw it; an adjustment, a carry-over or its flag returns it to pending, an ingestion does not; the closing answers 409 `month_not_reviewed` with the pending campaigns, so a month with a running flight cannot be closed. The closing freezes the billing basis, the billable volume, the carry-over and its flag in the snapshot, and «Cambió tras el cierre» compares with the current billing. Months closed before keep their revenue and their comparison. Finance downloads a CSV of each closed month from the snapshot, one row per flight, in UTF-8 with a byte order mark, `;` as separator and a decimal comma, so that Excel in Spanish opens it in columns. The acceptance tests compute their expected values with the rule from the sheets' own columns, and the difference with the sheets (10 of 51 rows of the closed month, −1,258.41 € of revenue) is documented as known. **This supersedes, for committed lines, revenue on the contracted volume, the pro-rating of §5.1 and the credit note or revised order as the mechanism of the lesser-of rule (PO, 2026-09-17).** *(Confirmed by the business on 2026-11-26.)*
 - **A closed month is an immutable snapshot.** Closing a month stores, for each flight, every figure it reports (revenue, contracted revenue, media cost, rebate, platform cost, margin and, for a target line, its gross), the delivery those figures were computed on, its flags and the line's metric, CPM, volume and commitment; a closed month is read only from that snapshot and never moves. Each closing run records a header with the month, the moment, the user, the `as_of` and the latest succeeded batch of each DSP. The ingestion and the unlinking of a line keep rewriting a closed month's delivery as information. A closed flight whose current delivery would move its margin by 1.00 € or more, or its delivered volume by 1 % or more, is flagged «Cambió tras el cierre» with the differences and the margin they would give, computed with the closing's rebate and rates; no figure or total changes. Months closed before the snapshot are not backfilled, and reopening a month stays out of scope. **This replaces the provisional rule of closing a month from the 8th of the next month.** *(Business, 2026-11-25)*
 - **Deal lines are target lines, and their revenue is the curator margin Equativ reports.** The volume of a Deal line is an objective the buyer may miss or exceed; there is no over-delivery. The buyer pays the purchase order's fixed sale CPM. GeoQ's revenue is the curator margin Equativ reports, taken from the report and not from a constant (80 % of the buyer's spend today), invoiced as reported with no lesser-of rule and no manual adjustment. No media cost; the platform cost applies on served impressions; the package's data costs are stored (zero today). The rebate is paid on the served gross (served / 1,000 × sale CPM × rate), not on the curator margin, on the Deal counter. Under-delivery and no-delivery warnings apply against the target; over-delivery is not warned. The line declares the commitment (`committed` or `target`) at registration, never derived from the channel; the margin percentage is over revenue and the view shows the gross; data costs are flagged when above zero and not subtracted; a gross more than 1 % away from the buyer's spend is flagged; closing waits for the month's last day of Equativ and freezes the revenue of target flights. Equativ is read through its asynchronous report in `Etc/UTC`, keyed by `auctionPackageDealId`. **This supersedes the PO decisions of 2026-09-15 on the Deal** (same model as `Directo`, `CuratorMargin` outside the margin, rebate on the OC sale price) and, for Deal lines, the 2026-09-17 decisions that computed `CuratorMargin` and applied the lesser of contracted and served. *(Business, 2026-11-20; Equativ figures confirmed by two probes on 2026-11-24)*
 - **The purchase order prevails over the commercial offer.** Where the two disagree — volume, CPM — the campaign is created from the `OC` and the deviation against the offer is recorded as informational. It does not block registration; the offer remains the commercial antecedent. *(PO, 2026-09-21)*
@@ -649,11 +687,11 @@ Ordered by how much they move the numbers.
 - Authentication is Microsoft Entra ID, with Cognito kept for development and the end-to-end tests. Roles stay in the application database. *(PO, 2026-11-12; supersedes the 2026-09-21 decision that chose Cognito)*
 - Cognito is removed: Microsoft Entra ID is the only identity provider in every environment. Development and the end-to-end tests use a test issuer shaped like Entra, active only when `APP_ENV` is `development` or `test`. *(PO, 2026-11-17; supersedes the 2026-11-12 decision that kept Cognito for development and the end-to-end tests)*
 - Operations has global control and sees the margin; Finance is the reviewer and no longer writes rebate schedules or platform rates. Trading is a new role that reads the delivery status only. *(PO, 2026-11-12)*
-- CTV enters through the Adform ingestion, like Display, and is measured in impressions; DOOH is measured in OTS. `Directo` and `Deal` stay separate channels, each with its own rebate counter, and both are measured in impressions. The `delivery_metric` of the channel (`impressions` or `ots`) names the unit of the contracted and the delivered volume of its lines, revenue stays on the contracted volume and the platform cost on the delivered impressions, and a campaign does not mix delivery metrics. *(Confirmed by the business on 2026-11-19 (CTV through Adform) and on 2026-11-20 (`Directo` and `Deal` as separate channels). The revenue of a target line, every Deal, is the curator margin Equativ reports: see the first entry.)*
+- CTV enters through the Adform ingestion, like Display, and is measured in impressions; DOOH is measured in OTS. `Directo` and `Deal` stay separate channels, each with its own rebate counter, and both are measured in impressions. The `delivery_metric` of the channel (`impressions` or `ots`) names the unit of the contracted and the delivered volume of its lines, revenue stays on the contracted volume and the platform cost on the delivered impressions, and a campaign does not mix delivery metrics. *(Revenue on the contracted volume superseded by the business decision of 2026-11-26: a committed line earns its billing, in the same unit.)* *(Confirmed by the business on 2026-11-19 (CTV through Adform) and on 2026-11-20 (`Directo` and `Deal` as separate channels). The revenue of a target line, every Deal, is the curator margin Equativ reports: see the first entry.)*
 
 - The 136 finished campaign-months with no delivery did not execute and are discarded on migration; their 111,572 € of accrued rebate is reversed. *(PO, 2026-09-15)*
 - A rate change restates the whole current year; a volume-driven bracket crossing is marginal and forward-only. *(PO, 2026-09-17)*
-- A campaign that stopped or under-delivered is invoiced at the lesser of contracted and served, via credit note or revised OC. The purchase order is therefore versioned. *(PO, 2026-09-17. Superseded for Deal lines by the business decision of 2026-11-20: a target line is invoiced as Equativ reports.)*
+- A campaign that stopped or under-delivered is invoiced at the lesser of contracted and served, via credit note or revised OC. The purchase order is therefore versioned. *(PO, 2026-09-17. Superseded for Deal lines by the business decision of 2026-11-20: a target line is invoiced as Equativ reports. For committed lines the rule stands but its mechanism is superseded by the business decision of 2026-11-26: the system computes the billing per flight, with adjustments and carry-overs, and the order is not revised for it.)*
 - ~~`CuratorMargin` = OC revenue − purchase cost, verified on 404 of 408 campaigns in the 2024–2026 reports. It is computed, not ingested.~~ *(Evidence: `CuratorMargin2024/2025/2026.xlsx`, 2026-09-17. Superseded by the business decision of 2026-11-20: the curator margin is ingested from Equativ and is the revenue of a Deal line.)*
 - Everything is EUR and billed from Spain **for now**. No currency conversion is built, but amounts carry an explicit currency so that adding one later is not a migration. *(PO, 2026-09-21)*
 - The campaign is invoiced to the agency, which belongs to a holding group. `RECLAM` is not the billing entity. *(PO, 2026-09-21)*

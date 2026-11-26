@@ -24,10 +24,14 @@ context: |
   - TDD: new functionality starts with a failing test.
 
   Domain invariants that must never be violated
-  - Revenue is booked on CONTRACTED volume for a committed line, never on delivered
-    volume, and on the REPORTED revenue of its DSP for a target line (every Deal:
-    Equativ's curator margin), never on its contracted volume. The line's
-    volume_commitment decides, never its channel.
+  - Revenue is the BILLING for a committed line: min(delivered, cap) / 1000 x sale
+    CPM, in the unit of the channel, where the cap is the contracted volume, plus the
+    carry-over when it is billable; Operations and Finance may adjust it by hand
+    before the month is closed. It is never the contracted volume alone, and never
+    pro-rated by elapsed days. For a target line (every Deal) revenue is the
+    REPORTED revenue of its DSP (Equativ's curator margin), never its contracted
+    volume, with no cap and no adjustment. The line's volume_commitment decides,
+    never its channel.
     contracted_impressions and delivered_impressions are distinct fields; a single
     "impressions" field is a defect.
   - Platform cost is part of the margin:
