@@ -104,7 +104,10 @@ def _flight_of(body: dict, name: str) -> tuple[dict, dict, dict]:
 def test_only_the_flights_that_have_ended_are_closed(month, chosen):
     _, closed = month
 
-    assert closed == {"year": 2026, "month": 10, "closed": sum(1 for r in chosen.values() if r.is_closed), "already_closed": 0}
+    closed_count = sum(1 for r in chosen.values() if r.is_closed)
+    assert closed == {
+        "year": 2026, "month": 10, "closed": closed_count, "already_closed": 0, "closings": 1 if closed_count else 0,
+    }
 
 
 def test_each_real_row_reads_back_with_the_amounts_of_the_domain_and_of_the_sheet(month, chosen):

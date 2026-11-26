@@ -5,11 +5,18 @@ delivered more than contracted, one with a negative margin and positive revenue)
 database, closed with POST /margin/closings and read back with GET /margin.
 """
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 import pytest
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from app.application.services.delivery_ingestion_service import DeliveryIngestionService
+from app.domain.value_objects.delivery import DeliveryDateRange, ExternalLineKey
+from app.infrastructure.persistence.models.campaign import CampaignLineRecord, CampaignRecord
+from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from app.presentation.dependencies import providers
 from tests.acceptance.closed_month_sheet import (
     SHEET_PATH,
@@ -19,7 +26,15 @@ from tests.acceptance.closed_month_sheet import (
     price_rows,
     split_rows,
 )
-from tests.fixtures.delivery_data import insert_campaign_line, insert_delivery, insert_ingestion_batch
+from tests.fixtures.delivery_data import (
+    insert_campaign_line,
+    insert_delivery,
+    insert_ingestion_batch,
+    insert_mapping,
+    seeded_dsp_id,
+)
+from tests.fixtures.delivery_rows import dsp_row
+from tests.fixtures.dsp_delivery_client import InMemoryDspDeliveryClient
 from tests.fixtures.margin_data import group_of, set_volume
 
 pytestmark = pytest.mark.skipif(not SHEET_PATH.exists(), reason=SKIP_REASON)
@@ -93,7 +108,7 @@ def _flight_of(body: dict, name: str) -> tuple[dict, dict, dict]:
 def test_the_month_closes_the_five_flights(month):
     _, closed = month
 
-    assert closed == {"year": 2026, "month": 8, "closed": 5, "already_closed": 0}
+    assert closed == {"year": 2026, "month": 8, "closed": 5, "already_closed": 0, "closings": 1}
 
 
 def test_each_real_row_reads_back_with_the_amounts_of_the_domain_and_of_the_sheet(month, chosen):
@@ -167,3 +182,71 @@ def test_every_amount_leaves_as_a_decimal_string_and_the_totals_count_the_flags(
     assert body["totals"]["zero_sale_count"] == 1
     assert body["totals"]["flights_counted"] == 5
     assert body["totals"]["below_cost_count"] >= 2  # the negative-margin row and the line without a price
+
+
+
+# --- The closed month does not move when its window is ingested again (finance/margin-reporting) --------------------
+
+WARNING_FIELDS = ("delivery_changed", "delivery_change", "delivery_changed_count")
+
+
+def _without_the_warning(value: Any) -> Any:
+    """The response with the change warning left out: every other figure must stay as the closing froze it."""
+    if isinstance(value, dict):
+        return {key: _without_the_warning(item) for key, item in value.items() if key not in WARNING_FIELDS}
+    if isinstance(value, list):
+        return [_without_the_warning(item) for item in value]
+    return value
+
+
+def _line_of(session: Session, campaign_name: str) -> int:
+    return session.scalars(
+        select(CampaignLineRecord.id).join(CampaignRecord, CampaignRecord.id == CampaignLineRecord.campaign_id)
+        .where(CampaignRecord.name == campaign_name)
+    ).one()
+
+
+def test_a_closed_month_reads_the_same_after_its_window_is_ingested_again_with_other_figures(
+    month: tuple[Any, dict[str, Any]], chosen: dict[str, SheetRow], test_db_session: Session
+) -> None:
+    finance, _ = month
+    before = finance.get("/margin").json()
+    restated = {chosen["normal"].campaign, chosen["negative margin"].campaign}
+    rows = []
+    for name in [row.campaign for row in chosen.values()] + [SYNTHETIC_NAME]:
+        line_id = _line_of(test_db_session, name)
+        key = ExternalLineKey(f"campaign-{line_id}", f"line-{line_id}")
+        insert_mapping(test_db_session, line_id, seeded_dsp_id(test_db_session), key.external_campaign_id,
+                       key.external_line_item_id)
+        (flight,) = _flight_of(before, name)[2:]
+        impressions, cost = flight["delivered_impressions"], Decimal(flight["media_cost"])
+        if name in restated:
+            # The DSP restates the day: twice the impressions and 777.77 € more of cost.
+            impressions, cost = impressions * 2, cost + Decimal("777.77")
+        rows.append(dsp_row(date(2026, 8, 10), key, impressions=impressions, media_cost=cost))
+
+    # The window of the closed month is ingested again, through the ingestion service, as a custom range would.
+    result = DeliveryIngestionService(
+        InMemoryDspDeliveryClient(rows), lambda: SqlAlchemyUnitOfWork(lambda: test_db_session),
+        lambda: datetime(2026, 9, 2, 2, 0),
+    ).run(seeded_dsp_id(test_db_session), date(2026, 9, 2), window=DeliveryDateRange(date(2026, 8, 1), date(2026, 8, 31)))
+    after = finance.get("/margin").json()
+
+    assert result.stored_row_count == len(rows)
+    assert _without_the_warning(after) == _without_the_warning(before)
+    flagged = {
+        campaign["name"] for campaign in after["campaigns"] for line in campaign["lines"] for flight in line["flights"]
+        if flight["delivery_changed"]
+    }
+    assert flagged == restated
+    for campaign in after["campaigns"]:
+        (line,) = campaign["lines"]
+        (flight,) = line["flights"]
+        expected = 1 if campaign["name"] in restated else 0
+        assert (line["totals"]["delivery_changed_count"], campaign["totals"]["delivery_changed_count"]) == (
+            expected, expected,
+        )
+        assert flight["delivery_change"]["delivered_impressions_difference"] == (
+            flight["delivered_impressions"] if campaign["name"] in restated else 0
+        )
+    assert (before["totals"]["delivery_changed_count"], after["totals"]["delivery_changed_count"]) == (0, 2)

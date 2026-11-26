@@ -44,7 +44,7 @@ def test_finance_closes_a_month_and_gets_the_counts(finance_client, test_db_sess
     response = _close(finance_client)
 
     assert response.status_code == 200
-    assert response.json() == {"year": 2026, "month": 8, "closed": 3, "already_closed": 0}
+    assert response.json() == {"year": 2026, "month": 8, "closed": 3, "already_closed": 0, "closings": 1}
     assert _count(test_db_session) == 3
 
 
@@ -55,7 +55,7 @@ def test_closing_again_changes_nothing(finance_client, test_db_session):
     response = _close(finance_client)
 
     assert response.status_code == 200
-    assert response.json() == {"year": 2026, "month": 8, "closed": 0, "already_closed": 3}
+    assert response.json() == {"year": 2026, "month": 8, "closed": 0, "already_closed": 3, "closings": 1}
     assert _count(test_db_session) == 3
 
 
@@ -63,7 +63,7 @@ def test_a_month_without_ended_flights_answers_200_with_zero_closed(finance_clie
     response = _close(finance_client, month=3)
 
     assert response.status_code == 200
-    assert response.json()["closed"] == 0
+    assert (response.json()["closed"], response.json()["closings"]) == (0, 0)
     assert _count(test_db_session) == 0
 
 
@@ -133,7 +133,20 @@ def test_the_counts_are_integers_not_floats(finance_client, test_db_session):
 
     body = _close(finance_client).json()
 
-    assert all(type(body[key]) is int for key in ("year", "month", "closed", "already_closed"))
+    assert all(type(body[key]) is int for key in ("year", "month", "closed", "already_closed", "closings"))
+
+
+def test_a_flight_registered_in_a_closed_month_is_closed_by_a_second_closing_that_answers_two_closings(
+    finance_client: Any, test_db_session: Session
+) -> None:
+    first = insert_campaign_line(test_db_session)
+    _close(finance_client)
+    add_line_to_campaign(test_db_session, first, 2)
+
+    response = _close(finance_client)
+
+    assert response.status_code == 200
+    assert response.json() == {"year": 2026, "month": 8, "closed": 1, "already_closed": 1, "closings": 2}
 
 
 @pytest.mark.parametrize(

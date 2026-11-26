@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, Field, PlainSerializer, model_validator
 
+from app.domain.value_objects.closed_flight import ClosedDeliveryCheck
 from app.domain.value_objects.margin import MarginTotals
 from app.domain.value_objects.margin_report import FlightReport, FlightState, MarginReport
 from app.domain.value_objects.platform_rate import PlatformRateLevel
@@ -19,8 +20,14 @@ class ClosingRequest(BaseModel):
 class ClosingResponse(BaseModel):
     year: int
     month: int
-    closed: int
-    already_closed: int
+    closed: int = Field(description="The flights this request froze.")
+    already_closed: int = Field(description="The flights of the month frozen before this request.")
+    closings: int = Field(
+        description=(
+            "The closing headers the month holds after this request: one per closing that froze a flight. More than "
+            "one when a flight registered in a closed month was frozen by a later closing."
+        )
+    )
 
 
 # Money and rates leave as decimal strings in plain notation, never as JSON numbers.
@@ -59,6 +66,9 @@ class TotalsResponse(BaseModel):
         description="How many flights below have a gross more than 1 % away from the buyer's spend."
     )
     data_cost_count: int = Field(description="How many flights below report a third-party or audience data cost.")
+    delivery_changed_count: int = Field(
+        description="How many flights below carry `delivery_changed`. No amount of the totals changes because of them."
+    )
 
     @classmethod
     def from_totals(cls, totals: MarginTotals) -> "TotalsResponse":
@@ -71,6 +81,45 @@ class TotalsResponse(BaseModel):
             zero_sale_count=totals.zero_sale_count, margin_pct=totals.margin_pct,
             volume_commitment=totals.volume_commitment, gross_revenue=totals.gross_revenue,
             gross_differs_count=totals.gross_differs_count, data_cost_count=totals.data_cost_count,
+            delivery_changed_count=totals.delivery_changed_count,
+        )
+
+
+_INFORMATIVE = (
+    "Informative: the current margin uses the closing's rebate and rates with today's delivery; only the delivery "
+    "changes, and no amount or total adds it."
+)
+
+
+class DeliveryChangeResponse(BaseModel):
+    """A closed flight compared with the delivery stored now. Each difference is the current value less the frozen one."""
+
+    delivered_difference: QuantityString = Field(
+        description=f"The delivered volume, {IN_DELIVERY_METRIC}, four decimals."
+    )
+    delivered_impressions_difference: int = Field(description="The real impressions.")
+    media_cost_difference: DecimalString = Field(description="The media cost, both rounded to the cent first.")
+    reported_revenue_difference: DecimalString | None = Field(
+        description="The revenue the DSP reports, both rounded to the cent first. Null for a committed flight."
+    )
+    buyer_spend_difference: DecimalString | None = Field(
+        description="The buyer's spend, both rounded to the cent first. Null for a committed flight."
+    )
+    current_margin: DecimalString = Field(
+        description=f"The margin the flight would have with the delivery stored now. {_INFORMATIVE}"
+    )
+    margin_difference: DecimalString = Field(description="`current_margin` less the frozen `margin`.")
+
+    @classmethod
+    def from_check(cls, check: ClosedDeliveryCheck) -> "DeliveryChangeResponse":
+        return cls(
+            delivered_difference=check.delivered_difference,
+            delivered_impressions_difference=check.delivered_impressions_difference,
+            media_cost_difference=check.media_cost_difference,
+            reported_revenue_difference=check.reported_revenue_difference,
+            buyer_spend_difference=check.buyer_spend_difference,
+            current_margin=check.current_margin,
+            margin_difference=check.margin_difference,
         )
 
 
@@ -127,6 +176,15 @@ class FlightMarginResponse(BaseModel):
     data_cost_reported: bool = Field(
         description="The DSP reports a third-party or audience data cost inside the flight's window; never subtracted."
     )
+    delivery_changed: bool = Field(
+        description=(
+            "A closed flight whose delivery stored now moved from the one it was closed with: its margin by 1.00 € or "
+            "more, or its delivered volume by 1 % or more. False for a flight that is not closed. No figure changes."
+        )
+    )
+    delivery_change: DeliveryChangeResponse | None = Field(
+        description=f"A closed flight's differences and current margin. Null until closed. {_INFORMATIVE}"
+    )
 
     @classmethod
     def from_report(cls, report: FlightReport) -> "FlightMarginResponse":
@@ -155,6 +213,10 @@ class FlightMarginResponse(BaseModel):
             volume_commitment=margin.volume_commitment, gross_revenue=margin.gross_revenue,
             gross_differs_from_buyer_spend=margin.gross_differs_from_buyer_spend,
             data_cost_reported=margin.data_cost_reported,
+            delivery_changed=margin.delivery_changed,
+            delivery_change=(
+                None if report.delivery_change is None else DeliveryChangeResponse.from_check(report.delivery_change)
+            ),
         )
 
 

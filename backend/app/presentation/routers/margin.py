@@ -34,9 +34,13 @@ def close_month(
     user: Annotated[User, Depends(require_roles(RoleName.OPERATIONS, RoleName.FINANCE))],
     service: Annotated[MarginClosingService, Depends(get_margin_closing_service)],
 ) -> ClosingResponse:
-    """Freeze the rates of the flights that ended in a month. Idempotent. Requires: operations or finance role."""
+    """Freeze the flights that ended in a month: their rates and their snapshot, under one closing header. Idempotent.
+    Requires: operations or finance role."""
     result = service.close_month(body.year, body.month, closed_by=user.id)
-    return ClosingResponse(year=result.year, month=result.month, closed=result.closed, already_closed=result.already_closed)
+    return ClosingResponse(
+        year=result.year, month=result.month, closed=result.closed, already_closed=result.already_closed,
+        closings=result.closings,
+    )
 
 
 @router.get("", response_model=MarginResponse)
