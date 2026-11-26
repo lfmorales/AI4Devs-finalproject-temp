@@ -274,7 +274,7 @@ def _economics_at_closing(commitment: VolumeCommitment) -> FlightEconomics:
         delivered_impressions=812_345, media_cost=Decimal("1534.567891"), rebate_amount=Decimal("473.218765432109"),
         platform_rate=Decimal("1.37"), delivery_metric="impressions", delivered=Decimal(812_345),
         volume_commitment=commitment, reported_revenue=Decimal("3412.344999"), buyer_spend=Decimal("2999.99"),
-        data_cost=Decimal("0.000001"), gross_revenue=None,
+        data_cost=Decimal("0.000001"),
     )
 
 

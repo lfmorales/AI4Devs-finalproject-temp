@@ -1,7 +1,7 @@
 """Builders for the flight inputs of the margin: the delivery metric and the delivered volume have defaults here, not in the domain.
 
 Left out, a flight counts in impressions and `delivered` is its `delivered_impressions`; it is `committed`, its
-reported revenue, buyer's spend and data cost are zero, and its gross is not given (computed from what was served). Production code never relies on that: it always reads them
+reported revenue, buyer's spend and data cost are zero. Production code never relies on that: it always reads them
 from the stored line and delivery.
 """
 
@@ -29,7 +29,6 @@ def flight_economics(
     reported_revenue: Decimal = Decimal(0),
     buyer_spend: Decimal = Decimal(0),
     data_cost: Decimal = Decimal(0),
-    gross_revenue: Decimal | None = None,
 ) -> FlightEconomics:
     return FlightEconomics(
         flight_start=flight_start, flight_end=flight_end, contracted_impressions=contracted_impressions,
@@ -37,7 +36,7 @@ def flight_economics(
         rebate_amount=rebate_amount, platform_rate=platform_rate, delivery_metric=delivery_metric,
         delivered=Decimal(delivered_impressions) if delivered is None else delivered,
         volume_commitment=volume_commitment, reported_revenue=reported_revenue, buyer_spend=buyer_spend,
-        data_cost=data_cost, gross_revenue=gross_revenue,
+        data_cost=data_cost,
     )
 
 

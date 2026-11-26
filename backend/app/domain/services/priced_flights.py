@@ -61,8 +61,6 @@ def price_flights(
                 delivery_metric=facts.delivery_metric, delivered=facts.delivered,
                 volume_commitment=facts.volume_commitment, reported_revenue=facts.reported_revenue,
                 buyer_spend=facts.buyer_spend, data_cost=facts.data_cost,
-                # Priced now, never frozen: the gross is what was served.
-                gross_revenue=None,
             ),
             as_of,
         )
