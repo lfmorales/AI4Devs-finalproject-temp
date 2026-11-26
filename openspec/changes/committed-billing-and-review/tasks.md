@@ -4,13 +4,13 @@
 
 ## 0. Setup: Create Feature Branch (MANDATORY - FIRST STEP)
 
-- [ ] 0.1 Verify `git branch --show-current` reports `feature/committed-billing-and-review` (renamed from `feature/billing-review` with `git branch -m`) and `git status --short` is clean after the commit of this specification, before the first code change
-- [ ] 0.2 Check that `docs/product-description.md`, revised with this specification (§4, §5, §5.1, §5.3, §5.5, §5.8, §6 and §8), agrees with the specs of this change; verify with a read-through
+- [x] 0.1 Verify `git branch --show-current` reports `feature/committed-billing-and-review` (renamed from `feature/billing-review` with `git branch -m`) and `git status --short` is clean after the commit of this specification, before the first code change
+- [x] 0.2 Check that `docs/product-description.md`, revised with this specification (§4, §5, §5.1, §5.3, §5.5, §5.8, §6 and §8), agrees with the specs of this change; verify with a read-through
 
 ## 1. Access Matrix First
 
-- [ ] 1.1 Write the failing tests in `backend/tests/api/test_route_protection.py`: add `OPERATIONS_TRADING`, the seven `/billing` entries with `MARGIN_READERS` and `("/flights/{flight_id}/carryover", "PUT")` with `OPERATIONS_TRADING` to `ACCESS_MATRIX`; a test that the `/billing` routes are exactly the seven of `identity/access-matrix`; leave `test_the_margin_routes_are_the_four_of_this_change` unchanged. Verify that `test_the_access_matrix_has_an_entry_for_every_route_and_no_entry_without_a_route` fails for the eight missing routes
-- [ ] 1.2 Add the two routers with the eight routes, their `require_roles` and a 501 body, registered in `backend/app/main.py`; verify 1.1 and that every route answers 401 without a token and 403, with only `code` and `message`, to each role outside its entry
+- [x] 1.1 Write the failing tests in `backend/tests/api/test_route_protection.py`: add `OPERATIONS_TRADING`, the seven `/billing` entries with `MARGIN_READERS` and `("/flights/{flight_id}/carryover", "PUT")` with `OPERATIONS_TRADING` to `ACCESS_MATRIX`; a test that the `/billing` routes are exactly the seven of `identity/access-matrix`; leave `test_the_margin_routes_are_the_four_of_this_change` unchanged. Verify that `test_the_access_matrix_has_an_entry_for_every_route_and_no_entry_without_a_route` fails for the eight missing routes
+- [x] 1.2 Add the two routers with the eight routes, their `require_roles` and a 501 body, registered in `backend/app/main.py`; verify 1.1 and that every route answers 401 without a token and 403, with only `code` and `message`, to each role outside its entry
 
 ## 2. Domain: the Billing of a Committed Flight
 

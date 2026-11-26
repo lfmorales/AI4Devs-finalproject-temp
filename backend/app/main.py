@@ -6,9 +6,11 @@ from fastapi import FastAPI
 from app.presentation.dependencies.providers import build_startup_configuration
 from app.presentation.errors import register_exception_handlers
 from app.presentation.routers import (
+    billing,
     campaign_lines,
     campaign_status,
     campaigns,
+    carryover,
     dsp_catalog,
     dsp_mappings,
     flight_preview,
@@ -43,6 +45,8 @@ def create_app() -> FastAPI:
     app.include_router(flight_preview.router)
     app.include_router(campaign_status.router)
     app.include_router(margin.router)
+    app.include_router(billing.router)
+    app.include_router(carryover.router)
     app.include_router(users.router)
     return app
 

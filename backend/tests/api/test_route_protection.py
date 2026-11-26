@@ -81,6 +81,7 @@ OPERATIONS = frozenset({RoleName.OPERATIONS})
 READERS = frozenset({RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE})
 MARGIN_READERS = frozenset({RoleName.OPERATIONS, RoleName.FINANCE})
 EVERYONE = frozenset({RoleName.OPERATIONS, RoleName.BUSINESS, RoleName.FINANCE, RoleName.TRADING})
+OPERATIONS_TRADING = frozenset({RoleName.OPERATIONS, RoleName.TRADING})
 ALL_ROLES = (RoleName.OPERATIONS, RoleName.FINANCE, RoleName.BUSINESS, RoleName.TRADING)
 
 # The access matrix of the identity/access-matrix specification, route by route. /health is public on purpose.
@@ -104,6 +105,14 @@ ACCESS_MATRIX: dict[tuple[str, str], frozenset[RoleName]] = {
     ("/margin/closings", "POST"): MARGIN_READERS,
     ("/margin/rebate-schedules", "POST"): OPERATIONS,
     ("/margin/platform-rates", "POST"): OPERATIONS,
+    ("/billing", "GET"): MARGIN_READERS,
+    ("/billing/flights/{flight_id}/adjustments", "POST"): MARGIN_READERS,
+    ("/billing/flights/{flight_id}/adjustments", "GET"): MARGIN_READERS,
+    ("/billing/reviews", "POST"): MARGIN_READERS,
+    ("/billing/reviews/withdrawals", "POST"): MARGIN_READERS,
+    ("/billing/flights/{flight_id}/carryover/billable", "PUT"): MARGIN_READERS,
+    ("/billing/export", "GET"): MARGIN_READERS,
+    ("/flights/{flight_id}/carryover", "PUT"): OPERATIONS_TRADING,
 }
 
 
@@ -155,6 +164,30 @@ def test_the_margin_routes_are_the_four_of_this_change() -> None:
         ("/margin/rebate-schedules", "POST"),
         ("/margin/platform-rates", "POST"),
     }
+
+
+def test_the_billing_routes_are_the_seven_of_committed_billing_and_review() -> None:
+    billing = {key for key in ACCESS_MATRIX if key[0] == "/billing" or key[0].startswith("/billing/")}
+
+    assert billing == {
+        ("/billing", "GET"),
+        ("/billing/flights/{flight_id}/adjustments", "POST"),
+        ("/billing/flights/{flight_id}/adjustments", "GET"),
+        ("/billing/reviews", "POST"),
+        ("/billing/reviews/withdrawals", "POST"),
+        ("/billing/flights/{flight_id}/carryover/billable", "PUT"),
+        ("/billing/export", "GET"),
+    }
+    assert all(ACCESS_MATRIX[key] == MARGIN_READERS for key in billing)
+
+
+def test_the_carryover_is_the_only_write_trading_may_make() -> None:
+    trading_writes = {
+        key for key, roles in ACCESS_MATRIX.items() if RoleName.TRADING in roles and key[1] != "GET"
+    }
+
+    assert trading_writes == {("/flights/{flight_id}/carryover", "PUT")}
+    assert ACCESS_MATRIX[("/flights/{flight_id}/carryover", "PUT")] == OPERATIONS_TRADING
 
 
 @pytest.mark.parametrize(("path", "route", "inherited", "method"), _cases())
