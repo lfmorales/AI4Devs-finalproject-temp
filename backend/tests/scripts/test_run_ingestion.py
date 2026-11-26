@@ -111,7 +111,7 @@ class Scenario:
         )
 
     def count(self, record) -> int:
-        return self.session.scalar(select(func.count()).select_from(record))
+        return int(self.session.scalar(select(func.count()).select_from(record)) or 0)
 
     def batch_statuses(self) -> list[str]:
         return list(self.session.scalars(select(IngestionBatchRecord.status).order_by(IngestionBatchRecord.id)))

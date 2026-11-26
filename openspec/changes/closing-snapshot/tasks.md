@@ -67,10 +67,10 @@
 
 ## 11. Run Unit Tests and Verify Database State (MANDATORY)
 
-- [ ] 11.1 Capture the pre-test baseline of the development database: row counts of `applied_rates`, `month_closings`, `month_closing_batches`, `closed_flight_snapshots`, `daily_deliveries` and `ingestion_batches`
-- [ ] 11.2 Run the targeted tests of tasks 1 to 9, then the whole backend suite (`pytest`), the acceptance tests (38 plus the new one), mypy on the touched files as `docs/base-standards.md` §4 says, and the frontend suite (`npm test`), recording totals, failures and runtime
-- [ ] 11.3 Re-check the baseline and restore any change the tests left
-- [ ] 11.4 Create `docs/reports/YYYY-MM-DD-step-11-unit-test-and-db-verification.md`; the step is complete only once it exists
+- [x] 11.1 Capture the pre-test baseline of the development database: row counts of `applied_rates`, `month_closings`, `month_closing_batches`, `closed_flight_snapshots`, `daily_deliveries` and `ingestion_batches`
+- [x] 11.2 Run the targeted tests of tasks 1 to 9, then the whole backend suite (`pytest`), the acceptance tests (38 plus the new one), mypy on the touched files as `docs/base-standards.md` §4 says, and the frontend suite (`npm test`), recording totals, failures and runtime
+- [x] 11.3 Re-check the baseline and restore any change the tests left
+- [x] 11.4 Create `docs/reports/YYYY-MM-DD-step-11-unit-test-and-db-verification.md`; the step is complete only once it exists
 
 ## 12. Manual Endpoint Testing with curl (MANDATORY - AGENT MUST EXECUTE)
 
