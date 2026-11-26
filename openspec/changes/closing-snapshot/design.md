@@ -82,6 +82,7 @@ As in the previous changes, the reports go to `docs/reports/`, not to `specs/<ch
 - [The current margin of a target flight keeps the closing's rebate even when its gross moved] → Decided with the user: the counter has already advanced by the frozen gross; the field descriptions and the screen say so.
 - [A developer database with closed flights stops the migration] → The message names `e2e/scripts/reset-data.sh`.
 - [`applied_rates.closed_at` and `closed_by` repeat the header] → Kept: the table is append-only and the existing tests read them.
+- [The flights table of a line is wider than the page, and the warning's detail is read by scrolling it] → Left for the desk's interface: the table already overflowed before this change (at 1,600 px «Avisos» sits on the edge and «Entrega» is out of view, step 13 report). The tag «Cambió tras el cierre» on the flight and the counts on its line, its campaign and the period are visible without scrolling, and they are what warns.
 
 ## Migration Plan
 

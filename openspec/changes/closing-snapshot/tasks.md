@@ -86,6 +86,6 @@
 
 ## 14. Update Technical Documentation (MANDATORY)
 
-- [ ] 14.1 Update `docs/deploy.md`: replace «Closing a month: from the 8th of the next month» (`:266-268`) with what the snapshot guarantees, that the ingestion and the unlinking still rewrite the delivery of a closed month, that the margin screen flags it, and that a database holding closed flights must be reset before this migration
-- [ ] 14.2 Update `readme.md`: the closed-month paragraphs (`:126`, `:1524`), the data model of the three tables, the closing response with `closings`, the margin response with the change warning, and the output of `run_ingestion` with `closed_month_days`
-- [ ] 14.3 Update the invariant of frozen rates in `openspec/config.yaml` to the snapshot, and check that `docs/product-description.md` still agrees with the specs after the implementation
+- [x] 14.1 Update `docs/deploy.md`: replace «Closing a month: from the 8th of the next month» (`:266-268`) with what the snapshot guarantees, that the ingestion and the unlinking still rewrite the delivery of a closed month, that the margin screen flags it, and that a database holding closed flights must be reset before this migration
+- [x] 14.2 Update `readme.md`: the closed-month paragraphs (`:126`, `:1524`), the data model of the three tables, the closing response with `closings`, the margin response with the change warning, and the output of `run_ingestion` with `closed_month_days`
+- [x] 14.3 Update the invariant of frozen rates in `openspec/config.yaml` to the snapshot, and check that `docs/product-description.md` still agrees with the specs after the implementation

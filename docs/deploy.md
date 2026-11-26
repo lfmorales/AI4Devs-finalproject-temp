@@ -118,6 +118,12 @@ This release adds two migrations: one gives `daily_deliveries` the columns `ots`
 
 If it is not done, a finished DOOH flight whose delivery all predates the column reads 0 OTS and is reported as a line without delivery. **Those exceptions are false, and they do not close by themselves:** the exception queue never closes or reopens an exception when delivery appears later, so operations have to resolve each one by hand. The same rows also show 0 delivered OTS in the status and the margin until they are re-ingested, though the revenue and the platform cost do not change.
 
+### The release that freezes a closed month (`closing-snapshot`)
+
+This release adds one migration, `3a08cce1c979`, which creates the closing headers (`month_closings`, `month_closing_batches`) and the snapshot of every closed flight (`closed_flight_snapshots`). It **refuses a database whose `applied_rates` holds any row**: the snapshot of a flight closed before it cannot be rebuilt, because the delivery the flight was closed with is no longer stored, and the migration does not backfill it. The refusal leaves the database as it was, and its message names `e2e/scripts/reset-data.sh`.
+
+There is no production database yet, so a new installation migrates as usual. A development database with closed months is rebuilt with `e2e/scripts/reset-data.sh`, which drops the volume, migrates and seeds again. A database holding real closed months would need a backfill of its own before this migration.
+
 ## 10. Master data
 
 A fresh database has no agencies, advertisers, DSPs, channels, formats, campaign types, sectors or sales reps, and the "new campaign" form needs them. Load them from a JSON file with `scripts/load_masters.py`. Start from the template, which holds fictitious data:
@@ -185,9 +191,12 @@ new_exceptions: ...
 mapped_lines: ...
 skipped_lines: ...
 absences: ...
+closed_month_days: ...
 ```
 
 Exit codes: 0 succeeded, 1 failed (the line `error:` names the class of the error), 2 another run holds the lock, 3 configuration is missing. Reconcile the first figures by hand against Adform before scheduling it.
+
+`closed_month_days` is how many days of the run's window fall in a closed month (one that holds a closing header). Those days are ingested like any other: the figures of a closed month never move, and a closed flight whose delivery changed only gets the warning «Cambió tras el cierre» on the margin screen (*Closing a month*, below). A failed run prints no count.
 
 > **Warning: the first ingestion with no mappings opens many exceptions.** The run always asks Adform for the window, even when no line is mapped yet, and every pair with delivery that matches no mapped line becomes an `unmatched_delivery` exception. On a fresh installation that is one exception per pair with delivery in the whole Adform account, so the "Excepciones" queue fills up at once. Expect it, and work it down by linking each pair to its line (or resolving it) from the queue.
 
@@ -211,7 +220,7 @@ CRON_TZ=Europe/Madrid
 Every morning, or from a monitor, look at the last line the job wrote:
 
 ```
-tail -n 9 /var/log/adops360/ingestion.log
+tail -n 10 /var/log/adops360/ingestion.log
 grep 'exit=' /var/log/adops360/ingestion.log | tail -n 3
 ```
 
@@ -263,9 +272,14 @@ CRON_TZ=UTC
 - **The company currency is assumed to be EUR.** The amounts are read in the account's company currency and carry no currency column, as Adform's cost does. An account in another currency would need the euro metrics of Equativ instead.
 - **Mapping a Deal line.** On the «Catálogo Adform» page, «Vincular una línea de Equativ» lists the lines on Equativ without a mapping; operations writes the line's auction package id (a whole number above zero with no leading zero), suggested from the Equativ packages already seen in the catalogue but never required from it. The mapping counts as validated by the user: Equativ is not asked. **A wrong id is not detected when it is written**: no delivery ever arrives for it, and once its flight has ended it shows up in «Excepciones» as a line without delivery.
 
-### Closing a month: from the 8th of the next month
+### Closing a month
 
-The nightly runs replace D-7 to D-1 whatever the closing, and a closed flight still reads its media cost and its platform cost from the delivery stored now: only its rebate, its platform rate and, for a target line, its revenue and its gross are frozen. A day restated after the closing therefore moves the margin of a closed month. Until the closing freezes a full snapshot (a change of its own), **close a month from the 8th of the next month**, when the nightly window no longer reaches it. A `--from`/`--to` or `--date` run can still rewrite it, so avoid them on closed months. A month with a target flight cannot be closed anyway until its DSP has a succeeded run whose window includes the month's last day: the closing answers «month_delivery_not_loaded» until then.
+A month can be closed as soon as its last day is loaded: there is no waiting rule. Closing freezes, for every flight that ended in the month, its rates and a snapshot of every figure it shows (revenue, media cost, rebate, platform cost, margin, gross, flags and volumes) together with the delivery they were computed on. All of it goes under one closing header that names the month, the moment, the user, the last day counted (`as_of`) and the latest succeeded ingestion batch of each DSP. **A closed month never moves**: its flights are read only from their snapshots.
+
+- **The ingestion and the unlinking still rewrite the delivery of a closed month.** The nightly runs replace D-7 to D-1 and a range run replaces its range whatever the closing, and unlinking a line removes its delivery. The stored delivery keeps being the DSP's latest truth, but no figure of a closed flight, line, campaign or total changes. A run prints how many of its days fell in a closed month (`closed_month_days`).
+- **The margin screen flags a closed flight whose delivery changed.** When the delivery stored now would move its margin by 1.00 € or more, or its delivered volume by 1 % or more, the flight is tagged «Cambió tras el cierre», with the margin it would have with today's delivery and the differences. That margin uses the closing's rebate and rates, only the delivery changes, and no total adds it. Lines, campaigns and the period count the tagged flights. A closed month is not reopened: if the new delivery is right, the difference is settled outside the application.
+- **A month may be closed more than once.** A flight registered in a month already closed stays pending close, and blocks closing the later months of its year (`previous_month_open`), until the month is closed again. That closing freezes it under a second header, the closing response says how many headers the month holds (`closings`), and the figures of the earlier closing do not change.
+- **A month with a target flight waits for its DSP.** It cannot be closed until that DSP has a succeeded run whose window includes the month's last day: the closing answers `month_delivery_not_loaded` until then.
 
 ## 13. Backups
 
