@@ -21,11 +21,11 @@
 
 ## 3. Domain: the Check, the Counts and the Closed Days
 
-- [ ] 3.1 Write failing tests for `check_closed_delivery` with the scenarios of `finance/margin-calculation` («A closed flight is checked against its current delivery»): the restated committed flight (current margin −450.00, difference −2,300.00, impressions +500,000, media cost +1,800.00, flagged); an unchanged delivery (all zero, not flagged); a media cost moved by 0.99 € (not flagged) and by 1.00 € (flagged); 303,000.0000 against 300,000.0000 OTS (flagged) and 302,999.9999 (not); a frozen zero with 10 impressions now (flagged); the restated Deal flight (current margin 3,350.00, difference 600.00, revenue +800.00, spend +1,000.00, flagged); a committed flight with no revenue or spend difference
-- [ ] 3.2 Implement `check_closed_delivery` and `ClosedDeliveryCheck` with `MARGIN_CHANGE_TOLERANCE` and `DELIVERED_CHANGE_TOLERANCE`, reusing `round_amount` and `WindowDelivery`; verify 3.1
-- [ ] 3.3 Write failing tests in `backend/tests/domain/test_margin_totals.py` that `FlightMargin.delivery_changed` defaults to false, that `total_flights` and `total_lines` count it in `delivery_changed_count`, and that no amount, volume or other count of a total changes with it
-- [ ] 3.4 Add the field and the count; verify 3.3 and `test_margin_totals.py`
-- [ ] 3.5 Write failing tests for `days_in_closed_months`: 2026-11-26 to 2026-12-02 with November closed gives 5 and with nothing closed 0; 2026-10-15 to 2026-11-14 with October closed gives 17; implement it in the domain and verify
+- [x] 3.1 Write failing tests for `check_closed_delivery` with the scenarios of `finance/margin-calculation` («A closed flight is checked against its current delivery»): the restated committed flight (current margin −450.00, difference −2,300.00, impressions +500,000, media cost +1,800.00, flagged); an unchanged delivery (all zero, not flagged); a media cost moved by 0.99 € (not flagged) and by 1.00 € (flagged); 303,000.0000 against 300,000.0000 OTS (flagged) and 302,999.9999 (not); a frozen zero with 10 impressions now (flagged); the restated Deal flight (current margin 3,350.00, difference 600.00, revenue +800.00, spend +1,000.00, flagged); a committed flight with no revenue or spend difference
+- [x] 3.2 Implement `check_closed_delivery` and `ClosedDeliveryCheck` with `MARGIN_CHANGE_TOLERANCE` and `DELIVERED_CHANGE_TOLERANCE`, reusing `round_amount` and `WindowDelivery`; verify 3.1
+- [x] 3.3 Write failing tests in `backend/tests/domain/test_margin_totals.py` that `FlightMargin.delivery_changed` defaults to false, that `total_flights` and `total_lines` count it in `delivery_changed_count`, and that no amount, volume or other count of a total changes with it
+- [x] 3.4 Add the field and the count; verify 3.3 and `test_margin_totals.py`
+- [x] 3.5 Write failing tests for `days_in_closed_months`: 2026-11-26 to 2026-12-02 with November closed gives 5 and with nothing closed 0; 2026-10-15 to 2026-11-14 with October closed gives 17; implement it in the domain and verify
 
 ## 4. Closing Writes the Snapshot and the Header
 

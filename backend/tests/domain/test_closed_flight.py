@@ -15,11 +15,13 @@ from pathlib import Path
 import pytest
 
 from app.domain.services import closed_flight
-from app.domain.services.closed_flight import margin_from_snapshot, snapshot_of
+from app.domain.services.closed_flight import (
+    DELIVERED_CHANGE_TOLERANCE, MARGIN_CHANGE_TOLERANCE, check_closed_delivery, margin_from_snapshot, snapshot_of,
+)
 from app.domain.services.flight_margin import calculate_flight_margin
 from app.domain.services.priced_flights import price_flights
-from app.domain.value_objects.closed_flight import ClosedFlightSnapshot
-from app.domain.value_objects.margin import FlightEconomics, FlightStatus
+from app.domain.value_objects.closed_flight import ClosedDeliveryCheck, ClosedFlightSnapshot
+from app.domain.value_objects.margin import FlightEconomics, FlightStatus, WindowDelivery
 from app.domain.value_objects.platform_rate import PlatformRateLevel, ResolvedPlatformRate
 from app.domain.value_objects.priced_flight import FlightFacts, PlatformRates, PricedFlight
 from app.domain.value_objects.rebate import Bracket, CounterKey, FlightRebate, LadderStep, RebateSchedule
@@ -314,10 +316,207 @@ def test_the_margin_read_from_a_snapshot_is_the_margin_calculate_flight_margin_g
 
 
 def test_the_margin_of_a_closed_flight_is_never_computed() -> None:
+    # The module never imports the margin formula, and the read calls nothing that rounds: it only copies.
     tree = ast.parse(Path(closed_flight.__file__).read_text())
-    names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)} | {
-        alias.name for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) for alias in node.names
-    }
+    imported = {alias.name for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) for alias in node.names}
+    (read,) = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "margin_from_snapshot"]
+    called = {node.func.id for node in ast.walk(read) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
 
-    assert "calculate_flight_margin" not in names
-    assert "round_amount" not in names
+    assert "calculate_flight_margin" not in imported
+    assert called == {"FlightMargin"}
+
+
+# --- check_closed_delivery (finance/margin-calculation, «A closed flight is checked against its current delivery») ---
+#
+# The committed flight of the example closed with a revenue of 5,000.00 € (1,000,000 at 5.00 €), a media cost of
+# 1,200.00 €, a rebate of 1,250.00 €, a platform cost of 700.00 € on 700,000 impressions at 1.00 € and a margin of
+# 1,850.00 €. The Deal flight is the worked target example of the snapshot above.
+
+FROZEN_RATE = Decimal("1.00")
+
+
+def _closed_committed(**overrides: object) -> ClosedFlightSnapshot:
+    values: dict[str, object] = {
+        "revenue": Decimal("5000.00"), "contracted_revenue": Decimal("5000.00"), "media_cost": Decimal("1200.00"),
+        "rebate": Decimal("1250.00"), "platform_cost": Decimal("700.00"), "margin": Decimal("1850.00"),
+        "gross_revenue": None, "delivered_impressions": 700_000, "delivered": Decimal("700000.0000"),
+        "window_media_cost": Decimal("1200.000000"), "window_reported_revenue": Decimal(0),
+        "window_buyer_spend": Decimal(0), "window_data_cost": Decimal(0), "gross_differs_from_buyer_spend": False,
+        "data_cost_reported": False, "delivery_metric": "impressions", "sale_cpm": Decimal("5.00"),
+        "contracted_impressions": 1_000_000, "volume_commitment": VolumeCommitment.COMMITTED,
+    }
+    values.update(overrides)
+    return ClosedFlightSnapshot(**values)  # type: ignore[arg-type]
+
+
+def _closed_dooh() -> ClosedFlightSnapshot:
+    # 300,000.0000 OTS over 12,000 impressions: revenue 1,500.00 €, platform cost 12.00 €, margin 1,488.00 €.
+    return _closed_committed(
+        revenue=Decimal("1500.00"), contracted_revenue=Decimal("1500.00"), media_cost=Decimal("0.00"),
+        rebate=Decimal("0.00"), platform_cost=Decimal("12.00"), margin=Decimal("1488.00"),
+        delivered_impressions=12_000, delivered=Decimal("300000.0000"), window_media_cost=Decimal(0),
+        delivery_metric="ots", contracted_impressions=300_000,
+    )
+
+
+def _delivery_of(snapshot: ClosedFlightSnapshot, **changes: object) -> WindowDelivery:
+    """The delivery the snapshot was closed with, with some of it changed."""
+    values: dict[str, object] = {
+        "impressions": snapshot.delivered_impressions, "media_cost": snapshot.window_media_cost,
+        "delivered": snapshot.delivered, "reported_revenue": snapshot.window_reported_revenue,
+        "buyer_spend": snapshot.window_buyer_spend, "data_cost": snapshot.window_data_cost,
+    }
+    values.update(changes)
+    return WindowDelivery(**values)  # type: ignore[arg-type]
+
+
+def test_the_tolerances_are_one_euro_of_margin_and_one_percent_of_volume() -> None:
+    assert MARGIN_CHANGE_TOLERANCE == Decimal("1.00")
+    assert DELIVERED_CHANGE_TOLERANCE == Decimal("0.01")
+
+
+def test_the_restated_committed_flight_of_the_example_is_flagged() -> None:
+    snapshot = _closed_committed()
+    current = _delivery_of(
+        snapshot, impressions=1_200_000, delivered=Decimal("1200000.0000"), media_cost=Decimal("3000.000000"),
+    )
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, current)
+
+    assert check == ClosedDeliveryCheck(
+        delivered_difference=Decimal("500000.0000"),
+        delivered_impressions_difference=500_000,
+        media_cost_difference=Decimal("1800.00"),
+        reported_revenue_difference=None,
+        buyer_spend_difference=None,
+        current_margin=Decimal("-450.00"),
+        margin_difference=Decimal("-2300.00"),
+        changed=True,
+    )
+    assert snapshot.margin == Decimal("1850.00")
+
+
+def test_a_delivery_equal_to_the_frozen_one_raises_nothing() -> None:
+    snapshot = _closed_committed()
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, _delivery_of(snapshot))
+
+    assert check == ClosedDeliveryCheck(
+        delivered_difference=Decimal("0.0000"), delivered_impressions_difference=0,
+        media_cost_difference=Decimal("0.00"), reported_revenue_difference=None, buyer_spend_difference=None,
+        current_margin=Decimal("1850.00"), margin_difference=Decimal("0.00"), changed=False,
+    )
+
+
+@pytest.mark.parametrize(
+    ("media_cost", "changed"),
+    [("1200.99", False), ("1201.00", True), ("1199.01", False), ("1199.00", True)],
+)
+def test_a_margin_difference_of_one_euro_is_flagged_and_of_99_cents_is_not(media_cost: str, changed: bool) -> None:
+    snapshot = _closed_committed()
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, _delivery_of(snapshot, media_cost=Decimal(media_cost)))
+
+    assert abs(check.margin_difference) == abs(Decimal(media_cost) - Decimal("1200.00"))
+    assert check.changed is changed
+
+
+def test_the_media_cost_is_rounded_before_it_is_subtracted() -> None:
+    snapshot = _closed_committed(window_media_cost=Decimal("1200.004"))
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, _delivery_of(snapshot, media_cost=Decimal("1200.005")))
+
+    assert check.media_cost_difference == Decimal("0.01")
+    assert check.current_margin == Decimal("1849.99")
+
+
+@pytest.mark.parametrize(
+    ("delivered", "changed"),
+    [("303000.0000", True), ("302999.9999", False), ("297000.0000", True), ("297000.0001", False)],
+)
+def test_a_delivered_volume_one_percent_away_is_flagged(delivered: str, changed: bool) -> None:
+    snapshot = _closed_dooh()
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, _delivery_of(snapshot, delivered=Decimal(delivered)))
+
+    assert check.margin_difference == Decimal("0.00")
+    assert check.delivered_difference == Decimal(delivered) - Decimal("300000.0000")
+    assert check.changed is changed
+
+
+def test_delivery_appearing_after_a_closing_with_none_is_flagged() -> None:
+    snapshot = _closed_committed(
+        media_cost=Decimal("0.00"), platform_cost=Decimal("0.00"), margin=Decimal("3750.00"),
+        delivered_impressions=0, delivered=Decimal("0.0000"), window_media_cost=Decimal(0),
+    )
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, _delivery_of(snapshot, impressions=10, delivered=Decimal(10)))
+
+    assert check.margin_difference == Decimal("-0.01")  # 10 impressions at 1.00 € per thousand
+    assert check.changed is True
+
+
+def test_a_closing_with_no_delivery_still_without_delivery_is_not_flagged() -> None:
+    snapshot = _closed_committed(
+        media_cost=Decimal("0.00"), platform_cost=Decimal("0.00"), margin=Decimal("3750.00"),
+        delivered_impressions=0, delivered=Decimal("0.0000"), window_media_cost=Decimal(0),
+    )
+
+    assert check_closed_delivery(snapshot, FROZEN_RATE, _delivery_of(snapshot)).changed is False
+
+
+def test_a_restated_target_flight_keeps_the_closing_s_rebate_in_its_current_margin() -> None:
+    snapshot = snapshot_of(target_flight())
+    current = _delivery_of(
+        snapshot, impressions=1_300_000, delivered=Decimal(1_300_000), reported_revenue=Decimal("5200.00"),
+        buyer_spend=Decimal("6500.00"),
+    )
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, current)
+
+    assert check == ClosedDeliveryCheck(
+        delivered_difference=Decimal("200000.0000"),
+        delivered_impressions_difference=200_000,
+        media_cost_difference=Decimal("0.00"),
+        reported_revenue_difference=Decimal("800.00"),
+        buyer_spend_difference=Decimal("1000.00"),
+        current_margin=Decimal("3350.00"),
+        margin_difference=Decimal("600.00"),
+        changed=True,
+    )
+    assert (snapshot.revenue, snapshot.gross_revenue, snapshot.rebate, snapshot.margin) == (
+        Decimal("4400.00"), Decimal("5500.00"), Decimal("550.00"), Decimal("2750.00"),
+    )
+
+
+def test_the_reported_revenue_and_spend_of_a_target_flight_are_rounded_before_they_are_subtracted() -> None:
+    snapshot = dataclasses.replace(
+        snapshot_of(target_flight()), window_reported_revenue=Decimal("4400.004"), window_buyer_spend=Decimal("5499.996"),
+    )
+    current = _delivery_of(snapshot, reported_revenue=Decimal("4400.005"), buyer_spend=Decimal("5500.004"))
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, current)
+
+    assert (check.reported_revenue_difference, check.buyer_spend_difference) == (Decimal("0.01"), Decimal("0.00"))
+    assert check.current_margin == Decimal("2750.01")
+
+
+def test_a_committed_flight_reports_no_revenue_or_spend_difference_and_keeps_its_frozen_revenue() -> None:
+    snapshot = _closed_committed()
+    current = _delivery_of(snapshot, reported_revenue=Decimal("9999.00"), buyer_spend=Decimal("8888.00"))
+
+    check = check_closed_delivery(snapshot, FROZEN_RATE, current)
+
+    assert (check.reported_revenue_difference, check.buyer_spend_difference) == (None, None)
+    assert check.current_margin == Decimal("1850.00")
+    assert check.changed is False
+
+
+def test_the_current_platform_cost_uses_the_frozen_rate_given() -> None:
+    snapshot = _closed_committed(platform_cost=Decimal("959.00"), margin=Decimal("1591.00"))
+
+    check = check_closed_delivery(snapshot, Decimal("1.37"), _delivery_of(snapshot, impressions=700_001))
+
+    # 700,001 / 1000 × 1.37 = 959.00137, rounded 959.00: only the impressions moved, by one.
+    assert check.current_margin == Decimal("1591.00")
+    assert (check.delivered_impressions_difference, check.changed) == (1, False)

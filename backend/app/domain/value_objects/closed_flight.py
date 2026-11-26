@@ -52,3 +52,24 @@ class ClosedFlightSnapshot:
             raise ValueError("a committed flight's snapshot has no gross")
         if self.gross_revenue is not None and not isinstance(self.gross_revenue, Decimal):
             raise TypeError(f"gross_revenue must be a Decimal, not {type(self.gross_revenue).__name__}")
+
+
+@dataclass(frozen=True)
+class ClosedDeliveryCheck:
+    """A closed flight compared with the delivery stored now in its window: informative, it changes no figure.
+
+    Every difference is the current value less the frozen one. The amounts are rounded to the cent before subtracting
+    and `delivered_difference` has four decimals, in the unit of the flight's metric. The reported revenue and the
+    buyer's spend are a target flight's only, None for a committed one. `current_margin` is the frozen margin's formula
+    with only the delivery changed: the closing's rebate and platform rate, and a committed flight's frozen revenue.
+    `changed` is the flag: a margin or a delivered volume that moved beyond its tolerance.
+    """
+
+    delivered_difference: Decimal
+    delivered_impressions_difference: int
+    media_cost_difference: Decimal
+    reported_revenue_difference: Decimal | None
+    buyer_spend_difference: Decimal | None
+    current_margin: Decimal
+    margin_difference: Decimal
+    changed: bool

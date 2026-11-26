@@ -110,6 +110,9 @@ class FlightMargin:
     gross_differs_from_buyer_spend: bool = False
     # Any flight with a third-party or audience data cost inside its window; no amount changes.
     data_cost_reported: bool = False
+    # A closed flight whose delivery stored now moved beyond the tolerances from the one it was closed with; no amount
+    # changes. Always false for a flight that is not closed.
+    delivery_changed: bool = False
 
     @property
     def margin_pct(self) -> Decimal | None:
@@ -147,6 +150,7 @@ class MarginTotals:
     # How many flights below carry each flag.
     gross_differs_count: int = 0
     data_cost_count: int = 0
+    delivery_changed_count: int = 0
     # The one commitment of the flights or lines below; None when they disagree, or when there are none.
     volume_commitment: VolumeCommitment | None = None
 

@@ -41,7 +41,7 @@ def total_flights(flights: Iterable[FlightMargin]) -> MarginTotals:
     delivered = Decimal(0)
     metrics: set[str] = set()
     gross: Decimal | None = None
-    gross_differs = data_cost = 0
+    gross_differs = data_cost = delivery_changed = 0
     commitments: set[VolumeCommitment] = set()
     for flight in flights:
         if flight.delivery_metric is not None:
@@ -72,12 +72,14 @@ def total_flights(flights: Iterable[FlightMargin]) -> MarginTotals:
         gross = _add_gross(gross, flight.gross_revenue)
         gross_differs += flight.gross_differs_from_buyer_spend
         data_cost += flight.data_cost_reported
+        delivery_changed += flight.delivery_changed
         counted += 1
     metric, contracted_total, delivered_total = _volumes_in_one_metric(metrics, contracted, delivered)
     return MarginTotals(
         revenue, media_cost, rebate, platform_cost, margin, provisional, counted, below_cost, not_started, zero_sale,
         contracted_revenue, delivered_impressions, contracted_total, delivered_total, metric,
         gross_revenue=gross, gross_differs_count=gross_differs, data_cost_count=data_cost,
+        delivery_changed_count=delivery_changed,
         volume_commitment=_one_commitment(commitments, disagree=False),
     )
 
@@ -90,7 +92,7 @@ def total_lines(lines: Iterable[MarginTotals]) -> MarginTotals:
     delivered = Decimal(0)
     metrics: set[str] = set()
     gross: Decimal | None = None
-    gross_differs = data_cost = 0
+    gross_differs = data_cost = delivery_changed = 0
     commitments: set[VolumeCommitment] = set()
     disagree = mixed = False
     for line in lines:
@@ -108,6 +110,7 @@ def total_lines(lines: Iterable[MarginTotals]) -> MarginTotals:
         gross = _add_gross(gross, line.gross_revenue)
         gross_differs += line.gross_differs_count
         data_cost += line.data_cost_count
+        delivery_changed += line.delivery_changed_count
         revenue += line.revenue
         contracted_revenue += line.contracted_revenue
         delivered_impressions += line.delivered_impressions
@@ -128,5 +131,6 @@ def total_lines(lines: Iterable[MarginTotals]) -> MarginTotals:
         revenue, media_cost, rebate, platform_cost, margin, provisional, counted, below_cost, not_started, zero_sale,
         contracted_revenue, delivered_impressions, contracted_total, delivered_total, metric,
         gross_revenue=gross, gross_differs_count=gross_differs, data_cost_count=data_cost,
+        delivery_changed_count=delivery_changed,
         volume_commitment=_one_commitment(commitments, disagree),
     )

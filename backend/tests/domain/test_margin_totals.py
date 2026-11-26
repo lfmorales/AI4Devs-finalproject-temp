@@ -1,5 +1,6 @@
 """A line total is the exact sum of its flights' rounded amounts; a campaign total, of its lines'."""
 
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
@@ -367,3 +368,41 @@ def test_a_level_with_no_flights_does_not_null_the_metric_above_it() -> None:
     totals = total_lines([total_lines([]), total_lines([total_flights([_economics("ots", "1000", 10, contracted=5_000)])])])
 
     assert (totals.delivery_metric, totals.contracted_impressions, totals.delivered) == ("ots", 5_000, Decimal("1000"))
+
+
+# --- The change warning of a closed flight is only counted (finance/margin-reporting) -------------------------------
+
+
+def test_a_flight_is_not_flagged_as_changed_after_its_closing_by_default() -> None:
+    assert _closed().delivery_changed is False
+    assert _flight(date(2026, 9, 1), date(2026, 9, 30)).delivery_changed is False
+
+
+def test_a_line_and_a_campaign_count_the_flights_flagged_as_changed_after_closing() -> None:
+    flagged = replace(_closed(), delivery_changed=True)
+    line = total_flights([flagged, _closed(), flagged])
+    other = total_flights([_closed()])
+
+    campaign = total_lines([line, other])
+
+    assert line.delivery_changed_count == 2
+    assert other.delivery_changed_count == 0
+    assert campaign.delivery_changed_count == 2
+    assert total_lines([]).delivery_changed_count == 0
+
+
+def test_the_change_warning_changes_no_other_figure_of_a_total() -> None:
+    flights = [
+        _closed(contracted_impressions=726_202, sale_cpm="5.00", delivered_impressions=700_000, media_cost="1200.00",
+                rebate_amount="907.7525"),
+        _flight(date(2026, 9, 1), date(2026, 9, 30), delivered_impressions=1000, media_cost="2.50"),
+        _flight(date(2026, 10, 1), date(2026, 10, 31)),
+    ]
+    flagged = [replace(flights[0], delivery_changed=True), *flights[1:]]
+
+    plain_line, flagged_line = total_flights(flights), total_flights(flagged)
+    plain_campaign, flagged_campaign = total_lines([plain_line]), total_lines([flagged_line])
+
+    assert replace(flagged_line, delivery_changed_count=0) == plain_line
+    assert replace(flagged_campaign, delivery_changed_count=0) == plain_campaign
+    assert (flagged_line.delivery_changed_count, flagged_campaign.delivery_changed_count) == (1, 1)
