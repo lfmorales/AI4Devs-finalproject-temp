@@ -8,6 +8,7 @@ from app.domain.repositories.billing_adjustment_repository import AdjustableFlig
 from app.domain.services.billing_adjustment import validate_adjustment
 from app.domain.services.flight_margin import committed_billing
 from app.domain.value_objects.billing import AdjustmentEntry, BillingBasis
+from app.domain.value_objects.review import ReviewCause
 from app.domain.value_objects.volume_commitment import VolumeCommitment
 
 
@@ -70,7 +71,10 @@ class BillingAdjustmentService:
             basis=basis, amount=amount, reason=reason, is_target_line=flight.volume_commitment is VolumeCommitment.TARGET,
             flight_end=flight.window.flight_end, frozen=flight.frozen, as_of=self._today() - timedelta(days=1),
         )
-        entry = self._transaction.add_adjustment(flight_id, adjustment, reason, user_id, self._now())
+        at = self._now()
+        entry = self._transaction.add_adjustment(flight_id, adjustment, reason, user_id, at)
+        # A reviewed campaign goes back to pending review, in this very transaction.
+        self._transaction.reopen_review_if_reviewed(flight_id, ReviewCause.ADJUSTMENT, user_id, at)
         # The billing after it: the facts read now carry the adjustment just written, as the margin read will.
         facts = self._transaction.flight_facts(flight_id)
         billing = committed_billing(

@@ -229,3 +229,12 @@ class BillingAdjustmentError(DomainError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+class MonthlyReviewError(DomainError):
+    """A review or a withdrawal broke a rule of finance/monthly-review. Carries a stable code:
+    `campaign_month_not_found`, `campaign_month_in_progress`, `campaign_month_closed` or `not_reviewed`."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code

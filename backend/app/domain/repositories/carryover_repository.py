@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from app.domain.services.carryover import PreviousFlight
+from app.domain.value_objects.review import ReviewCause
 from app.domain.value_objects.flight import FlightWindow
 from app.domain.value_objects.volume_commitment import VolumeCommitment
 
@@ -53,6 +54,11 @@ class CarryoverTransaction(ABC):
 
     @abstractmethod
     def write_billable(self, flight_id: int, billable: bool, user_id: int, at: datetime) -> None: ...
+
+    @abstractmethod
+    def reopen_review_if_reviewed(self, flight_id: int, cause: ReviewCause, user_id: int, at: datetime) -> None:
+        """Return the flight's campaign to pending review in the flight's month when it was reviewed, in this very
+        transaction (finance/monthly-review)."""
 
     @abstractmethod
     def commit(self) -> None: ...

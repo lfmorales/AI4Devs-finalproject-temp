@@ -5,6 +5,7 @@ from datetime import datetime
 from app.domain.value_objects.billing import AdjustmentEntry, BillingAdjustment
 from app.domain.value_objects.flight import FlightWindow
 from app.domain.value_objects.priced_flight import FlightFacts
+from app.domain.value_objects.review import ReviewCause
 from app.domain.value_objects.volume_commitment import VolumeCommitment
 
 
@@ -40,6 +41,11 @@ class BillingAdjustmentTransaction(ABC):
     @abstractmethod
     def adjustments(self, flight_id: int) -> list[AdjustmentEntry]:
         """Every adjustment of the flight, latest first."""
+
+    @abstractmethod
+    def reopen_review_if_reviewed(self, flight_id: int, cause: ReviewCause, user_id: int, at: datetime) -> None:
+        """Return the flight's campaign to pending review in the flight's month when it was reviewed, in this very
+        transaction (finance/monthly-review)."""
 
     @abstractmethod
     def commit(self) -> None: ...

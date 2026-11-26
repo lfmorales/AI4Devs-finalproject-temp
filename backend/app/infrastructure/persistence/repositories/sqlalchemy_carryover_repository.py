@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.domain.repositories.carryover_repository import CarryoverFlight, CarryoverTransaction, LineFlight
 from app.domain.services.carryover import PreviousFlight
 from app.domain.value_objects.flight import FlightWindow
+from app.domain.value_objects.review import ReviewCause
 from app.domain.value_objects.volume_commitment import VolumeCommitment
 from app.infrastructure.persistence.models.campaign import (
     CampaignLinePeriodRecord,
@@ -16,6 +17,7 @@ from app.infrastructure.persistence.models.campaign import (
 from app.infrastructure.persistence.models.delivery import DailyDeliveryRecord
 from app.infrastructure.persistence.models.margin import MonthClosingRecord
 from app.infrastructure.persistence.models.masters import ChannelRecord
+from app.infrastructure.persistence.repositories import sqlalchemy_review_repository as reviews
 from app.infrastructure.persistence.repositories.delivered_volume import delivered_in_channel_metric
 from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories import CLOSING_LOCK_NAMESPACE
 
@@ -107,6 +109,9 @@ class SqlAlchemyCarryoverTransaction(CarryoverTransaction):
             )
         )
         self._session.flush()
+
+    def reopen_review_if_reviewed(self, flight_id: int, cause: ReviewCause, user_id: int, at: datetime) -> None:
+        reviews.reopen_review_if_reviewed(self._session, flight_id, cause, user_id, at)
 
     def commit(self) -> None:
         self._session.commit()

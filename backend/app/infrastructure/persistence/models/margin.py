@@ -266,6 +266,37 @@ class FlightBillingAdjustmentRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
 
 
+class CampaignPeriodReviewRecord(Base):
+    """A review event of a campaign in a month: a review, or a reopening that returns it to pending review.
+
+    Added once, never changed or deleted. The state of the campaign is derived from the latest event and from its flights
+    (finance/monthly-review); an edit that reopens a review names the flight it changed.
+    """
+
+    __tablename__ = "campaign_period_reviews"
+    __table_args__ = (
+        CheckConstraint("kind IN ('reviewed', 'reopened')", name="ck_campaign_period_reviews_kind"),
+        CheckConstraint(
+            "cause IS NULL OR cause IN ('withdrawn', 'adjustment', 'carryover', 'carryover_billable')",
+            name="ck_campaign_period_reviews_cause",
+        ),
+        CheckConstraint("(kind = 'reviewed') = (cause IS NULL)", name="ck_campaign_period_reviews_cause_with_reopening"),
+        CheckConstraint(
+            "COALESCE(cause IN ('adjustment', 'carryover', 'carryover_billable'), false) = (campaign_line_period_id IS NOT NULL)",
+            name="ck_campaign_period_reviews_flight_with_edit",
+        ),
+        Index("ix_campaign_period_reviews_period", "campaign_period_id", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    campaign_period_id: Mapped[int] = mapped_column(ForeignKey("campaign_periods.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    cause: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    campaign_line_period_id: Mapped[int | None] = mapped_column(ForeignKey("campaign_line_periods.id"), nullable=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+
+
 class AppliedRateBracketRecord(Base):
     """The part of a frozen flight's revenue that fell in one bracket. Added once, never changed or deleted."""
 

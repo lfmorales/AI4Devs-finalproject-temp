@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 from app.domain.exceptions import FlightNotFoundError
 from app.domain.repositories.carryover_repository import CarryoverFlight, CarryoverTransaction
 from app.domain.services.carryover import delivery_target, previous_flight_of, validate_billable, validate_carryover
+from app.domain.value_objects.review import ReviewCause
 from app.domain.value_objects.volume_commitment import VolumeCommitment
 
 
@@ -89,6 +90,7 @@ class CarryoverService:
         )
         at = self._now()
         self._transaction.write_carryover(flight_id, volume, reason, user_id, at)
+        self._transaction.reopen_review_if_reviewed(flight_id, ReviewCause.CARRYOVER, user_id, at)
         return CarryoverResult(
             flight_id=flight_id, delivery_metric=flight.delivery_metric, contracted_impressions=flight.contracted,
             carryover=volume, delivery_target=delivery_target(flight.contracted, volume), reason=reason,
@@ -103,4 +105,5 @@ class CarryoverService:
         )
         at = self._now()
         self._transaction.write_billable(flight_id, billable, user_id, at)
+        self._transaction.reopen_review_if_reviewed(flight_id, ReviewCause.CARRYOVER_BILLABLE, user_id, at)
         return BillableResult(flight_id=flight_id, carryover=flight.carryover, billable=billable, set_by=user_id, set_at=at)

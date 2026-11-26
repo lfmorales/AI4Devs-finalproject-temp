@@ -26,6 +26,7 @@ from app.application.services.carryover_service import CarryoverService
 from app.application.services.margin_closing_service import MarginClosingService
 from app.application.services.margin_masters_service import MarginMastersService
 from app.application.services.margin_query_service import MarginQueryService
+from app.application.services.monthly_review_service import MonthlyReviewService
 from app.application.services.user_activation_service import UserActivationService
 from app.config import get_settings
 from app.domain.exceptions import DspNotConfiguredError
@@ -62,6 +63,7 @@ from app.infrastructure.persistence.repositories.sqlalchemy_line_mapping_removal
 from app.infrastructure.persistence.repositories.sqlalchemy_billing_adjustment_repository import (
     SqlAlchemyBillingAdjustmentTransaction,
 )
+from app.infrastructure.persistence.repositories.sqlalchemy_review_repository import SqlAlchemyMonthlyReviewTransaction
 from app.infrastructure.persistence.repositories.sqlalchemy_carryover_repository import SqlAlchemyCarryoverTransaction
 from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories import (
     SqlAlchemyAppliedRateRepository,
@@ -241,6 +243,17 @@ def get_billing_adjustment_service(
 ) -> BillingAdjustmentService:
     return BillingAdjustmentService(
         SqlAlchemyBillingAdjustmentTransaction(session),
+        today=lambda: today,
+        now=lambda: datetime.now(UTC).replace(tzinfo=None),
+    )
+
+
+def get_monthly_review_service(
+    session: Annotated[Session, Depends(get_db_session)],
+    today: Annotated[date, Depends(get_today)],
+) -> MonthlyReviewService:
+    return MonthlyReviewService(
+        SqlAlchemyMonthlyReviewTransaction(session),
         today=lambda: today,
         now=lambda: datetime.now(UTC).replace(tzinfo=None),
     )

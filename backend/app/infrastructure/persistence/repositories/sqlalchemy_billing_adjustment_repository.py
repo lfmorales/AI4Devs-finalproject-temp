@@ -7,6 +7,7 @@ from app.domain.repositories.billing_adjustment_repository import AdjustableFlig
 from app.domain.value_objects.billing import AdjustmentEntry, BillingAdjustment, BillingBasis
 from app.domain.value_objects.flight import FlightWindow
 from app.domain.value_objects.priced_flight import FlightFacts
+from app.domain.value_objects.review import ReviewCause
 from app.domain.value_objects.volume_commitment import VolumeCommitment
 from app.infrastructure.persistence.models.campaign import (
     CampaignLinePeriodRecord,
@@ -14,6 +15,7 @@ from app.infrastructure.persistence.models.campaign import (
     CampaignPeriodRecord,
 )
 from app.infrastructure.persistence.models.margin import AppliedRateRecord, FlightBillingAdjustmentRecord
+from app.infrastructure.persistence.repositories import sqlalchemy_review_repository as reviews
 from app.infrastructure.persistence.repositories.sqlalchemy_margin_repositories import (
     CLOSING_LOCK_NAMESPACE,
     _flight_facts,
@@ -83,6 +85,9 @@ class SqlAlchemyBillingAdjustmentTransaction(BillingAdjustmentTransaction):
             .order_by(FlightBillingAdjustmentRecord.id.desc())
         )
         return [_entry(record) for record in records]
+
+    def reopen_review_if_reviewed(self, flight_id: int, cause: ReviewCause, user_id: int, at: datetime) -> None:
+        reviews.reopen_review_if_reviewed(self._session, flight_id, cause, user_id, at)
 
     def commit(self) -> None:
         self._session.commit()

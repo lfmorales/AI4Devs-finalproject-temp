@@ -31,7 +31,7 @@ def test_migration_schema_matches_models(test_db_session):
         'dsp_mappings', 'dsp_catalog_lines',
         'daily_deliveries', 'ingestion_batches', 'ingestion_exceptions', 'ingestion_exception_deliveries',
         'rebate_schedules', 'rebate_brackets', 'platform_rate_settings', 'applied_rates', 'applied_rate_brackets',
-        'month_closings', 'month_closing_batches', 'closed_flight_snapshots', 'flight_billing_adjustments',
+        'month_closings', 'month_closing_batches', 'closed_flight_snapshots', 'flight_billing_adjustments', 'campaign_period_reviews',
     }
 
     # Actual tables in database

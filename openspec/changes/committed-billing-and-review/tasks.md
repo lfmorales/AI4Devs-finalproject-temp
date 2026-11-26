@@ -64,12 +64,14 @@
 
 ## 8. Monthly Review
 
-- [ ] 8.1 Write failing tests in a new `backend/tests/domain/test_review_state.py` for `review_state` with every scenario of `finance/monthly-review` («A campaign has a review state in each month»)
-- [ ] 8.2 Implement it in `backend/app/domain/services/monthly_review.py`; verify 8.1
-- [ ] 8.3 Write failing migration tests for `campaign_period_reviews`: kinds and causes paired, the flight required for the three edit causes, the append-only trigger, `downgrade -1`
-- [ ] 8.4 Add the model and the migration, review it; verify 8.3 and `test_migration_schema_sync.py`
-- [ ] 8.5 Write failing tests in a new `backend/tests/api/test_monthly_review_endpoint.py`: review and withdrawal with every scenario of `finance/monthly-review`, 404 and 409 codes, reviewing twice writes once; an adjustment, a carry-over and a flag reopen a reviewed campaign with their cause, flight and user, write nothing when it was pending, and write nothing when the edit is refused; an ingestion does not reopen; 403 as `trading` and `business`, 401 without a token
-- [ ] 8.6 Implement `MonthlyReviewService`, the two routes and `reopen_if_reviewed` called by the services of tasks 6 and 7 in their transactions; verify 8.5, 6.1, 6.3 and 7.5
+> The migration is `e8b5c3a07f24`. A review is reopened when the latest event of the campaign period is a review (not when the derived state is `reviewed`), so an edit of a flight that receives a carry-over while it still runs also reopens the review of an earlier-reviewed month; the derived state stays `in_progress` until the flight ends. `reopen_review_if_reviewed` runs on the session of the edit, after its write, and the services call it through their transaction. Tasks 8.1 and 8.2 were written in one pass, so their red was shown afterwards with mutations on copies of the code: counting a flight that ends on D as ended survived until the boundary tests of D and D-1 were added; allowing a review with a running flight, and counting one running flight as ended in `review_state`, were caught.
+
+- [x] 8.1 Write failing tests in a new `backend/tests/domain/test_review_state.py` for `review_state` with every scenario of `finance/monthly-review` («A campaign has a review state in each month»)
+- [x] 8.2 Implement it in `backend/app/domain/services/monthly_review.py`; verify 8.1
+- [x] 8.3 Write failing migration tests for `campaign_period_reviews`: kinds and causes paired, the flight required for the three edit causes, the append-only trigger, `downgrade -1`
+- [x] 8.4 Add the model and the migration, review it; verify 8.3 and `test_migration_schema_sync.py`
+- [x] 8.5 Write failing tests in a new `backend/tests/api/test_monthly_review_endpoint.py`: review and withdrawal with every scenario of `finance/monthly-review`, 404 and 409 codes, reviewing twice writes once; an adjustment, a carry-over and a flag reopen a reviewed campaign with their cause, flight and user, write nothing when it was pending, and write nothing when the edit is refused; an ingestion does not reopen; 403 as `trading` and `business`, 401 without a token
+- [x] 8.6 Implement `MonthlyReviewService`, the two routes and `reopen_if_reviewed` called by the services of tasks 6 and 7 in their transactions; verify 8.5, 6.1, 6.3 and 7.5
 
 ## 9. Closing: Every DSP, the Review and the Billing Snapshot
 

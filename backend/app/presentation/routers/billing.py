@@ -6,21 +6,27 @@ its task is implemented, a route answers 501 with a code and a message and no fi
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, status
+from fastapi import APIRouter, Depends, Path, Response, status
 from fastapi.responses import JSONResponse
 
 from app.application.services.billing_adjustment_service import BillingAdjustmentService
 from app.application.services.carryover_service import CarryoverService
+from app.application.services.monthly_review_service import MonthlyReviewService
 from app.domain.models.user import RoleName, User
 from app.domain.value_objects.billing import BillingBasis
 from app.presentation.dependencies.auth import require_roles
-from app.presentation.dependencies.providers import get_billing_adjustment_service, get_carryover_service
+from app.presentation.dependencies.providers import (
+    get_billing_adjustment_service,
+    get_carryover_service,
+    get_monthly_review_service,
+)
 from app.presentation.schemas.billing_adjustments import (
     AdjustmentHistoryResponse,
     AdjustmentRequest,
     AdjustmentResponse,
 )
 from app.presentation.schemas.carryover import BillableRequest, BillableResponse
+from app.presentation.schemas.monthly_review import ReviewRequest, ReviewResponse
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -64,16 +70,30 @@ def list_flight_adjustments(
     return AdjustmentHistoryResponse.from_entries(service.history(flight_id))
 
 
-@router.post("/reviews")
-def review_campaign_month(_user: OperationsOrFinance) -> JSONResponse:
-    """Mark a campaign reviewed in a month. Requires: operations or finance role."""
-    return not_implemented()
+@router.post("/reviews", response_model=ReviewResponse, status_code=status.HTTP_201_CREATED)
+def review_campaign_month(
+    body: ReviewRequest,
+    response: Response,
+    user: OperationsOrFinance,
+    service: Annotated[MonthlyReviewService, Depends(get_monthly_review_service)],
+) -> ReviewResponse:
+    """Mark a campaign reviewed in a month, once all its flights of the month have ended. A campaign already reviewed
+    answers 200 with its current review and writes nothing. Requires: operations or finance role."""
+    result = service.review(body.campaign_id, body.year, body.month, user.id)
+    if not result.created:
+        response.status_code = status.HTTP_200_OK
+    return ReviewResponse.from_result(result)
 
 
-@router.post("/reviews/withdrawals")
-def withdraw_campaign_month_review(_user: OperationsOrFinance) -> JSONResponse:
-    """Withdraw the review of a campaign in a month. Requires: operations or finance role."""
-    return not_implemented()
+@router.post("/reviews/withdrawals", response_model=ReviewResponse, status_code=status.HTTP_201_CREATED)
+def withdraw_campaign_month_review(
+    body: ReviewRequest,
+    user: OperationsOrFinance,
+    service: Annotated[MonthlyReviewService, Depends(get_monthly_review_service)],
+) -> ReviewResponse:
+    """Withdraw the review of a campaign in a month: it goes back to pending review and the withdrawal stays in the
+    history. Requires: operations or finance role."""
+    return ReviewResponse.from_result(service.withdraw(body.campaign_id, body.year, body.month, user.id))
 
 
 @router.put("/flights/{flight_id}/carryover/billable", response_model=BillableResponse)
