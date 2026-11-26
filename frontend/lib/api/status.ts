@@ -64,3 +64,26 @@ export interface CampaignStatusRow {
 export function getCampaignStatus(client: ApiClient): Promise<CampaignStatusRow[]> {
   return client.get<CampaignStatusRow[]>("/campaign-status");
 }
+
+export interface CarryoverRequest {
+  /** A whole volume, zero or more, in the unit of the row's `delivery_metric`; zero removes the carry-over. */
+  volume: number;
+  reason: string;
+}
+
+/** What PUT /flights/{id}/carryover answers: volumes and a reason, never an amount or the billable flag. */
+export interface CarryoverResponse {
+  flight_id: number;
+  delivery_metric: DeliveryMetric;
+  contracted_impressions: number;
+  carryover: number;
+  delivery_target: number;
+  reason: string;
+  set_by: number;
+  set_at: string;
+}
+
+/** Carries undelivered volume of the previous flight of the line to this one. Operations and trading only. */
+export function putCarryover(client: ApiClient, flightId: number, request: CarryoverRequest): Promise<CarryoverResponse> {
+  return client.put<CarryoverResponse>(`/flights/${flightId}/carryover`, request);
+}

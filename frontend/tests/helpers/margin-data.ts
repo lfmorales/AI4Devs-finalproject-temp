@@ -85,6 +85,8 @@ export function flight(overrides: Partial<FlightMargin> = {}): FlightMargin {
     data_cost_reported: false,
     delivery_changed: false,
     delivery_change: null,
+    billable: impressionsAsDelivered(delivered_impressions),
+    billing_basis: "minimum",
     ...overrides,
   };
 }
@@ -99,6 +101,8 @@ export function deliveryChange(overrides: Partial<DeliveryChange> = {}): Deliver
     buyer_spend_difference: null,
     current_margin: "823.26",
     margin_difference: "0.00",
+    billable_difference: "0.0000",
+    billing_difference: "0.00",
     ...overrides,
   };
 }

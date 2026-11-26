@@ -1,11 +1,11 @@
 import { expect, failApiCalls, test } from "../support/fixtures";
 
-const LINKS = ["Campañas", "Estado", "Margen", "Excepciones", "Catálogo Adform"];
+const LINKS = ["Campañas", "Estado", "Margen", "Facturación", "Excepciones", "Catálogo Adform"];
 
 // The session is the E2E operations user's (see roles-matrix.spec.ts for the other profiles): under the access matrix
-// operations sees the five links.
+// operations sees the six links.
 test.describe("the navigation of the operations user", () => {
-  test("has the five links", async ({ operationsSession: page }) => {
+  test("has the six links", async ({ operationsSession: page }) => {
     await page.goto("/status");
 
     const navigation = page.getByRole("navigation", { name: "Principal" });

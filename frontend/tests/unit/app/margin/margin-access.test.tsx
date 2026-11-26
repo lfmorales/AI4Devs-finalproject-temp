@@ -104,6 +104,8 @@ describe("the closing and the access", () => {
     return {
       "GET /margin": () => reply(200, margin()),
       "GET /margin?year=2026&month=8": () => reply(200, pendingClose()),
+      // Every campaign of August is reviewed: the closing control waits for nothing else.
+      "GET /billing?year=2026&month=8": () => reply(200, { year: 2026, month: 8, as_of: "2026-08-31", campaigns: [] }),
       "POST /margin/closings": closing,
     };
   }

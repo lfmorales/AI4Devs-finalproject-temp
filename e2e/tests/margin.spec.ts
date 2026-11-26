@@ -4,7 +4,8 @@ import { expect, test } from "../support/fixtures";
 import {
   amountsByFlight, campaignCard, campaignField, chooseMonth, closedFlightsMessage, currentMonth, deliveryLegend, expectStates, flightCell, flightsOf,
   flightsTable, FRESH_DATABASE_SKIP_REASON, hasPendingClose, isoDate, lastDayOf, madridToday, money, monthName,
-  monthOfYear, NOTHING_TO_CLOSE, openAllCards, percent, previousMonth, readMargin, REMOVE_CAMPAIGN_FILTER, reviewMonth, saleLabel,
+  monthOfYear, NOTHING_TO_CLOSE, openAllCards, PENDING_REVIEW, percent, previousMonth, readMargin, REMOVE_CAMPAIGN_FILTER, reviewMonth,
+  saleLabel,
   type CampaignMargin, type LineMargin, type MarginResponse, type Month,
 } from "../support/margin";
 
@@ -35,12 +36,13 @@ test.describe("the margin of the previous month, pending close", () => {
       const summary = campaignCard(page, campaign.name).locator(":scope > summary");
       // A target campaign (the Deal demo) names its sale «Venta objetivo».
       await expect(summary).toContainText(`${saleLabel(campaign.totals.volume_commitment)} ${money(campaign.totals.contracted_revenue)}`);
-      await expect(summary).toContainText(`Devengado ${money(campaign.totals.revenue)}`);
+      // Every flight of the previous month has ended: its billing is «Facturable», not «Facturable a la fecha».
+      await expect(summary).toContainText(`Facturable ${money(campaign.totals.revenue)}`);
       for (const line of campaign.lines) {
         const table = flightsTable(page, campaign, line);
         for (const [index, flight] of line.flights.entries()) {
           await expect(await flightCell(table, index, saleLabel(flight.volume_commitment))).toHaveText(money(flight.contracted_revenue));
-          await expect(await flightCell(table, index, "Devengado")).toHaveText(money(flight.revenue));
+          await expect(await flightCell(table, index, "Facturable")).toHaveText(money(flight.revenue));
         }
       }
     }
@@ -69,7 +71,7 @@ test.describe("the Deal demo of the previous month", () => {
     await expect(summary).toContainText(`Bruto ${money(campaign.totals.gross_revenue ?? "")}`);
     const table = flightsTable(page, campaign, line as LineMargin);
     await expect(await flightCell(table, 0, "Venta objetivo")).toHaveText(money("5000.00"));
-    await expect(await flightCell(table, 0, "Devengado")).toHaveText(money("4400.00"));
+    await expect(await flightCell(table, 0, "Facturable")).toHaveText(money("4400.00"));
     await expect(await flightCell(table, 0, "Bruto")).toHaveText(money("5500.00"));
     await expect(await flightCell(table, 0, "Margen")).toHaveText(money("2750.00"));
     await expect(await flightCell(table, 0, "% de margen")).toHaveText(percent("62.50"));
@@ -185,8 +187,23 @@ test.describe("the close-month button", () => {
     await expect(button).toHaveAccessibleDescription(NOTHING_TO_CLOSE);
   });
 
-  test("is on in a month with a flight pending close", async ({ operationsSession: page, api }) => {
+  test("is off while a campaign of the month is pending review, with the reason", async ({ operationsSession: page, api }) => {
     test.skip(!hasPendingClose(await readMargin(api, previous)), FRESH_DATABASE_SKIP_REASON);
+    const billing = await api.get(`billing?year=${previous.year}&month=${previous.month}`);
+    const states = ((await billing.json()) as { campaigns: { review_state: string }[] }).campaigns.map((c) => c.review_state);
+    test.skip(!states.includes("pending_review"), "Las campañas del mes previo ya están revisadas: ejecuta reset-data.sh.");
+
+    await page.goto("/margin");
+    await chooseMonth(page, previous);
+
+    const button = page.getByRole("button", { name: "Cerrar mes" });
+    await expect(button).toHaveAccessibleDescription(PENDING_REVIEW);
+    await expect(button).toBeDisabled();
+  });
+
+  test("is on in a month with a flight pending close once every campaign of it is reviewed", async ({ operationsSession: page, api }) => {
+    test.skip(!hasPendingClose(await readMargin(api, previous)), FRESH_DATABASE_SKIP_REASON);
+    await reviewMonth(api, previous);
 
     await page.goto("/margin");
     await chooseMonth(page, previous);
@@ -198,6 +215,7 @@ test.describe("the close-month button", () => {
 test.describe("the access to the closing", () => {
   test("shows 'Acceso denegado' when the closing answers 403", async ({ operationsSession: page, api }) => {
     test.skip(!hasPendingClose(await readMargin(api, previous)), FRESH_DATABASE_SKIP_REASON);
+    await reviewMonth(api, previous); // the button is on only once the month is reviewed
     await page.route(/\/api\/margin\/closings$/, (route) =>
       route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ code: "forbidden", message: "simulated" }) }),
     );
@@ -233,6 +251,7 @@ test.describe("the closing order", () => {
         orderReceivedOn: isoDate(earlier.year, earlier.month, 1),
       });
       registered = true;
+      await reviewMonth(api, previous); // the button is on only once the month is reviewed
 
       await page.goto("/margin");
       await chooseMonth(page, previous);

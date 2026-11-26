@@ -86,11 +86,23 @@ export class ApiError extends Error {
   }
 }
 
+/** A file the API answered with: its content and the name the server gave it, if any. */
+export interface DownloadedFile {
+  blob: Blob;
+  fileName: string | null;
+}
+
 export interface ApiClient {
   get<TResponse>(path: string): Promise<TResponse>;
   post<TResponse>(path: string, body: unknown): Promise<TResponse>;
+  put<TResponse>(path: string, body: unknown): Promise<TResponse>;
   delete<TResponse>(path: string): Promise<TResponse>;
+  /** A file instead of JSON: the errors are handled as for every other request. */
+  getFile(path: string): Promise<DownloadedFile>;
 }
+
+/** The file name of `Content-Disposition: attachment; filename="..."`, or null. */
+const FILE_NAME = /filename="([^"]+)"/;
 
 function kindForStatus(status: number): ApiErrorKind {
   if (status === 401) return "unauthenticated";
@@ -104,7 +116,7 @@ export function createApiClient({ baseUrl }: { baseUrl: string }): ApiClient {
     throw new Error("baseUrl must not be empty");
   }
 
-  async function request<TResponse>(path: string, init: RequestInit): Promise<TResponse> {
+  async function send(path: string, init: RequestInit): Promise<Response> {
     const headers = new Headers(init.headers);
     headers.set("Accept", "application/json");
 
@@ -151,7 +163,19 @@ export function createApiClient({ baseUrl }: { baseUrl: string }): ApiClient {
       throw error;
     }
 
+    return response;
+  }
+
+  async function request<TResponse>(path: string, init: RequestInit): Promise<TResponse> {
+    const response = await send(path, init);
     return (await response.json()) as TResponse;
+  }
+
+  async function getFile(path: string): Promise<DownloadedFile> {
+    const response = await send(path, { method: "GET" });
+    const disposition = response.headers.get("Content-Disposition");
+    const name = disposition === null ? null : FILE_NAME.exec(disposition);
+    return { blob: await response.blob(), fileName: name?.[1] ?? null };
   }
 
   return {
@@ -163,5 +187,12 @@ export function createApiClient({ baseUrl }: { baseUrl: string }): ApiClient {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       }),
+    put: <TResponse,>(path: string, body: unknown) =>
+      request<TResponse>(path, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    getFile,
   };
 }

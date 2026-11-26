@@ -69,6 +69,7 @@ const NO_BREAK_SPACE = " ";
 export const FRESH_DATABASE_SKIP_REASON = "la base no está recién sembrada: ejecuta reset-data.sh";
 export const NOTHING_TO_CLOSE = "No hay flights pendientes de cierre en este mes";
 export const REMOVE_CAMPAIGN_FILTER = "Quita el filtro de campaña para cerrar el mes";
+export const PENDING_REVIEW = "Hay campañas pendientes de revisión";
 
 const STATE_LABEL: Record<FlightState, string> = {
   closed: "Cerrado",

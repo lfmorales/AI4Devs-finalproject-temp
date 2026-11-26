@@ -96,3 +96,28 @@ describe("the closings a month holds", () => {
     );
   });
 });
+
+
+describe("the closing of a month with campaigns not reviewed", () => {
+  const august = { year: 2026, month: 8 };
+
+  it("names each campaign with its state in Spanish and says what to do", () => {
+    const message = closingErrorMessage(
+      "month_not_reviewed",
+      "2026-08 has campaigns not reviewed: Campaña B (pending review); Campaña C (in progress). Review them, then close the month.",
+      august,
+    );
+
+    expect(message).toBe(
+      "No se puede cerrar agosto de 2026: hay campañas sin revisar: Campaña B (pendiente de revisión), Campaña C (en curso). "
+      + "Márcalas como revisadas en Facturación cuando hayan terminado sus flights y vuelve a cerrar el mes.",
+    );
+  });
+
+  it("still says what to do when the backend's message cannot be read", () => {
+    expect(closingErrorMessage("month_not_reviewed", undefined, august)).toBe(
+      "No se puede cerrar agosto de 2026: hay campañas sin revisar. "
+      + "Márcalas como revisadas en Facturación cuando hayan terminado sus flights y vuelve a cerrar el mes.",
+    );
+  });
+});

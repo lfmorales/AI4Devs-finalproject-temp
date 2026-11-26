@@ -1,6 +1,7 @@
 import { formatQuantity } from "@/lib/format/decimal";
 import { metricLabel, type DeliveryMetric } from "@/lib/format/delivery-metric";
 import { formatInteger } from "@/lib/format/integer";
+import type { BillingBasis } from "@/lib/api/margin";
 import type { VolumeCommitment } from "@/lib/api/volume-commitment";
 const MONTH_NAMES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -72,10 +73,30 @@ function monthDeliveryNotLoaded(message: string | undefined, target: ClosingTarg
   return `No se puede cerrar ${closing}: ${missing} de su último día. Espera a la ingesta de ese día y vuelve a cerrar el mes.`;
 }
 
-/** The Spanish message for a failed closing, from the backend's code. `message` is only read for a month or a DSP. */
+/** What the backend names when campaigns block the closing: "...: A (pending review); B (in progress). Review ...". */
+const NOT_REVIEWED_LIST = /has campaigns not reviewed: (.+)\. Review them/;
+const NOT_REVIEWED_ITEM = /^(.*) \((pending review|in progress)\)$/;
+const REVIEW_STATE_IN_SPANISH: Record<string, string> = { "pending review": "pendiente de revisión", "in progress": "en curso" };
+const REVIEW_THEN_CLOSE =
+  "Márcalas como revisadas en Facturación cuando hayan terminado sus flights y vuelve a cerrar el mes.";
+
+function monthNotReviewed(message: string | undefined, target: ClosingTarget): string {
+  const closing = monthOfYear(target.year, target.month);
+  const listed = message === undefined ? null : NOT_REVIEWED_LIST.exec(message);
+  const items = (listed?.[1] ?? "").split("; ").map((item) => NOT_REVIEWED_ITEM.exec(item));
+  if (listed === null || items.some((item) => item === null)) {
+    return `No se puede cerrar ${closing}: hay campañas sin revisar. ${REVIEW_THEN_CLOSE}`;
+  }
+  const named = items.map((item) => `${item?.[1] ?? ""} (${REVIEW_STATE_IN_SPANISH[item?.[2] ?? ""] ?? ""})`).join(", ");
+  return `No se puede cerrar ${closing}: hay campañas sin revisar: ${named}. ${REVIEW_THEN_CLOSE}`;
+}
+
+/** The Spanish message for a failed closing, from the backend's code. `message` is only read for a month, a DSP or
+ * the campaigns that block it. */
 export function closingErrorMessage(code: string | undefined, message: string | undefined, target: ClosingTarget): string {
   if (code === "previous_month_open") return previousMonthOpen(message, target);
   if (code === "month_delivery_not_loaded") return monthDeliveryNotLoaded(message, target);
+  if (code === "month_not_reviewed") return monthNotReviewed(message, target);
   if (code !== undefined && code in MESSAGE_BY_CODE) return MESSAGE_BY_CODE[code] ?? GENERIC_CLOSING_ERROR;
   return GENERIC_CLOSING_ERROR;
 }
@@ -98,10 +119,37 @@ export function flightCount(count: number): string {
   return count === 1 ? "1 flight" : `${count} flights`;
 }
 
-export const ACCRUED_LABEL = "Devengado";
+/** The revenue of a level is its billing: «Facturable», or «Facturable a la fecha» while a flight of it runs. */
+export const BILLING_LABEL = "Facturable";
+export const BILLING_TO_DATE_LABEL = "Facturable a la fecha";
 
-export const ACCRUED_HELP =
-  "Ingreso proporcional a los días transcurridos del flight; en un flight cerrado es igual a la venta contratada.";
+export function billingLabel(includesRunning: boolean): string {
+  return includesRunning ? BILLING_TO_DATE_LABEL : BILLING_LABEL;
+}
+
+export const BILLING_HELP =
+  "Lo que se factura del flight: el menor entre lo entregado y lo contratado (más el arrastre si es facturable), "
+  + "o lo que fije un ajuste; en un flight en curso, lo facturable hasta ayer. En una línea objetivo, lo que comunica el DSP.";
+
+/** A flight whose billing an adjustment sets, not the rule of the lesser. */
+export const ADJUSTED_LABEL = "Ajustado";
+const ADJUSTED_BASES: readonly (BillingBasis | null)[] = ["delivered", "contracted", "custom"];
+const ADJUSTED_HELP_BY_BASIS: Record<string, string> = {
+  delivered: "Ajuste en vigor: se factura todo lo entregado, sin tope.",
+  contracted: "Ajuste en vigor: se factura el tope, lo contratado más el arrastre facturable.",
+  custom: "Ajuste en vigor: se factura un importe fijo.",
+};
+
+export function isAdjusted(basis: BillingBasis | null): boolean {
+  return ADJUSTED_BASES.includes(basis);
+}
+
+export function adjustedHelp(basis: BillingBasis | null): string {
+  return ADJUSTED_HELP_BY_BASIS[basis ?? ""] ?? "";
+}
+
+/** Why the closing control is off while the billing read reports a campaign in progress or pending review. */
+export const PENDING_REVIEW_REASON = "Hay campañas pendientes de revisión";
 
 /** «10 de 14 días»: the days of a running flight counted so far and the days of the whole flight, as received. */
 export function daysLegend(accruedDays: number, windowDays: number): string {

@@ -24,11 +24,30 @@ function marginWith(...states: FlightState[]) {
 
 const GET_ALL = () => reply(200, marginWith("pending_close"));
 
+/** GET /billing of August 2026 with one campaign in each of the given review states. */
+function billingOf(...states: string[]) {
+  return {
+    year: 2026, month: 8, as_of: "2026-08-31",
+    campaigns: states.map((review_state, index) => ({
+      campaign_id: index + 1, name: `Campaña ${index + 1}`, agency: "Agencia", advertiser: "Anunciante", review_state,
+      review_set_by: null, review_set_at: null, lines: [],
+    })),
+  };
+}
+
+/** The billing read of August and September with every campaign reviewed: the closing waits for nothing else. */
+const REVIEWED = {
+  "GET /billing?year=2026&month=8": () => reply(200, billingOf("reviewed")),
+  "GET /billing?year=2026&month=9": () => reply(200, billingOf("reviewed")),
+};
+
 /** The routes of a page showing August 2026, with the closing answering as given. */
 function routes(closing: () => FakeReply | Promise<FakeReply>) {
   return {
     "GET /margin": GET_ALL,
     "GET /margin?year=2026&month=8": GET_ALL,
+    // Every campaign of August is reviewed: the closing control waits for nothing else.
+    "GET /billing?year=2026&month=8": () => reply(200, billingOf("reviewed")),
     "POST /margin/closings": closing,
   };
 }
@@ -194,7 +213,7 @@ describe("the availability of the close-month button", () => {
   async function showAugust(margins: FlightState[][], closing: () => FakeReply = () => reply(200, { year: 2026, month: 8, closed: 1, already_closed: 0, closings: 1 })) {
     let reads = 0;
     const answer = () => reply(200, marginWith(...(margins[Math.min(reads++, margins.length - 1)] ?? [])));
-    installRoutes({ "GET /margin": () => reply(200, marginWith("pending_close")), "GET /margin?year=2026&month=8": answer, "POST /margin/closings": closing });
+    installRoutes({ ...REVIEWED, "GET /margin": () => reply(200, marginWith("pending_close")), "GET /margin?year=2026&month=8": answer, "POST /margin/closings": closing });
     const user = userEvent.setup();
     renderAuthenticated(<MarginPage />);
     await screen.findByRole("region", { name: "Totales del periodo" });
@@ -244,6 +263,7 @@ describe("the availability of the close-month button", () => {
 
   it("is off in any month while a campaign filter is active, and does not change when the month changes", async () => {
     installRoutes({
+      ...REVIEWED,
       "GET /margin": () => reply(200, marginWith("pending_close")),
       "GET /margin?year=2026&month=8": () => reply(200, marginWith("pending_close")),
       "GET /margin?year=2026&month=8&campaign_id=1": () => reply(200, marginWith("pending_close")),
@@ -269,7 +289,7 @@ describe("the availability of the close-month button", () => {
   });
 
   it("is off under a campaign filter even before a month is chosen", async () => {
-    installRoutes({ "GET /margin": () => reply(200, marginWith("pending_close")), "GET /margin?campaign_id=1": () => reply(200, marginWith("pending_close")) });
+    installRoutes({ ...REVIEWED, "GET /margin": () => reply(200, marginWith("pending_close")), "GET /margin?campaign_id=1": () => reply(200, marginWith("pending_close")) });
     const user = userEvent.setup();
     renderAuthenticated(<MarginPage />);
     await screen.findByRole("region", { name: "Totales del periodo" });
@@ -282,6 +302,7 @@ describe("the availability of the close-month button", () => {
 
   it("decides again by the flights of the loaded month once the campaign filter is removed", async () => {
     installRoutes({
+      ...REVIEWED,
       "GET /margin": () => reply(200, marginWith("pending_close")),
       "GET /margin?year=2026&month=8": () => reply(200, marginWith("closed")),
       "GET /margin?year=2026&month=8&campaign_id=1": () => reply(200, marginWith("pending_close")),
@@ -303,6 +324,7 @@ describe("the availability of the close-month button", () => {
   it("uses no data of another month when the month changes without a filter", async () => {
     let answerSeptember: (reply: FakeReply) => void = () => {};
     installRoutes({
+      ...REVIEWED,
       "GET /margin": () => reply(200, marginWith("closed")),
       "GET /margin?year=2026&month=8": () => reply(200, marginWith("pending_close")),
       "GET /margin?year=2026&month=9": () => new Promise<FakeReply>((resolve) => { answerSeptember = resolve; }),
@@ -324,7 +346,7 @@ describe("the availability of the close-month button", () => {
   });
 
   it("keeps the year-and-month hint, not this one, while no month is chosen", async () => {
-    installRoutes({ "GET /margin": () => reply(200, marginWith("closed")) });
+    installRoutes({ ...REVIEWED, "GET /margin": () => reply(200, marginWith("closed")) });
     renderAuthenticated(<MarginPage />);
     await screen.findByRole("region", { name: "Totales del periodo" });
 
@@ -400,5 +422,47 @@ describe("the errors of the closing", () => {
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cerrar mes" })).toBeEnabled();
+  });
+});
+
+
+describe("the close-month button and the review of the month", () => {
+  it.each([["pending_review"], ["in_progress"]])("is off while a campaign of the month is %s, and says why", async (state) => {
+    installRoutes({ ...routes(() => reply(200, {})), "GET /billing?year=2026&month=8": () => reply(200, billingOf("reviewed", state)) });
+    const user = userEvent.setup();
+
+    renderAuthenticated(<MarginPage />);
+    await chooseAugust(user);
+
+    const button = screen.getByRole("button", { name: "Cerrar mes" });
+    await waitFor(() => expect(button).toHaveAccessibleDescription("Hay campañas pendientes de revisión"));
+    expect(button).toBeDisabled();
+  });
+
+  it("is on once every campaign of the month is reviewed or closed", async () => {
+    installRoutes({ ...routes(() => reply(200, {})), "GET /billing?year=2026&month=8": () => reply(200, billingOf("reviewed", "closed")) });
+    const user = userEvent.setup();
+
+    renderAuthenticated(<MarginPage />);
+    await chooseAugust(user);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cerrar mes" })).toBeEnabled());
+    expect(screen.queryByText("Hay campañas pendientes de revisión")).not.toBeInTheDocument();
+  });
+
+  it("shows a refusal for a campaign not reviewed in Spanish, with what to do", async () => {
+    installRoutes(routes(() => reply(409, {
+      code: "month_not_reviewed",
+      message: "2026-08 has campaigns not reviewed: Campaña 2 (pending review). Review them, then close the month.",
+    })));
+    const user = userEvent.setup();
+
+    renderAuthenticated(<MarginPage />);
+    const dialog = await openDialog(user);
+    await user.click(within(dialog).getByRole("button", { name: "Confirmar cierre" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "No se puede cerrar agosto de 2026: hay campañas sin revisar: Campaña 2 (pendiente de revisión).",
+    );
   });
 });

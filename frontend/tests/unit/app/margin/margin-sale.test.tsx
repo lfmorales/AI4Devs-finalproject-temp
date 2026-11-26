@@ -15,7 +15,10 @@ vi.mock("@/lib/auth/user-manager", () => ({
 }));
 
 const SPACE = " ";
-const HELP = "Ingreso proporcional a los días transcurridos del flight; en un flight cerrado es igual a la venta contratada.";
+// The world holds a running flight, so its line, campaign and period bill «a la fecha».
+const HELP =
+  "Lo que se factura del flight: el menor entre lo entregado y lo contratado (más el arrastre si es facturable), "
+  + "o lo que fije un ajuste; en un flight en curso, lo facturable hasta ayer. En una línea objetivo, lo que comunica el DSP.";
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.unstubAllGlobals());
@@ -77,13 +80,13 @@ describe("the fields of the API, through the real client", () => {
   });
 });
 
-describe("the contracted sale and the accrued revenue", () => {
-  it("puts «Venta contratada» immediately to the left of «Devengado» in the flights table", async () => {
+describe("the contracted sale and the billing", () => {
+  it("puts «Venta contratada» immediately to the left of «Facturable a la fecha» in the flights table", async () => {
     const table = await renderWorld();
 
     const headers = within(table).getAllByRole("columnheader").map((h) => plain(h));
     expect(headers.indexOf("Venta contratada")).toBeGreaterThan(-1);
-    expect(headers.indexOf("Devengado")).toBe(headers.indexOf("Venta contratada") + 1);
+    expect(headers.indexOf("Facturable a la fecha")).toBe(headers.indexOf("Venta contratada") + 1);
     expect(headers).not.toContain("Ingreso");
   });
 
@@ -102,23 +105,23 @@ describe("the contracted sale and the accrued revenue", () => {
     const lineGroup = screen.getByRole("group", { name: "Línea 1 de Alfa" });
     for (const container of [period, group, lineGroup]) {
       expect(figure(container, "Venta contratada")).toBe(`6.400,00${SPACE}€`);
-      expect(figure(container, "Devengado")).toBe(`6.000,00${SPACE}€`);
+      expect(figure(container, "Facturable a la fecha")).toBe(`6.000,00${SPACE}€`);
     }
     expect(screen.queryByText("Ingreso", { selector: ".figure-label" })).not.toBeInTheDocument();
   });
 
-  it("explains «Devengado» in the column header with an accessible description", async () => {
+  it("explains «Facturable a la fecha» in the column header with an accessible description", async () => {
     const table = await renderWorld();
 
-    const header = within(table).getByRole("columnheader", { name: "Devengado" });
+    const header = within(table).getByRole("columnheader", { name: "Facturable a la fecha" });
     expect(header).toHaveAccessibleDescription(HELP);
   });
 
-  it("explains «Devengado» among the figures too", async () => {
+  it("explains «Facturable a la fecha» among the figures too", async () => {
     await renderWorld();
 
     const period = screen.getByRole("region", { name: "Totales del periodo" });
-    const label = within(period).getByText("Devengado", { selector: ".figure-label" });
+    const label = within(period).getByText("Facturable a la fecha", { selector: ".figure-label" });
     expect(label).toHaveAccessibleDescription(HELP);
   });
 

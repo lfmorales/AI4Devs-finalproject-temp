@@ -53,9 +53,9 @@ describe("a target flight in the margin", () => {
     const headers = headersOf(table);
     expect(headers).toContain("Venta objetivo");
     expect(headers).not.toContain("Venta contratada");
-    expect(headers.indexOf("Bruto")).toBe(headers.indexOf("Devengado") + 1);
+    expect(headers.indexOf("Bruto")).toBe(headers.indexOf("Facturable") + 1);
     expect(plain(cellOf(table, "Venta objetivo"))).toBe(`5.000,00${SPACE}€`);
-    expect(plain(cellOf(table, "Devengado"))).toBe(`4.400,00${SPACE}€`);
+    expect(plain(cellOf(table, "Facturable"))).toBe(`4.400,00${SPACE}€`);
     expect(plain(cellOf(table, "Bruto"))).toBe(`5.500,00${SPACE}€`);
     expect(plain(cellOf(table, "% de margen"))).toContain("62,50");
   });

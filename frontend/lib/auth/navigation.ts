@@ -14,6 +14,7 @@ export const NAVIGATION_LINKS: readonly NavigationLink[] = [
   { href: "/campaigns", label: "Campañas", roles: ["operations", "business", "finance"] },
   { href: "/status", label: "Estado", roles: ["operations", "business", "finance", "trading"] },
   { href: "/margin", label: "Margen", roles: ["operations", "finance"] },
+  { href: "/billing", label: "Facturación", roles: ["operations", "finance"] },
   { href: "/exceptions", label: "Excepciones", roles: ["operations"] },
   { href: "/dsp-catalog", label: "Catálogo Adform", roles: ["operations"] },
 ];

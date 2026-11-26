@@ -7,6 +7,8 @@ const PAGES = [
   { link: "Campañas", path: "/campaigns", api: /\/api\/campaigns(\?|$)/ },
   { link: "Estado", path: "/status", api: /\/api\/campaign-status(\?|$)/ },
   { link: "Margen", path: "/margin", api: /\/api\/margin(\?|$)/ },
+  // The billing reads nothing until a month is chosen: the screen itself is what answers.
+  { link: "Facturación", path: "/billing", api: null },
   { link: "Excepciones", path: "/exceptions", api: /\/api\/ingestion-exceptions(\?|$)/ },
   { link: "Catálogo Adform", path: "/dsp-catalog", api: /\/api\/dsp-catalog(\?|$)/ },
 ] as const;
@@ -15,7 +17,7 @@ type Page = (typeof PAGES)[number];
 /** The access matrix, page by page: the pages each role may open. */
 const OPENS: Record<RoleName, readonly string[]> = {
   operations: PAGES.map((page) => page.path),
-  finance: ["/campaigns", "/status", "/margin"],
+  finance: ["/campaigns", "/status", "/margin", "/billing"],
   business: ["/campaigns", "/status"],
   trading: ["/status"],
 };
@@ -54,6 +56,11 @@ test.describe("the pages each profile may open, each with its own E2E user and t
 
       // Each page the profile may open is reached through its link and the backend serves it.
       for (const target of allowed.filter((candidate) => candidate.path !== "/status")) {
+        if (target.api === null) {
+          await navigation.getByRole("link", { name: target.link }).click();
+          await expect(page.getByRole("heading", { level: 1, name: target.link })).toBeVisible();
+          continue;
+        }
         const response = page.waitForResponse(target.api);
         await navigation.getByRole("link", { name: target.link }).click();
         expect((await response).status(), `${target.path} for ${profile.name}`).toBe(200);

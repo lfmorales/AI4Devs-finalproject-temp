@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 
 import { namesAreMasked } from "@/features/linking/AdformName";
+import { billingPath, getBilling, type BillingResponse } from "@/lib/api/billing";
 import { closeMonth, getMargin, marginPath, type MarginResponse } from "@/lib/api/margin";
 import { createApiClient, type ApiError } from "@/lib/api/client";
 import { useApiCall } from "@/lib/api/useApiCall";
@@ -13,7 +14,7 @@ import { SessionExpiredPage } from "@/lib/components/SessionExpiredPage";
 import { CloseMonthDialog } from "./CloseMonthDialog";
 import { hasActiveFilter, NO_FILTERS, toFilters, type FilterFields } from "./filters";
 import { MarginTree } from "./MarginTree";
-import { closedFlightsMessage, closingErrorMessage, closingsMessage, monthNames } from "./messages";
+import { closedFlightsMessage, closingErrorMessage, closingsMessage, monthNames, PENDING_REVIEW_REASON } from "./messages";
 
 const NOTHING_TO_CLOSE = "No hay flights pendientes de cierre en este mes";
 const REMOVE_CAMPAIGN_FILTER = "Quita el filtro de campaña para cerrar el mes";
@@ -29,6 +30,11 @@ function hasPendingClose(margin: MarginResponse): boolean {
   return margin.campaigns.some((campaign) =>
     campaign.lines.some((line) => line.flights.some((flight) => flight.state === "pending_close")),
   );
+}
+
+/** Whether the billing read reports a campaign of the month in progress or pending review: only its states are read. */
+function hasCampaignNotReviewed(billing: BillingResponse): boolean {
+  return billing.campaigns.some((campaign) => campaign.review_state === "in_progress" || campaign.review_state === "pending_review");
 }
 
 type Outcome = { kind: "success"; lines: string[] } | { kind: "error"; text: string };
@@ -54,11 +60,19 @@ export function MarginPage() {
   const hintId = useId();
   const nothingToCloseId = useId();
   const campaignFilterId = useId();
+  const pendingReviewId = useId();
 
   const canClose = useHasAnyRole("operations", "finance");
 
   const filters = toFilters(fields);
   const { state } = useApiCall(`${marginPath(filters)}#${reloads}`, (client) => getMargin(client, filters));
+  const target = filters.year !== undefined && filters.month !== undefined ? { year: filters.year, month: filters.month } : null;
+  // The closing waits for every campaign of the month to be reviewed: the billing read says which are not.
+  const reviewMonth = canClose ? target : null;
+  const { state: review } = useApiCall(
+    `${reviewMonth === null ? "no-review" : billingPath(reviewMonth)}#${reloads}`,
+    (client) => (reviewMonth === null ? Promise.resolve(null) : getBilling(client, reviewMonth)),
+  );
 
   // The campaigns on offer are those of the last margin loaded without a campaign filter, so that choosing one
   // does not hide the others (it is used for nothing else). Adjusted while rendering (not in an effect) so the first screen already has them.
@@ -73,11 +87,13 @@ export function MarginPage() {
   if (state.status === "unauthenticated" || blocked === "unauthenticated") return <SessionExpiredPage />;
   if (forbidden) return <AccessDeniedPage message="No tienes permiso para ver el margen." />;
 
-  const target = filters.year !== undefined && filters.month !== undefined ? { year: filters.year, month: filters.month } : null;
   const masked = namesAreMasked();
   // Closing acts on the whole month, so a campaign filter, which narrows the flights loaded, rules it out.
   const campaignFiltered = filters.campaignId !== undefined;
   const nothingToClose = !campaignFiltered && target !== null && (state.status !== "ready" || !hasPendingClose(state.data));
+  const reviewKnown = review.status === "ready" && review.data !== null;
+  const pendingReview = !campaignFiltered && !nothingToClose && review.status === "ready" && review.data !== null
+    && hasCampaignNotReviewed(review.data);
 
   async function confirmClosing() {
     if (target === null) return;
@@ -141,8 +157,13 @@ export function MarginPage() {
             <button
               type="button"
               className="btn-primary"
-              disabled={target === null || campaignFiltered || nothingToClose || submitting}
-              aria-describedby={campaignFiltered ? campaignFilterId : target === null ? hintId : nothingToClose ? nothingToCloseId : undefined}
+              disabled={target === null || campaignFiltered || nothingToClose || !reviewKnown || pendingReview || submitting}
+              aria-describedby={
+                campaignFiltered ? campaignFilterId
+                  : target === null ? hintId
+                    : nothingToClose ? nothingToCloseId
+                      : pendingReview ? pendingReviewId : undefined
+              }
               onClick={() => setDialogOpen(true)}
             >
               Cerrar mes
@@ -150,6 +171,7 @@ export function MarginPage() {
             {campaignFiltered && <p id={campaignFilterId} className="hint">{REMOVE_CAMPAIGN_FILTER}</p>}
             {!campaignFiltered && target === null && <p id={hintId} className="hint">Elige año y mes para cerrar un mes</p>}
             {nothingToClose && <p id={nothingToCloseId} className="hint">{NOTHING_TO_CLOSE}</p>}
+            {pendingReview && <p id={pendingReviewId} className="hint">{PENDING_REVIEW_REASON}</p>}
           </div>
         )}
       </div>

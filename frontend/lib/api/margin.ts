@@ -13,6 +13,12 @@ export type DecimalString = string;
 
 export type FlightState = "closed" | "pending_close" | "running";
 
+/**
+ * How a flight's billing was reached: `minimum` (the lesser of delivered and its cap), `delivered`, `contracted` or
+ * `custom` (an adjustment in force), `reported` (a target flight).
+ */
+export type BillingBasis = "minimum" | "delivered" | "contracted" | "custom" | "reported";
+
 export interface MarginTotals {
   revenue: DecimalString;
   /** The sale of the whole flights, summed by the server. */
@@ -60,6 +66,10 @@ export interface DeliveryChange {
   buyer_spend_difference: DecimalString | null;
   current_margin: DecimalString;
   margin_difference: DecimalString;
+  /** The billable volume in the flight's unit, four decimals; null for a target flight, a custom billing or an old closing. */
+  billable_difference: string | null;
+  /** The billing, two decimals; null for a target flight or an old closing. */
+  billing_difference: DecimalString | null;
 }
 
 export interface AppliedRates {
@@ -83,7 +93,7 @@ export interface FlightMargin {
   below_cost: boolean;
   /** A line without a price ("Sin venta"). */
   zero_sale: boolean;
-  /** The accrued revenue: proportional to the elapsed days in a running flight, the whole sale in a closed one. */
+  /** The billing: what the flight bills, to date while it runs; for a target flight, what its DSP reported. */
   revenue: DecimalString;
   /** The sale of the whole flight. */
   contracted_revenue: DecimalString;
@@ -114,6 +124,11 @@ export interface FlightMargin {
   delivery_changed: boolean;
   /** Null until the flight is closed. */
   delivery_change: DeliveryChange | null;
+  /** The volume the billing was computed on, in the unit of `delivery_metric`, four decimals; null for a target
+   * flight, a custom billing and a flight closed before the billing was frozen. */
+  billable: string | null;
+  /** Null for a flight closed before the billing was frozen. */
+  billing_basis: BillingBasis | null;
 }
 
 export interface LineMargin {

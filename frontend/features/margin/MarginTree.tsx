@@ -15,8 +15,8 @@ import { formatInteger } from "@/lib/format/integer";
 import { Figures } from "./Figures";
 import { TotalsFlags } from "./Flags";
 import {
-  ACCRUED_HELP,
-  ACCRUED_LABEL,
+  ADJUSTED_LABEL,
+  BILLING_HELP,
   DATA_COST_HELP,
   DATA_COST_LABEL,
   DELIVERY_CHANGED_HELP,
@@ -25,8 +25,11 @@ import {
   GROSS_DIFFERS_HELP,
   GROSS_DIFFERS_LABEL,
   GROSS_LABEL,
+  adjustedHelp,
+  billingLabel,
   daysLegend,
   deliveryLegend,
+  isAdjusted,
   saleLabel,
 } from "./messages";
 
@@ -43,6 +46,15 @@ const STATE_CLASS: Record<FlightState, string> = {
 };
 
 const SCOPE_LABEL: Record<string, string> = { national: "Nacional", international: "Internacional" };
+
+/** Whether a level holds a running flight, read from the states the server reported: its billing is then to date. */
+function lineRuns(line: LineMargin): boolean {
+  return line.flights.some((flight) => flight.state === "running");
+}
+
+function campaignRuns(campaign: CampaignMargin): boolean {
+  return campaign.lines.some(lineRuns);
+}
 
 function twoDigits(month: number): string {
   return month < 10 ? `0${month}` : `${month}`;
@@ -73,6 +85,12 @@ function DeliveryChangeDetail({ change, metric }: { change: DeliveryChange; metr
   }
   if (change.buyer_spend_difference !== null) {
     entries.push(["Diferencia de gasto del comprador", formatMoney(change.buyer_spend_difference)]);
+  }
+  if (change.billable_difference !== null) {
+    entries.push(["Diferencia de volumen facturable", `${formatQuantity(change.billable_difference)} ${metricLabel(metric)}`]);
+  }
+  if (change.billing_difference !== null) {
+    entries.push(["Diferencia de facturación", formatMoney(change.billing_difference)]);
   }
   return (
     <span className="delivery-change">
@@ -114,6 +132,9 @@ function FlightRow({ flight, showGross }: { flight: FlightMargin; showGross: boo
           <Warning label={GROSS_DIFFERS_LABEL} help={GROSS_DIFFERS_HELP} className="tag tag-warning" />
         )}
         {flight.data_cost_reported && <Warning label={DATA_COST_LABEL} help={DATA_COST_HELP} className="tag tag-info" />}
+        {isAdjusted(flight.billing_basis) && (
+          <Warning label={ADJUSTED_LABEL} help={adjustedHelp(flight.billing_basis)} className="tag tag-info" />
+        )}
         {flight.delivery_changed && flight.delivery_change !== null && (
           <>
             <Warning label={DELIVERY_CHANGED_LABEL} help={DELIVERY_CHANGED_HELP} className="tag tag-warning" />
@@ -130,6 +151,7 @@ function LineLevel({ campaign, line }: { campaign: CampaignMargin; line: LineMar
   const helpId = useId();
   // A line has one commitment: a target line names its sale «Venta objetivo» and shows the gross of its flights.
   const target = line.totals.volume_commitment === "target";
+  const runs = lineRuns(line);
   return (
     <details className="margin-level margin-line" aria-label={`Línea ${line.line_number} de ${campaign.name}`}>
       <summary className="margin-summary">
@@ -137,7 +159,7 @@ function LineLevel({ campaign, line }: { campaign: CampaignMargin; line: LineMar
           Línea {line.line_number} · {line.channel} · {SCOPE_LABEL[line.scope] ?? line.scope}
         </span>
         <TotalsFlags totals={line.totals} />
-        <Figures figured={line.totals} />
+        <Figures figured={line.totals} includesRunning={runs} />
       </summary>
       <div className="table-scroll">
         <table aria-label={`Flights de la línea ${line.line_number} de ${campaign.name}`} className="compact">
@@ -147,7 +169,7 @@ function LineLevel({ campaign, line }: { campaign: CampaignMargin; line: LineMar
               <th scope="col">Ventana</th>
               <th scope="col">Estado</th>
               <th scope="col">{saleLabel(line.totals.volume_commitment)}</th>
-              <th scope="col" aria-describedby={helpId} title={ACCRUED_HELP}>{ACCRUED_LABEL}</th>
+              <th scope="col" aria-describedby={helpId} title={BILLING_HELP}>{billingLabel(runs)}</th>
               {target && <th scope="col">{GROSS_LABEL}</th>}
               <th scope="col">Coste de medios</th>
               <th scope="col">Rebate</th>
@@ -162,7 +184,7 @@ function LineLevel({ campaign, line }: { campaign: CampaignMargin; line: LineMar
             {line.flights.map((flight) => <FlightRow key={flight.flight_id} flight={flight} showGross={target} />)}
           </tbody>
         </table>
-        <span id={helpId} hidden>{ACCRUED_HELP}</span>
+        <span id={helpId} hidden>{BILLING_HELP}</span>
       </div>
     </details>
   );
@@ -174,7 +196,7 @@ function CampaignLevel({ campaign }: { campaign: CampaignMargin }) {
       <summary className="margin-summary">
         <span className="margin-title"><AdformName name={campaign.name} /></span>
         <TotalsFlags totals={campaign.totals} />
-        <Figures figured={campaign.totals} />
+        <Figures figured={campaign.totals} includesRunning={campaignRuns(campaign)} />
       </summary>
       {campaign.lines.map((line) => <LineLevel key={line.campaign_line_id} campaign={campaign} line={line} />)}
     </details>
@@ -189,7 +211,7 @@ export function MarginTree({ margin }: { margin: MarginResponse }) {
         <h2>Totales del periodo</h2>
         <div className="margin-summary">
           <TotalsFlags totals={margin.totals} />
-          <Figures figured={margin.totals} />
+          <Figures figured={margin.totals} includesRunning={margin.campaigns.some(campaignRuns)} />
         </div>
       </section>
       {margin.campaigns.map((campaign) => <CampaignLevel key={campaign.campaign_id} campaign={campaign} />)}

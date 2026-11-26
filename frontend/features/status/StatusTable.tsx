@@ -35,7 +35,8 @@ function Flags({ row }: { row: CampaignStatusRow }) {
   );
 }
 
-export function StatusTable({ rows }: { rows: CampaignStatusRow[] }) {
+/** `onCarry` is given to a user who may write a carry-over (operations or trading): each row then offers it. */
+export function StatusTable({ rows, onCarry }: { rows: CampaignStatusRow[]; onCarry?: (row: CampaignStatusRow) => void }) {
   const [sort, setSort] = useState<SortState | null>(null);
   const onSort = (column: SortColumn) => setSort((current) => nextSort(current, column));
 
@@ -51,6 +52,8 @@ export function StatusTable({ rows }: { rows: CampaignStatusRow[] }) {
           <th scope="col">Ventana</th>
           <th scope="col">Unidad</th>
           <th scope="col" className="num">Contratado</th>
+          <th scope="col" className="num">Arrastre</th>
+          <th scope="col" className="num">Objetivo de entrega</th>
           <th scope="col" className="num">Entregado</th>
           <th scope="col" className="num">Ratio</th>
           <th scope="col" className="num">Esperado</th>
@@ -72,6 +75,13 @@ export function StatusTable({ rows }: { rows: CampaignStatusRow[] }) {
               {row.volume_commitment === "target" && <span className="figure-label">{TARGET_VOLUME_LABEL} </span>}
               {formatImpressions(row.contracted_impressions)}
             </td>
+            <td className="num">
+              {formatImpressions(row.carryover)}
+              {onCarry !== undefined && (
+                <button type="button" onClick={() => onCarry(row)}>Registrar arrastre</button>
+              )}
+            </td>
+            <td className="num">{formatImpressions(row.delivery_target)}</td>
             <td className="num">{formatQuantity(row.delivered)}</td>
             <td className="num">{formatFraction(row.delivery_ratio)}</td>
             <td className="num">{formatImpressions(row.pacing.expected_impressions)}</td>

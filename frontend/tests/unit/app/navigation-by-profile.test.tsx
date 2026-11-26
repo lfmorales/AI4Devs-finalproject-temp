@@ -11,11 +11,12 @@ vi.mock("@/lib/auth/user-manager", () => ({ getUserManager: () => ({ getUser: vi
 afterEach(() => vi.unstubAllGlobals());
 vi.mock("next/navigation", () => ({ usePathname: () => "/status" }));
 
-const ALL_PAGES = ["/campaigns", "/status", "/margin", "/exceptions", "/dsp-catalog"] as const;
+const ALL_PAGES = ["/campaigns", "/status", "/margin", "/billing", "/exceptions", "/dsp-catalog"] as const;
 const LABELS: Record<(typeof ALL_PAGES)[number], string> = {
   "/campaigns": "Campañas",
   "/status": "Estado",
   "/margin": "Margen",
+  "/billing": "Facturación",
   "/exceptions": "Excepciones",
   "/dsp-catalog": "Catálogo Adform",
 };
@@ -23,7 +24,7 @@ const LABELS: Record<(typeof ALL_PAGES)[number], string> = {
 /** The pages the access matrix opens to each role; the backend answers 403 for every other one. */
 const ROLE_PAGES = {
   operations: ALL_PAGES,
-  finance: ["/campaigns", "/status", "/margin"],
+  finance: ["/campaigns", "/status", "/margin", "/billing"],
   business: ["/campaigns", "/status"],
   trading: ["/status"],
 } as const;
@@ -63,13 +64,13 @@ function renderAs(roles: Role[]) {
 
 describe("the navigation, as a safety net, once the backend has refused the pages a profile may not open", () => {
   it.each([
-    [["operations"], ["Campañas", "Estado", "Margen", "Excepciones", "Catálogo Adform"]],
-    [["finance"], ["Campañas", "Estado", "Margen"]],
+    [["operations"], ["Campañas", "Estado", "Margen", "Facturación", "Excepciones", "Catálogo Adform"]],
+    [["finance"], ["Campañas", "Estado", "Margen", "Facturación"]],
     [["business"], ["Campañas", "Estado"]],
     [["trading"], ["Estado"]],
-    [["finance", "trading"], ["Campañas", "Estado", "Margen"]],
+    [["finance", "trading"], ["Campañas", "Estado", "Margen", "Facturación"]],
     [["business", "trading"], ["Campañas", "Estado"]],
-    [["business", "finance"], ["Campañas", "Estado", "Margen"]],
+    [["business", "finance"], ["Campañas", "Estado", "Margen", "Facturación"]],
   ] as [Role[], string[]][])("for %s shows %j", async (roles, expected) => {
     const nav = renderAs(roles);
 

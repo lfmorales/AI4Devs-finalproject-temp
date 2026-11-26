@@ -25,8 +25,9 @@ const LINKS_BY_ROLE: Record<string, Role[]> = {
   Excepciones: ["operations"],
   "Catálogo Adform": ["operations"],
   Margen: ["operations", "finance"],
+  Facturación: ["operations", "finance"],
 };
-const ORDER = ["Campañas", "Estado", "Margen", "Excepciones", "Catálogo Adform"];
+const ORDER = ["Campañas", "Estado", "Margen", "Facturación", "Excepciones", "Catálogo Adform"];
 
 function expectedFor(roles: Role[]): string[] {
   return ORDER.filter((label) => LINKS_BY_ROLE[label]!.some((role) => roles.includes(role)));
@@ -81,7 +82,7 @@ describe("the navigation driven by GET /users/me", () => {
     const requests = installRoutes({ "GET /users/me": rolesRoute(["operations"]) });
 
     render(layoutAs(SESSION));
-    await waitFor(() => expect(linkTexts()).toHaveLength(5));
+    await waitFor(() => expect(linkTexts()).toHaveLength(ORDER.length));
 
     expect(requests.filter((request) => request.path === "/users/me")).toHaveLength(1);
   });
@@ -117,7 +118,7 @@ describe("the navigation driven by GET /users/me", () => {
     render(layoutAs(SESSION));
     await user.click(await screen.findByRole("button", { name: "Reintentar" }));
 
-    await waitFor(() => expect(linkTexts()).toEqual(["Campañas", "Estado", "Margen"]));
+    await waitFor(() => expect(linkTexts()).toEqual(["Campañas", "Estado", "Margen", "Facturación"]));
     expect(screen.getByText("content")).toBeInTheDocument();
     expect(requests.filter((request) => request.path === "/users/me")).toHaveLength(2);
   });
@@ -145,7 +146,7 @@ describe("the navigation driven by GET /users/me", () => {
 
     render(layoutAs(SESSION, <Refused />));
 
-    await waitFor(() => expect(linkTexts()).toEqual(["Campañas", "Estado", "Excepciones", "Catálogo Adform"]));
+    await waitFor(() => expect(linkTexts()).toEqual(["Campañas", "Estado", "Facturación", "Excepciones", "Catálogo Adform"]));
   });
 
   it("keeps the roles out of every browser storage", async () => {
@@ -153,7 +154,7 @@ describe("the navigation driven by GET /users/me", () => {
     installRoutes({ "GET /users/me": rolesRoute(["operations", "finance"]) });
 
     render(layoutAs(SESSION));
-    await waitFor(() => expect(linkTexts()).toHaveLength(5));
+    await waitFor(() => expect(linkTexts()).toHaveLength(ORDER.length));
 
     expect(setItem).not.toHaveBeenCalled();
     expect(window.localStorage.length).toBe(0);
@@ -166,7 +167,7 @@ describe("the navigation driven by GET /users/me", () => {
     const requests = installRoutes({ "GET /users/me": () => answers.shift()! });
 
     const { rerender } = render(layoutAs(SESSION));
-    await waitFor(() => expect(linkTexts()).toHaveLength(5));
+    await waitFor(() => expect(linkTexts()).toHaveLength(ORDER.length));
 
     rerender(layoutAs({ status: "unauthenticated" }));
     expect(screen.queryByRole("navigation", { name: "Principal" })).not.toBeInTheDocument();
@@ -181,7 +182,7 @@ describe("the navigation driven by GET /users/me", () => {
     installRoutes({ "GET /users/me": rolesRoute(["operations"]) });
 
     const { rerender } = render(layoutAs(SESSION));
-    await waitFor(() => expect(linkTexts()).toHaveLength(5));
+    await waitFor(() => expect(linkTexts()).toHaveLength(ORDER.length));
 
     rerender(layoutAs({ status: "session_expired" }));
 
