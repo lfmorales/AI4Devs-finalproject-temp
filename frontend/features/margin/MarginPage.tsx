@@ -5,7 +5,8 @@ import { useId, useState } from "react";
 import { namesAreMasked } from "@/features/linking/AdformName";
 import { billingPath, getBilling, type BillingResponse } from "@/lib/api/billing";
 import { closeMonth, getMargin, marginPath, type MarginResponse } from "@/lib/api/margin";
-import { createApiClient, type ApiError } from "@/lib/api/client";
+import { browserApiClient } from "@/lib/api/browser-client";
+import type { ApiError } from "@/lib/api/client";
 import { useApiCall } from "@/lib/api/useApiCall";
 import { useReportForbidden } from "@/lib/auth/ForbiddenPages";
 import { useHasAnyRole } from "@/lib/auth/RolesContext";
@@ -38,12 +39,6 @@ function hasCampaignNotReviewed(billing: BillingResponse): boolean {
 }
 
 type Outcome = { kind: "success"; lines: string[] } | { kind: "error"; text: string };
-
-function apiClient() {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!baseUrl) throw new Error("API URL not configured");
-  return createApiClient({ baseUrl });
-}
 
 /** The margin per campaign, line and flight, with its filters and the closing of a month. */
 export function MarginPage() {
@@ -99,7 +94,7 @@ export function MarginPage() {
     if (target === null) return;
     setSubmitting(true);
     try {
-      const result = await closeMonth(apiClient(), target);
+      const result = await closeMonth(browserApiClient(), target);
       setDialogOpen(false);
       const lines = [closedFlightsMessage(result.closed, target)];
       if (result.closed === 0 && result.already_closed > 0) lines.push(`Ya estaban cerrados: ${result.already_closed}`);
