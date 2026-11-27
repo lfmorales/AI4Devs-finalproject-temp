@@ -1,10 +1,10 @@
 """GET /margin returns the sale of the whole flight and the days behind a running figure, at every level."""
 
 from collections.abc import Callable
+from typing import Any
 from datetime import date
 from decimal import Decimal
 
-from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.domain.services.flight_margin import round_amount
@@ -84,7 +84,7 @@ def test_a_closed_flight_accrues_all_of_it_and_closing_changes_none_of_the_three
 
 
 def test_a_closed_flight_that_under_delivered_bills_less_than_it_contracted(
-    client_for_roles: Callable[..., TestClient], test_db_session: Session
+    client_for_roles: Callable[..., Any], test_db_session: Session
 ) -> None:
     # 700,000 of 1,000,000 contracted at 5.00 €: it bills the lesser, 3,500.00 €, on a billable volume of 700,000.
     _bill(test_db_session, insert_campaign_line(test_db_session), 700_000)
@@ -99,7 +99,7 @@ def test_a_closed_flight_that_under_delivered_bills_less_than_it_contracted(
 
 
 def test_a_running_flight_reports_the_billable_volume_its_billing_to_date_was_computed_on(
-    client_for_roles: Callable[..., TestClient], test_db_session: Session
+    client_for_roles: Callable[..., Any], test_db_session: Session
 ) -> None:
     _bill(test_db_session, insert_campaign_line(test_db_session), 180_000)
 

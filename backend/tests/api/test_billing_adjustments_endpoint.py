@@ -40,7 +40,7 @@ MONEY_WORDS = ("revenue", "cost", "margin", "rebate", "cpm", "price")
 def _on(client: TestClient, today: date = PENDING_CLOSE) -> TestClient:
     """Pin D and confirm the data prepared so far: a refused request rolls the service back, and the test session joins
     an outer transaction through a savepoint, so what was only flushed would be lost with it."""
-    overrides = client.app.dependency_overrides  # type: ignore[attr-defined]
+    overrides = client.app.dependency_overrides
     overrides[providers.get_today] = lambda: today
     next(overrides[providers.get_db_session]()).commit()
     return client

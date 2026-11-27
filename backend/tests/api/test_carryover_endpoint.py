@@ -44,7 +44,7 @@ def _on(client: TestClient, today: date = D_PLUS_1) -> TestClient:
     The test session joins an outer transaction through a savepoint, and a refused request makes the service roll back:
     what was only flushed would be lost with it, so the preparation is committed before the requests start.
     """
-    overrides = client.app.dependency_overrides  # type: ignore[attr-defined]
+    overrides = client.app.dependency_overrides
     overrides[providers.get_today] = lambda: today
     next(overrides[providers.get_db_session]()).commit()
     return client

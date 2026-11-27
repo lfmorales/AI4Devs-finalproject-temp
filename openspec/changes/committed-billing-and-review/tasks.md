@@ -131,10 +131,10 @@
 
 ## 14. Run Unit Tests and Verify Database State (MANDATORY)
 
-- [ ] 14.1 Capture the pre-test baseline of the development database: row counts of `applied_rates`, `closed_flight_snapshots`, `month_closings`, `flight_billing_adjustments`, `campaign_period_reviews`, `campaign_line_periods` with a carry-over, `daily_deliveries` and `ingestion_batches`
-- [ ] 14.2 Run the targeted tests of tasks 1 to 12, then the whole backend suite (`pytest`), the acceptance tests, mypy on the touched files as `docs/base-standards.md` §4 says, and the frontend suite (`npm test`), recording totals, failures and runtime; compare test by test with `HEAD`, not totals
-- [ ] 14.3 Re-check the baseline and restore any change the tests left
-- [ ] 14.4 Create `docs/reports/YYYY-MM-DD-step-14-unit-test-and-db-verification.md`; the step is complete only once it exists
+- [x] 14.1 Capture the pre-test baseline of the development database: row counts of `applied_rates`, `closed_flight_snapshots`, `month_closings`, `flight_billing_adjustments`, `campaign_period_reviews`, `campaign_line_periods` with a carry-over, `daily_deliveries` and `ingestion_batches`
+- [x] 14.2 Run the targeted tests of tasks 1 to 12, then the whole backend suite (`pytest`), the acceptance tests, mypy on the touched files as `docs/base-standards.md` §4 says, and the frontend suite (`npm test`), recording totals, failures and runtime; compare test by test with `HEAD`, not totals
+- [x] 14.3 Re-check the baseline and restore any change the tests left
+- [x] 14.4 Create `docs/reports/YYYY-MM-DD-step-14-unit-test-and-db-verification.md`; the step is complete only once it exists
 
 ## 15. Manual Endpoint Testing with curl (MANDATORY - AGENT MUST EXECUTE)
 
@@ -156,3 +156,7 @@
 - [ ] 17.1 Check that the invariants of `openspec/config.yaml` agree with the implementation: the revenue invariant was updated with this specification (billing of a committed line, reported revenue of a target line)
 - [ ] 17.2 Update `readme.md`: the economic model, the data model of the three new tables and the new columns, the eight routes with their roles, the closing errors, the billing screen and the CSV
 - [ ] 17.3 Update `docs/deploy.md`: closing requires the review and the last day of every DSP, a month cannot be closed while a flight runs, and the CSV download; and check that `docs/product-description.md` still agrees with the specs after the implementation
+
+## Debt Outside This Change
+
+> Not part of committed-billing-and-review, and no task of it: nine copies of the API client of a page action remain outside `lib/api/browser-client.ts`, each reading `NEXT_PUBLIC_API_URL` and calling `createApiClient` itself: `frontend/app/(authenticated)/campaigns/page.tsx` (1), `frontend/features/campaigns/CreateCampaignForm.tsx` (3), `frontend/features/catalogue/CatalogueView.tsx` (2), `frontend/features/catalogue/EquativMapping.tsx` (1) and `frontend/features/exceptions/ExceptionList.tsx` (2). A later change can make them take `browserApiClient()` and extend `frontend/tests/unit/lib/api/browser-client.test.ts` to those features.
