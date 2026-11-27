@@ -138,10 +138,10 @@
 
 ## 15. Manual Endpoint Testing with curl (MANDATORY - AGENT MUST EXECUTE)
 
-- [ ] 15.1 With the stack reset by `e2e/scripts/reset-data.sh` and test-issuer tokens: `GET /api/billing` of the demo's pending month as `finance`; `POST /api/billing/flights/{id}/adjustments` to `contracted` with a reason, then the history, then `GET /api/margin` with the adjusted revenue; the 422 without reason and the 409 on a running flight; as `trading` 403 on each `/api/billing` route
-- [ ] 15.2 `PUT /api/flights/{id}/carryover` as `trading` within and above the shortfall; `GET /api/campaign-status` as `trading` with `carryover` and `delivery_target` and no amount or flag; `PUT /api/billing/flights/{id}/carryover/billable` as `finance`, and 403 as `trading`
-- [ ] 15.3 `POST /api/margin/closings` refused with `month_not_reviewed`; `POST /api/billing/reviews` for each campaign, a withdrawal and a new review; the closing accepted; `GET /api/billing/export` as `operations` saved and checked column by column against `GET /api/billing`; 409 `month_not_closed` for an open month
-- [ ] 15.4 Restore the development database with `e2e/scripts/reset-data.sh` (a closing cannot be undone), check the baseline of 14.1, and document every command and response in `docs/reports/YYYY-MM-DD-step-15-curl.md` with no identifier, name, amount or token of a real DSP
+- [x] 15.1 With the stack reset by `e2e/scripts/reset-data.sh` and test-issuer tokens: `GET /api/billing` of the demo's pending month as `finance`; `POST /api/billing/flights/{id}/adjustments` to `contracted` with a reason, then the history, then `GET /api/margin` with the adjusted revenue; the 422 without reason and the 409 on a running flight; as `trading` 403 on each `/api/billing` route
+- [x] 15.2 `PUT /api/flights/{id}/carryover` as `trading` within and above the shortfall; `GET /api/campaign-status` as `trading` with `carryover` and `delivery_target` and no amount or flag; `PUT /api/billing/flights/{id}/carryover/billable` as `finance`, and 403 as `trading`
+- [x] 15.3 `POST /api/margin/closings` refused with `month_not_reviewed`; `POST /api/billing/reviews` for each campaign, a withdrawal and a new review; the closing accepted; `GET /api/billing/export` as `operations` saved and checked column by column against `GET /api/billing`; 409 `month_not_closed` for an open month
+- [x] 15.4 Restore the development database with `e2e/scripts/reset-data.sh` (a closing cannot be undone), check the baseline of 14.1, and document every command and response in `docs/reports/YYYY-MM-DD-step-15-curl.md` with no identifier, name, amount or token of a real DSP
 
 ## 16. E2E Testing with Playwright (MANDATORY - AGENT MUST EXECUTE)
 
