@@ -124,6 +124,8 @@
 - [x] 12.10 Propose the previous month in `frontend/features/billing/`; verify 12.9, the frontend suite and Playwright
 - [x] 12.11 Write a failing Vitest test: the adjustment dialog shows the same Spanish message for a 422 `validation_error` and a 422 `invalid_adjustment`
 - [x] 12.12 Make the adjustment dialog read `validation_error` as `invalid_adjustment` in `frontend/features/billing/`, leaving the other actions' messages as they are; verify 12.11 and the frontend suite
+- [x] 12.13 Write a failing Vitest test: the «Arrastre» cell of the status screen reads the figure, a space and «Registrar arrastre», never the two run together
+- [x] 12.14 Separate the figure from its button in `frontend/features/status/StatusTable.tsx` and its style; verify 12.13, the frontend suite and Playwright, and look at the screen in the browser
 
 ## 13. Review and Update Existing Unit Tests (MANDATORY)
 

@@ -71,6 +71,12 @@ describe("the carry-over in the campaign status", () => {
     expect(plain(cellOf("Objetivo de entrega", 1))).toBe("500.000");
   });
 
+  it("keeps the carry-over figure apart from its button", async () => {
+    await renderStatus(["trading"]);
+
+    expect(plain(cellOf("Arrastre"))).toBe("100.000 Registrar arrastre");
+  });
+
   it.each([[["operations"]], [["trading"]], [["finance", "trading"]]] as [Role[]][])(
     "offers the carry-over form to %j",
     async (roles) => {

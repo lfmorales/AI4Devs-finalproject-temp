@@ -78,7 +78,10 @@ export function StatusTable({ rows, onCarry }: { rows: CampaignStatusRow[]; onCa
             <td className="num">
               {formatImpressions(row.carryover)}
               {onCarry !== undefined && (
-                <button type="button" onClick={() => onCarry(row)}>Registrar arrastre</button>
+                <>
+                  {" "}
+                  <button type="button" className="cell-action" onClick={() => onCarry(row)}>Registrar arrastre</button>
+                </>
               )}
             </td>
             <td className="num">{formatImpressions(row.delivery_target)}</td>
