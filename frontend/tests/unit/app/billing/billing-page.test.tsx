@@ -345,6 +345,24 @@ describe("the adjustment of a flight", () => {
     );
   });
 
+  // The dialog never sends a blank reason, but the server can refuse it two ways: its request validation answers a
+  // missing reason with `validation_error`, the adjustment's rules a blank one with `invalid_adjustment`.
+  it.each(["validation_error", "invalid_adjustment"])("explains a 422 %s of the adjustment with the same message", async (code) => {
+    const { user } = await renderOctober({
+      ...MONTH,
+      "POST /billing/flights/31/adjustments": () => reply(422, { code, message: "the reason is missing" }),
+    });
+    await user.click(await screen.findByRole("button", { name: "Ajustar" }));
+    const dialog = screen.getByRole("dialog", { name: "Ajustar la facturación" });
+    await user.type(within(dialog).getByLabelText("Motivo"), "OC");
+
+    await user.click(within(dialog).getByRole("button", { name: "Guardar ajuste" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "El ajuste no es válido: elige una base, escribe el motivo y, solo con un importe fijo, un importe de cero o más con dos decimales como máximo.",
+    );
+  });
+
   it("lists the adjustments of a flight, latest first, with the one in force", async () => {
     const { user } = await renderOctober({
       ...MONTH,

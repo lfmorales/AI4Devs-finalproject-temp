@@ -83,3 +83,9 @@ export function billingErrorMessage(code: string | undefined, message: string | 
   if (code !== undefined && code in MESSAGE_BY_CODE) return MESSAGE_BY_CODE[code] ?? GENERIC_ERROR;
   return GENERIC_ERROR;
 }
+
+/** The message of a refused adjustment. A form the request's validation refuses (`validation_error`, a missing
+ * reason) reads as one the adjustment's rules refuse (`invalid_adjustment`, a blank reason): the same thing to fix. */
+export function adjustmentErrorMessage(code: string | undefined, message: string | undefined, context: ErrorContext): string {
+  return billingErrorMessage(code === "validation_error" ? "invalid_adjustment" : code, message, context);
+}

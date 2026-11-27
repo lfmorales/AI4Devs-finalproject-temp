@@ -116,7 +116,7 @@ Wherever a response of a route under `/billing`, or of `PUT /flights/{flight_id}
 
 ### Requirement: The billing screen shows a month's billing
 
-The system SHALL offer, to users holding `operations` or `finance`, a billing screen for a month that shows each campaign with its review state, and each flight with its contracted volume, carry-over, delivery target, delivered volume, billable volume, sale CPM, billing labelled «Facturable» or «Facturable a la fecha» as in the margin screen, and the adjustment in force with its reason, the name of its author and its moment, as each campaign's review shows the name of whoever reviewed it. It SHALL let them adjust an ended, unfrozen committed flight (basis, amount when custom, mandatory reason), set the billable flag of a carry-over, mark and withdraw the review, and download the CSV of a closed month. It SHALL show the response's error in Spanish when an action is refused, and SHALL compute no figure. The screen and its entry in the navigation SHALL be hidden from a user holding neither role. The screen SHALL open on the month before today's in Madrid, the month Finance reviews most often, and SHALL let the user choose any other.
+The system SHALL offer, to users holding `operations` or `finance`, a billing screen for a month that shows each campaign with its review state, and each flight with its contracted volume, carry-over, delivery target, delivered volume, billable volume, sale CPM, billing labelled «Facturable» or «Facturable a la fecha» as in the margin screen, and the adjustment in force with its reason, the name of its author and its moment, as each campaign's review shows the name of whoever reviewed it. It SHALL let them adjust an ended, unfrozen committed flight (basis, amount when custom, mandatory reason), set the billable flag of a carry-over, mark and withdraw the review, and download the CSV of a closed month. It SHALL show the response's error in Spanish when an action is refused, and SHALL compute no figure. An adjustment refused for what its form holds SHALL show the same message whether the request's validation refused it (`validation_error`) or the adjustment's rules did (`invalid_adjustment`). The screen and its entry in the navigation SHALL be hidden from a user holding neither role. The screen SHALL open on the month before today's in Madrid, the month Finance reviews most often, and SHALL let the user choose any other.
 
 #### Scenario: The screen proposes the previous month
 - **WHEN** a user holding `finance` opens the billing screen on 26 November 2026
@@ -129,6 +129,10 @@ The system SHALL offer, to users holding `operations` or `finance`, a billing sc
 #### Scenario: Finance adjusts a flight from the billing screen
 - **WHEN** a user holding `finance` adjusts a pending-close flight to its contracted volume with a reason
 - **THEN** the flight shows the billing of the response, «Ajustado» with the reason, and its campaign «Pendiente de revisión»
+
+#### Scenario: A refused adjustment reads the same whoever refused it
+- **WHEN** an adjustment is refused with 422 `validation_error`, as a request without a reason is, and another with 422 `invalid_adjustment`, as one with a blank reason is
+- **THEN** the dialog shows the same message in Spanish for both, naming the basis, the reason and the amount
 
 #### Scenario: The CSV is downloaded from the screen
 - **WHEN** a user holding `operations` downloads the CSV of a closed month

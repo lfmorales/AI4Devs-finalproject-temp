@@ -122,6 +122,8 @@
 - [x] 12.8 Show the names in `frontend/features/billing/` and add the fields to `frontend/lib/api/billing.ts`; verify 12.7, the frontend suite and Playwright
 - [x] 12.9 Write failing Vitest tests: the billing screen opens on the month before today's in Madrid and reads it, December of the year before in January, and lets the user choose another month
 - [x] 12.10 Propose the previous month in `frontend/features/billing/`; verify 12.9, the frontend suite and Playwright
+- [x] 12.11 Write a failing Vitest test: the adjustment dialog shows the same Spanish message for a 422 `validation_error` and a 422 `invalid_adjustment`
+- [x] 12.12 Make the adjustment dialog read `validation_error` as `invalid_adjustment` in `frontend/features/billing/`, leaving the other actions' messages as they are; verify 12.11 and the frontend suite
 
 ## 13. Review and Update Existing Unit Tests (MANDATORY)
 

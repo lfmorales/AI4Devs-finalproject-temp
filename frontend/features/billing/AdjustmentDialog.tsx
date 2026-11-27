@@ -7,7 +7,7 @@ import { browserApiClient } from "@/lib/api/browser-client";
 import type { ApiError } from "@/lib/api/client";
 import { Modal } from "@/lib/components/Modal";
 import { NEW_ADJUSTMENT, toAdjustmentRequest, type AdjustmentFields } from "./adjustment-form";
-import { BASIS_LABEL, BASIS_ORDER, billingErrorMessage } from "./messages";
+import { adjustmentErrorMessage, BASIS_LABEL, BASIS_ORDER } from "./messages";
 
 interface AdjustmentDialogProps {
   flightId: number;
@@ -38,7 +38,7 @@ export function AdjustmentDialog({ flightId, month, onDone, onCancel, onBlocked 
     } catch (caught) {
       const failure = caught as Partial<ApiError>;
       if (failure.kind === "unauthenticated" || failure.kind === "forbidden") onBlocked(failure.kind);
-      else setError(billingErrorMessage(failure.code, failure.message, { month }));
+      else setError(adjustmentErrorMessage(failure.code, failure.message, { month }));
     } finally {
       setSubmitting(false);
     }
