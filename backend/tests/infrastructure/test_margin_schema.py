@@ -326,7 +326,8 @@ def test_the_columns_of_the_margin_tables_hold_no_floating_point(rolled_back_ses
     inspector = inspect(rolled_back_session.get_bind())
     for table in (
         "rebate_schedules", "rebate_brackets", "platform_rate_settings", "applied_rates", "applied_rate_brackets",
-        "month_closings", "month_closing_batches", "closed_flight_snapshots",
+        "month_closings", "month_closing_batches", "closed_flight_snapshots", "flight_billing_adjustments",
+        "campaign_period_reviews",
     ):
         for column in inspector.get_columns(table):
             assert column["type"].__class__.__name__ not in {"FLOAT", "REAL", "DOUBLE_PRECISION"}, (table, column["name"])
@@ -345,7 +346,11 @@ def test_the_frozen_revenue_and_base_are_exact_nullable_numerics(rolled_back_ses
     assert (stored["type"].precision, stored["type"].scale, stored["nullable"]) == (24, 12, True)
 
 
-def test_a_committed_flights_row_holds_neither_frozen_amount(rolled_back_session: Session, ids: _Ids) -> None:
+def test_a_row_may_hold_neither_frozen_amount_as_a_committed_row_closed_before_the_billing_was_frozen(
+    rolled_back_session: Session, ids: _Ids
+) -> None:
+    # Since committed-billing-and-review the closing writes a committed flight's billing in both columns
+    # (test_margin_closing_service.py); the schema keeps both empty for the rows closed before it.
     row = _applied(ids)
     _add(rolled_back_session, row)
     rolled_back_session.expire_all()
