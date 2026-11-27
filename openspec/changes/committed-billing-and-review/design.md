@@ -99,11 +99,11 @@ As in the previous changes, the reports go to `docs/reports/`, not to `specs/<ch
 - [The carry-over keeps only its latest value] → Each change reopens a reviewed campaign with an event naming the cause, the flight and the user.
 - [The current margin of a closed committed flight mixes the current billing with the frozen rebate] → Same trade-off as `closing-snapshot`: the counter has already advanced; the field descriptions say so.
 - [The CSV's names are read now] → Only names: every figure comes from the snapshot. A renamed agency changes the CSV of a closed month.
-- [Every test that closes a month must review first] → One fixture helper reviews every campaign of a month through the service; the closing tests and the demo seed call it.
+- [Every test that closes a month must review first] → One fixture helper reviews every campaign of a month through the service, and the closing tests call it; the E2E review through the API or the billing screen. The demo seed reviews nothing, so a freshly seeded month is pending review.
 - [A flight registered in a closed month] → As in `closing-snapshot`: its campaign is pending review and a second closing needs its review.
 
 ## Migration Plan
 
 1. Four migrations after `3a08cce1c979`, one per task group: `flight_billing_adjustments` with its trigger; the carry-over columns of `campaign_line_periods` with their checks; `campaign_period_reviews` with its trigger; the billing columns of `closed_flight_snapshots` with their checks. None refuses existing rows; legacy snapshots get nulls. Each downgrade drops what it added.
-2. Development: `e2e/scripts/reset-data.sh`; the demo seed reviews the campaigns of the month it closes.
+2. Development: `e2e/scripts/reset-data.sh`; the demo seed leaves the previous month pending review and writes no carry-over.
 3. Rollback: downgrade the four migrations and redeploy the previous image; adjustments, carry-overs and reviews are lost, and snapshots written meanwhile lose their billing columns but keep their revenue.

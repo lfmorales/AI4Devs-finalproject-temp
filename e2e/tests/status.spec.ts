@@ -1,10 +1,13 @@
 import { registerCampaign } from "../support/campaigns";
-import { expect, test } from "../support/fixtures";
+import { expect, signInAs, test } from "../support/fixtures";
 import { formatDecimalEsEs, formatQuantityEsEs, unitLabel } from "../support/format";
+import { currentMonth, isoDate, lastDayOf, madridToday, previousMonth } from "../support/margin";
 
 interface StatusRow {
   campaign: { id: number; name: string };
   contracted_impressions: number;
+  carryover: number;
+  delivery_target: number;
   delivery_metric: "impressions" | "ots";
   delivered: string;
   missing_data_flag: boolean;
@@ -106,5 +109,49 @@ test.describe("a target line in the campaign status", () => {
     await expect(shown).toHaveCount(1);
     await expect(shown).toContainText(`Objetivo ${formatDecimalEsEs(String(row.contracted_impressions))}`);
     await expect(shown).not.toContainText("Desviación de ritmo");
+  });
+});
+
+test.describe("a carry-over written by trading", () => {
+  test.skip(
+    madridToday().day === 1,
+    "Hoy (Madrid) es día 1: D-1 cae en el flight del mes previo, que es el primero de su línea y no puede recibir arrastre.",
+  );
+
+  test("trading carries volume to this month's flight and sees «Arrastre» and «Objetivo de entrega», and no amount", async ({ page, api }) => {
+    // A line from the first day of the previous month to the last of this one: its previous month's flight has ended
+    // without delivery, so its whole volume is short and this month's flight can receive part of it.
+    const previous = previousMonth();
+    const current = currentMonth();
+    const name = `E2E-ARRASTRE-${Date.now()}`;
+    await registerCampaign(api, {
+      name,
+      start: isoDate(previous.year, previous.month, 1),
+      end: isoDate(current.year, current.month, lastDayOf(current)),
+      orderReceivedOn: isoDate(previous.year, previous.month, 1),
+    });
+    await signInAs(page, "trading");
+
+    await page.goto("/status");
+    const table = page.getByRole("table", { name: "Estado de las campañas" });
+    const row = table.getByRole("row").filter({ hasText: name });
+    await expect(row).toHaveCount(1);
+    await row.getByRole("button", { name: "Registrar arrastre" }).click();
+    const dialog = page.getByRole("dialog", { name: `Arrastre de ${name} · línea 1` });
+    await dialog.getByLabel("Volumen").fill("10000");
+    await dialog.getByLabel("Motivo").fill("Recuperar lo no entregado el mes anterior");
+    await dialog.getByRole("button", { name: "Guardar arrastre" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Arrastre guardado" })).toBeVisible();
+
+    const rows = (await (await api.get("campaign-status")).json()) as StatusRow[];
+    const written = rows.find((candidate) => candidate.campaign.name === name);
+    expect([written?.carryover, written?.delivery_target]).toEqual([10_000, (written?.contracted_impressions ?? 0) + 10_000]);
+    const headers = (await table.getByRole("columnheader").allInnerTexts()).map((text) => text.trim());
+    const cell = (header: string) => row.getByRole("cell").nth(headers.indexOf(header));
+    await expect(cell("Arrastre")).toContainText(formatDecimalEsEs("10000"));
+    await expect(cell("Objetivo de entrega")).toHaveText(formatDecimalEsEs(String(written?.delivery_target)));
+    // Trading never sees an amount or the billable flag.
+    await expect(page.locator("main")).not.toContainText("€");
+    await expect(page.getByText("Arrastre facturable")).toHaveCount(0);
   });
 });

@@ -41,7 +41,7 @@ A committed line earns its whole contracted volume today, whatever it delivered:
 - API: `GET /margin` changes the meaning of `revenue` for committed flights and adds `billable` and `billing_basis`; `delivery_change` adds `billable_difference` and `billing_difference`; `GET /campaign-status` adds `carryover` and `delivery_target`; `POST /margin/closings` gains `month_not_reviewed`; eight new routes.
 - Frontend: the margin labels, a billing screen (adjustments, review, CSV download), the carry-over on the status screen.
 - Tests: the acceptance tests, every test that closes a month (they review first), and the tests that assumed revenue on the contracted volume.
-- E2E: the demo seed reviews its campaigns; the closing flows; a trading flow for the carry-over.
+- E2E: the closing flows review first; a billing flow that adjusts, reviews, closes and downloads the CSV; a trading flow for the carry-over.
 - Data: no backfill; closed months keep their figures.
 
 ## Non-goals
