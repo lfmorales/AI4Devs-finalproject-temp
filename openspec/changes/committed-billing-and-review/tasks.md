@@ -157,9 +157,9 @@
 
 ## 17. Update Technical Documentation (MANDATORY)
 
-- [ ] 17.1 Check that the invariants of `openspec/config.yaml` agree with the implementation: the revenue invariant was updated with this specification (billing of a committed line, reported revenue of a target line)
-- [ ] 17.2 Update `readme.md`: the economic model, the data model of the three new tables and the new columns, the eight routes with their roles, the closing errors, the billing screen and the CSV
-- [ ] 17.3 Update `docs/deploy.md`: closing requires the review and the last day of every DSP, a month cannot be closed while a flight runs, and the CSV download; and check that `docs/product-description.md` still agrees with the specs after the implementation
+- [x] 17.1 Check that the invariants of `openspec/config.yaml` agree with the implementation: the revenue invariant was updated with this specification (billing of a committed line, reported revenue of a target line); the closing conditions name every earlier month of the year, the billing a committed flight freezes, and the adjustments and review events that are only added
+- [x] 17.2 Update `readme.md`: the economic model, the data model of the two new tables (`flight_billing_adjustments`, `campaign_period_reviews`) and the new columns of `campaign_line_periods` and `closed_flight_snapshots`, the eight routes with their roles, the closing errors, the billing screen and the CSV; that the closing requires the review of every campaign of the month and the review requires the month's last day loaded by each DSP; a short section for Finance, «Cómo se cierra un mes» (review each campaign, adjust if needed, close and download the CSV); the overflow of the status table and of a billing line with a billable carry-over, next to the wide margin table, as pending for the trading-desk interface; and §2.6 with the new figures and the links to the reports of steps 13 to 16
+- [x] 17.3 Update `docs/deploy.md`: closing requires the review of every campaign of the month and the review requires the last day of every DSP, a month cannot be closed while a flight runs, the CSV download, and what the release's four migrations do to an existing database; and check that `docs/product-description.md` still agrees with the specs after the implementation (the review requires the month's last day of each DSP)
 
 ## Debt Outside This Change
 

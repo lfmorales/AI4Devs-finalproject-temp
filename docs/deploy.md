@@ -124,6 +124,17 @@ This release adds one migration, `3a08cce1c979`, which creates the closing heade
 
 There is no production database yet, so a new installation migrates as usual. A development database with closed months is rebuilt with `e2e/scripts/reset-data.sh`, which drops the volume, migrates and seeds again. A database holding real closed months would need a backfill of its own before this migration.
 
+### The release that bills committed lines and reviews the month (`committed-billing-and-review`)
+
+This release adds four migrations after `3a08cce1c979`, and none refuses existing rows:
+
+1. `c4a1b7e92d10` gives `campaign_line_periods` the carry-over of a flight: its volume (0 by default), reason, author and moment, and the billable flag with its author and moment.
+2. `d7e2a9f41b36` creates `flight_billing_adjustments`, only added to, with a trigger that refuses an update or a delete.
+3. `e8b5c3a07f24` creates `campaign_period_reviews`, the review events of a campaign in a month, with the same trigger.
+4. `f1c6d2b84a57` gives `closed_flight_snapshots` the billing it froze: its basis, billable volume, carry-over, billable flag and adjustment. A snapshot written before this release gets nulls and keeps its revenue.
+
+Each downgrade drops what it added. After the release, the revenue of a committed flight that is not closed is its billing: the lesser of what it delivered and its cap, to date while it runs, never pro-rated. A month that was pending close before the release now also needs every campaign of it reviewed before it can be closed (*Closing a month*, §12).
+
 ## 10. Master data
 
 A fresh database has no agencies, advertisers, DSPs, channels, formats, campaign types, sectors or sales reps, and the "new campaign" form needs them. Load them from a JSON file with `scripts/load_masters.py`. Start from the template, which holds fictitious data:
@@ -274,12 +285,20 @@ CRON_TZ=UTC
 
 ### Closing a month
 
-A month can be closed as soon as its last day is loaded: there is no waiting rule. Closing freezes, for every flight that ended in the month, its rates and a snapshot of every figure it shows (revenue, media cost, rebate, platform cost, margin, gross, flags and volumes) together with the delivery they were computed on. All of it goes under one closing header that names the month, the moment, the user, the last day counted (`as_of`) and the latest succeeded ingestion batch of each DSP. **A closed month never moves**: its flights are read only from their snapshots.
+Closing freezes, for every flight that ended in the month, its rates, its billing and a snapshot of every figure it shows (revenue, media cost, rebate, platform cost, margin, gross, billable volume, billing basis, carry-over and its flag, flags and volumes) together with the delivery they were computed on. All of it goes under one closing header that names the month, the moment, the user, the last day counted (`as_of`) and the latest succeeded ingestion batch of each DSP. **A closed month never moves**: its flights are read only from their snapshots. The closing answers 409, writing nothing, at the first of these checks that fails:
+
+1. **An earlier month of the same year is open** (`previous_month_open`): it holds an ended flight that is not closed. Close the months in order.
+2. **A campaign of the month is in progress** (`month_not_reviewed`): one of its flights has not ended, so a month is never closed while a flight runs. The message names every campaign that blocks the closing.
+3. **A DSP has not loaded the month's last day** (`month_delivery_not_loaded`): every DSP with an ended, unfrozen flight in the month needs a succeeded run whose window includes the last day, committed lines included. Run or wait for that ingestion.
+4. **A campaign of the month is pending review** (`month_not_reviewed`): every campaign with flights in the month must be reviewed (or already closed).
+
+**The review.** On the «Facturación» screen, Operations or Finance mark each campaign of the month «Revisada» once its flights have ended. The review itself requires the last day of the month loaded by the DSP of each of its flights (`month_delivery_not_loaded` otherwise), so a reviewed campaign never has an incomplete delivery, and an ingestion after it does not reopen it. An adjustment of a flight's billing, a carry-over or a change of its billable flag returns the campaign to «Pendiente de revisión», and it has to be reviewed again. A review can be withdrawn before the closing.
+
+**The CSV.** Once a month is closed, «Descargar CSV» on the «Facturación» screen (or `GET /api/billing/export?year=…&month=…`, for `operations` and `finance`) saves `facturacion-YYYY-MM.csv`: one row per flight frozen in the month, built only from the snapshots, in UTF-8 with a byte order mark, `;` as separator and a decimal comma, so that Excel set to Spanish opens it in columns. A later ingestion does not change it. A month with no closing answers `month_not_closed`.
 
 - **The ingestion and the unlinking still rewrite the delivery of a closed month.** The nightly runs replace D-7 to D-1 and a range run replaces its range whatever the closing, and unlinking a line removes its delivery. The stored delivery keeps being the DSP's latest truth, but no figure of a closed flight, line, campaign or total changes. A run prints how many of its days fell in a closed month (`closed_month_days`).
-- **The margin screen flags a closed flight whose delivery changed.** When the delivery stored now would move its margin by 1.00 € or more, or its delivered volume by 1 % or more, the flight is tagged «Cambió tras el cierre», with the margin it would have with today's delivery and the differences. That margin uses the closing's rebate and rates, only the delivery changes, and no total adds it. Lines, campaigns and the period count the tagged flights. A closed month is not reopened: if the new delivery is right, the difference is settled outside the application.
-- **A month may be closed more than once.** A flight registered in a month already closed stays pending close, and blocks closing the later months of its year (`previous_month_open`), until the month is closed again. That closing freezes it under a second header, the closing response says how many headers the month holds (`closings`), and the figures of the earlier closing do not change.
-- **A month with a target flight waits for its DSP.** It cannot be closed until that DSP has a succeeded run whose window includes the month's last day: the closing answers `month_delivery_not_loaded` until then.
+- **The margin screen flags a closed flight whose delivery changed.** When the delivery stored now would move its margin by 1.00 € or more, or its delivered volume by 1 % or more, the flight is tagged «Cambió tras el cierre», with the margin it would have with today's delivery and the differences. That margin uses the closing's rebate, rates, cap and billing basis, only the delivery changes, and no total adds it. Lines, campaigns and the period count the tagged flights. A closed month is not reopened: if the new delivery is right, the difference is settled outside the application.
+- **A month may be closed more than once.** A flight registered in a month already closed stays pending close, its campaign is pending review, and it blocks closing the later months of its year (`previous_month_open`) until the campaign is reviewed and the month is closed again. That closing freezes it under a second header, the closing response says how many headers the month holds (`closings`), and the figures of the earlier closing do not change.
 
 ## 13. Backups
 

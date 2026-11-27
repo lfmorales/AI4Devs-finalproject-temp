@@ -76,8 +76,8 @@ Instrucciones de despliegue, ingesta, carga de histórico y copias de seguridad:
 
 Implementado:
 
-- **Margen por flight** (línea × mes): en una línea comprometida, ingreso sobre el volumen contratado y el CPM de venta (en una línea con objetivo, el que comunica su DSP: ver abajo), coste de medios (el coste de Adform), rebate y coste de plataforma. Cada importe se redondea a dos decimales antes de restar y los totales de línea y de campaña son la suma exacta de los de sus flights.
-- **Mes en curso**: en una línea comprometida, el ingreso y el rebate se devengan por días transcurridos del contrato hasta D-1 y se etiquetan como provisionales; los costes salen de lo entregado.
+- **Margen por flight** (línea × mes): en una línea comprometida, ingreso sobre el volumen contratado y el CPM de venta (desde `committed-billing-and-review`, su facturación: ver abajo; en una línea con objetivo, el que comunica su DSP), coste de medios (el coste de Adform), rebate y coste de plataforma. Cada importe se redondea a dos decimales antes de restar y los totales de línea y de campaña son la suma exacta de los de sus flights.
+- **Mes en curso**: en una línea comprometida, el ingreso y el rebate se devengaban por días transcurridos del contrato hasta D-1 y se etiquetan como provisionales; los costes salen de lo entregado. Desde `committed-billing-and-review` ya no se prorratea: un flight en curso factura lo entregado hasta D-1 (ver abajo).
 - **Motor de rebate**: escalera de seis pasos de resolución de tarifa, tramos marginales sobre un contador anual por grupo, agencia en excepción y canal, aplicado en orden cronológico.
 - **Cierre de mes** (`POST /margin/closings`): congela las tasas aplicadas (y, desde `closing-snapshot`, todas las cifras de cada flight: ver abajo), es idempotente y rechaza cerrar un mes si uno anterior del mismo año tiene flights terminados sin cerrar, nombrando el mes que bloquea.
 - **API de margen** (`GET /margin`) y maestros de tarifas de rebate y de tasa de plataforma, solo para el rol `finance`.
@@ -113,7 +113,7 @@ Limitaciones conocidas:
 
 Implementado:
 
-- **Foto del cierre**: cerrar un mes guarda, para cada flight terminado, todas las cifras que muestra (ingreso, coste de medios, rebate, coste de plataforma, margen, bruto, avisos y volúmenes) y la entrega con que se calcularon. Lo hace bajo una cabecera de cierre con el mes, el momento, el usuario, el último día contado y el último lote correcto de cada DSP. **Un mes cerrado se lee solo de su foto y no se mueve**: ni una reingesta, ni desvincular una línea, ni editar un maestro cambian sus cifras. Un mes se puede cerrar en cuanto su último día está cargado.
+- **Foto del cierre**: cerrar un mes guarda, para cada flight terminado, todas las cifras que muestra (ingreso, coste de medios, rebate, coste de plataforma, margen, bruto, avisos y volúmenes) y la entrega con que se calcularon. Lo hace bajo una cabecera de cierre con el mes, el momento, el usuario, el último día contado y el último lote correcto de cada DSP. **Un mes cerrado se lee solo de su foto y no se mueve**: ni una reingesta, ni desvincular una línea, ni editar un maestro cambian sus cifras. Un mes se puede cerrar en cuanto su último día está cargado (desde `committed-billing-and-review`, además, con todas sus campañas revisadas).
 - **Aviso «Cambió tras el cierre»**: un flight cerrado cuya entrega guardada movería ahora su margen 1,00 € o más, o su volumen entregado un 1 % o más, lleva el aviso. Junto a él se muestran el margen que tendría con la entrega de hoy y las diferencias. Ese margen usa la extraprima y las tarifas del cierre, solo cambia la entrega y ningún total lo suma. Las líneas, las campañas y el periodo cuentan los flights con aviso.
 - **Varios cierres de un mes**: un flight dado de alta en un mes ya cerrado lo cierra un cierre posterior, con su propia cabecera. La respuesta del cierre dice cuántas cabeceras tiene el mes (`closings`) y la pantalla avisa cuando son más de una; las cifras del cierre anterior no cambian.
 - **Ingesta**: `run_ingestion` sigue reemplazando los días de los meses cerrados y dice cuántos días de su ventana caen en ellos (`closed_month_days`).
@@ -124,6 +124,40 @@ Limitaciones conocidas:
 - Un mes cerrado **no se reabre**: si la nueva entrega es correcta, la diferencia se regulariza fuera de la aplicación.
 - El alta acepta flights en meses ya cerrados: quedan pendientes de cierre, y bloquean el cierre de los meses siguientes del año, hasta que el mes se cierra otra vez.
 - La tabla de flights de una línea es más ancha que la página y el detalle del aviso se lee desplazándola; la etiqueta del flight y los recuentos de línea, campaña y periodo se ven sin desplazar. Queda para la interfaz de la mesa.
+- Lo mismo pasa, a 1.600 px de ancho, con la tabla de «Estado» y con la de una línea de «Facturación» cuyo flight lleva «Arrastre facturable»: sus últimas columnas («Entregado» y siguientes en «Estado»; «Facturable a la fecha», «Ajuste» y «Acciones» en «Facturación») se leen desplazando la tabla dentro de su contenedor. Queda también para la interfaz de la mesa.
+
+---
+
+### Facturación de las líneas comprometidas y revisión del mes (`committed-billing-and-review`)
+
+Implementado:
+
+- **El ingreso de una línea comprometida es su facturación**: el menor entre lo entregado y su tope, dividido por mil y multiplicado por el CPM de venta, redondeado una vez, en la unidad del canal (OTS en DOOH). El tope es el volumen contratado del flight, más el arrastre cuando es facturable. Un flight terminado lo rotula «Facturable»; uno en curso, «Facturable a la fecha», con lo entregado hasta D-1 y **sin prorrateo** por días. El rebate se calcula sobre la facturación y el contador anual avanza con ella. Las líneas con objetivo siguen ingresando lo que comunica su DSP.
+- **Ajuste manual**: antes del cierre, operations y finance pueden fijar la facturación de un flight comprometido terminado a la regla del mínimo, a todo lo entregado, a lo contratado (su tope) o a un importe fijo de cero o más. El motivo es obligatorio y se guardan el autor y el momento. Los ajustes solo se añaden y manda el último; con las tres primeras bases la facturación sigue a la entrega hasta el cierre, y el importe fijo no se mueve. Una línea con objetivo y un flight ya cerrado no se ajustan.
+- **Arrastre**: operations y trading llevan, caso a caso, volumen no entregado al flight siguiente de la misma línea, con motivo, hasta lo que le faltó al anterior y nunca a un mes cerrado (de diciembre a enero, sí). El **objetivo de entrega** del flight que lo recibe pasa a ser su contratado más el arrastre, y lo leen el ritmo y la pantalla de estado. Trading ve los volúmenes y nunca un importe. La marca **«Arrastre facturable»**, falsa por defecto y solo de operations y finance, sube el tope de la facturación.
+- **Revisión del mes**: cada campaña tiene, en cada mes, un estado: «En curso», «Pendiente de revisión», «Revisada» o «Cerrada». Se marca revisada cuando todos sus flights del mes han terminado **y el DSP de cada uno ha cargado el último día del mes**, así que una campaña revisada nunca tiene la entrega incompleta, y una ingesta posterior no la reabre. La revisión se puede retirar. Un ajuste, un arrastre o un cambio de su marca la devuelven a «Pendiente de revisión».
+- **El cierre exige la revisión de todas las campañas del mes.** Comprueba, en este orden, que ningún mes anterior del año quede abierto (`previous_month_open`), que ninguna campaña del mes siga en curso (`month_not_reviewed`, que nombra todas las que bloquean), que cada DSP con flights del mes haya cargado su último día, también en las líneas comprometidas (`month_delivery_not_loaded`), y que no quede ninguna pendiente de revisión (`month_not_reviewed`). Así un mes nunca se cierra con un flight en curso.
+- **La foto del cierre guarda la facturación**: la base, el volumen facturable, el arrastre y su marca, y el ajuste en vigor. «Cambió tras el cierre» compara con la facturación que tendría hoy. Los meses cerrados antes de este change conservan su ingreso.
+- **Pantalla «Facturación»** (`/billing`, para operations y finance): abre en el mes anterior al de hoy en Madrid y deja elegir otro. Por campaña muestra su estado, con quién lo revisó y cuándo; por flight, contratado, arrastre, objetivo de entrega, entregado, volumen facturable, CPM, facturación y el ajuste en vigor con su motivo, autor y momento. Ofrece «Ajustar», «Historial», «Arrastre facturable», «Marcar como revisada» y «Quitar revisión», y «Descargar CSV» en un mes cerrado. Los rechazos se explican en español, con lo que hay que hacer. La pantalla no calcula ninguna cifra. En «Margen», «Cerrar mes» se apaga con el motivo «Hay campañas pendientes de revisión».
+- **Arrastre en «Estado»**: las columnas «Arrastre» y «Objetivo de entrega» en todas las filas, y «Registrar arrastre» para operations y trading.
+- **CSV de un mes cerrado** (`facturacion-AAAA-MM.csv`): una fila por flight, solo desde la foto del cierre, con cliente, agencia, campaña, línea, orden de compra, entregado, contratado, arrastre, facturable, CPM, importe, ajustado y motivo. Va en UTF-8 con marca de orden de bytes, `;` como separador y coma decimal, para que Excel en español lo abra en columnas. Una ingesta posterior no lo cambia.
+- **Autor visible**: cada revisión, ajuste, arrastre y marca lleva el nombre del usuario, o su correo si no tiene nombre.
+
+Limitaciones conocidas:
+
+- Un mes cerrado **no se reabre**: después del cierre no se puede ajustar un flight ni darle arrastre; una corrección se regulariza fuera de la aplicación.
+- La regla cambia 10 de las 51 filas comparadas de la hoja del mes cerrado (−1.258,41 € de ingreso): es una diferencia conocida, y las pruebas de aceptación calculan lo esperado con la regla desde las columnas de la hoja.
+- Sin motivo, el ajuste responde `validation_error`; con un motivo en blanco, `invalid_adjustment`. Los dos son 422 y el diálogo de ajuste muestra el mismo mensaje.
+- La siembra de demostración deja el mes anterior pendiente de revisión y sin arrastre: cada prueba E2E crea las revisiones, ajustes y arrastres que comprueba.
+- Nueve copias del cliente de la API siguen fuera de `lib/api/browser-client.ts` (campañas, catálogo y excepciones): deuda anotada en `tasks.md`.
+
+### Cómo se cierra un mes (para Finanzas)
+
+1. **Abre «Facturación».** Propone el mes anterior. Cada campaña muestra su estado: «En curso», «Pendiente de revisión», «Revisada» o «Cerrada».
+2. **Revisa cada campaña.** Mira, por flight, lo entregado, el volumen facturable y la facturación. Si un flight debe facturarse de otra forma, pulsa «Ajustar» y elige la base (o un importe fijo) con su motivo. Si un arrastre debe facturarse, marca «Arrastre facturable». Los dos devuelven la campaña a «Pendiente de revisión».
+3. **Marca cada campaña como revisada.** Si la aplicación responde que un DSP aún no ha cargado el último día del mes, espera a la ingesta de ese día y vuelve a marcarla.
+4. **Cierra el mes** en «Margen»: elige el mes y pulsa «Cerrar mes». El botón está apagado, con el motivo, mientras quede una campaña sin revisar. El cierre congela todas las cifras y **no se puede deshacer**.
+5. **Descarga el CSV** en «Facturación» con «Descargar CSV»: `facturacion-AAAA-MM.csv`, listo para abrir en Excel.
 
 ### Diferencias con la hoja de origen (Qlik), explicadas
 
@@ -136,7 +170,7 @@ Limitaciones conocidas:
 
 ### Limitaciones conocidas (margen)
 
-- En una línea comprometida, el **ingreso es el importe de la orden de compra**, que es la base de facturación. El margen no refleja los **ajustes de fin de mes** (por infraentrega o campañas paradas): un mes cerrado usa la venta contratada. En el mes cerrado verificado, ajustar a lo entregado las campañas infraentregadas habría reducido la venta en menos del 1 % y el margen en torno al 1,6 %. Mejora prevista: registrar el ajuste de cada flight mientras está pendiente de cierre, con motivo, como base del ingreso y del rebate; el cierre lo congelaría. La pantalla muestra lo entregado frente a lo contratado para detectar los candidatos.
+- **Resuelto en `committed-billing-and-review`:** el ingreso de una línea comprometida ya no es el importe de la orden de compra. Es su facturación, el menor entre lo entregado y lo contratado, y antes del cierre se puede ajustar por flight con motivo; el cierre congela el ajuste en vigor (ver arriba).
 - Las campañas **sin volumen contratado** y los píxeles sin coste de compra no se contemplan en esta versión.
 - Una línea con **precio 0 y volumen** se admite como excepción de precio y se marca «Sin venta»; su margen es el coste en negativo y su porcentaje no se calcula.
 - Un flight **sin tarifa de rebate** avanza igualmente el contador del grupo (supuesto pendiente de confirmar con Finanzas).
@@ -179,7 +213,10 @@ Vista consultable por los equipos de operaciones y negocio con el estado y el re
 **5. Cálculo de márgenes**
 Cruce del rendimiento obtenido con los datos maestros —precios de venta y extraprima por agencia, entre otros— para que el equipo financiero disponga del margen de cada campaña y de los acumulados por período, tipo de campaña y agencia. Es la función que sustituye a Qlik Sense.
 
-**6. Gestión de datos maestros y configuración**
+**6. Facturación y revisión del mes**
+Cada flight de una línea comprometida factura el menor entre lo entregado y lo contratado. Operaciones y finanzas lo ajustan con motivo, revisan cada campaña antes de cerrar el mes y descargan, del mes cerrado, el CSV de facturación. Trading lleva el volumen no entregado al flight siguiente sin ver importes.
+
+**7. Gestión de datos maestros y configuración**
 Mantenimiento administrativo (alta, consulta, modificación y baja) de los parámetros que alimentan el cálculo de márgenes: extraprimas por agencia, costes, precios de venta y demás configuración asociada. Accesible para el rol financiero.
 
 ### **1.3. Diseño y experiencia de usuario:**
@@ -552,14 +589,17 @@ El modelo de autorización completo está en [Base Standards § Authorization Mo
 
 El desarrollo sigue TDD: toda funcionalidad nueva empieza por un test que falla.
 
-**Estado actual (change `closing-snapshot`, 26 de noviembre de 2026):** todas las suites pasan, cada una ejecutada dos veces con los mismos resultados:
+**Estado actual (change `committed-billing-and-review`, 27 de noviembre de 2026):** todas las suites pasan, cada una ejecutada dos veces con los mismos resultados:
 
-- **2.830** tests recogidos en el backend (más 1 deseleccionado, el marcado `slow`; 0 saltados), con las **39** pruebas de aceptación de margen incluidas, que leen las dos hojas privadas de `backend/tests/private/` (ignoradas por Git). Ningún test puede llegar a la API real de Equativ: una fixture `autouse` de `backend/tests/conftest.py` corta cualquier petición a sus hosts, y los clientes de los tests usan un Equativ falso.
-- **665** en Vitest (66 ficheros), con `tsc --noEmit` sin errores.
+- **3.436** tests recogidos en el backend (más 1 deseleccionado, el marcado `slow`; 0 saltados), con las **43** pruebas de aceptación de margen incluidas, que leen las dos hojas privadas de `backend/tests/private/` (ignoradas por Git). Desde la base del change hay 606 más, contados commit a commit, y los 46 que no se recogen con su nombre anterior están todos identificados: cambiaron de nombre al invertirse o al cambiar su cifra. Ningún test puede llegar a la API real de Equativ: una fixture `autouse` de `backend/tests/conftest.py` corta cualquier petición a sus hosts, y los clientes de los tests usan un Equativ falso.
+- **746** en Vitest (71 ficheros), con `tsc --noEmit` sin errores.
 - **48** en `node --test` de `e2e/` y **15** en los scripts de la raíz (`scripts/*.test.mjs`).
-- **45** en Playwright, sobre la pila Docker con los datos recién sembrados por `e2e/scripts/reset-data.sh`.
+- **49** en Playwright (8 ficheros), sobre la pila Docker con los datos recién sembrados por `e2e/scripts/reset-data.sh`, sin ningún salto.
+- **47** llamadas con curl y **68** comprobaciones sobre sus campos, contra la pila de desarrollo.
 
-Informes de este change: [paso 10, revisión de los tests](./docs/reports/2026-11-26-step-10-test-review.md) · [paso 11, suites y estado de la base](./docs/reports/2026-11-26-step-11-unit-test-and-db-verification.md) · [paso 12, comprobaciones con curl y ejecución real de la ingesta](./docs/reports/2026-11-26-step-12-curl.md) · [paso 13, E2E y margen cerrado en el navegador](./docs/reports/2026-11-26-step-13-e2e.md).
+Informes de este change: [paso 13, revisión de los tests](./docs/reports/2026-11-26-step-13-test-review.md) · [paso 14, suites y estado de la base](./docs/reports/2026-11-27-step-14-unit-test-and-db-verification.md) · [paso 15, comprobaciones con curl](./docs/reports/2026-11-27-step-15-curl.md) · [paso 16, E2E y revisión en navegador](./docs/reports/2026-11-27-step-16-e2e.md).
+
+Informes del change `closing-snapshot` (26 de noviembre de 2026): [paso 10, revisión de los tests](./docs/reports/2026-11-26-step-10-test-review.md) · [paso 11, suites y estado de la base](./docs/reports/2026-11-26-step-11-unit-test-and-db-verification.md) · [paso 12, comprobaciones con curl y ejecución real de la ingesta](./docs/reports/2026-11-26-step-12-curl.md) · [paso 13, E2E y margen cerrado en el navegador](./docs/reports/2026-11-26-step-13-e2e.md).
 
 Informes del change `equativ-deals` (25 de noviembre de 2026): [paso 16, revisión de los tests](./docs/reports/2026-11-25-step-16-test-review.md) · [paso 17, suites y estado de la base](./docs/reports/2026-11-25-step-17-unit-test-and-db-verification.md) · [paso 18, comprobaciones con curl y ejecución real de Equativ](./docs/reports/2026-11-25-step-18-curl.md) · [paso 19, E2E y revisión en navegador](./docs/reports/2026-11-25-step-19-e2e.md).
 
@@ -571,11 +611,11 @@ Informes del change `entra-auth-and-roles` (18 de noviembre de 2026): [paso 13, 
 |---|---|---|
 | **Tests de dominio** | `pytest` (backend) | Reglas de negocio puras sin base de datos: expansión de períodos, versionado de órdenes de compra, modelo económico (ingreso, extraprima escalonada, coste de plataforma y margen), ritmo de entrega en `Decimal` y totales de margen. |
 | **Tests de API** | `pytest` + `httpx` contra FastAPI + PostgreSQL real | Endpoints reales: códigos de estado, esquemas, autenticación con tokens de Entra y del emisor de pruebas, y **aplicación de roles en los endpoints protegidos por rol**. Base de pruebas (`adops360_test`) recreada al inicio de cada ejecución. |
-| **Tests de infraestructura y migraciones** | `pytest` contra PostgreSQL real | Modelos, repositorios y coherencia entre cada migración Alembic y los modelos, con prueba de subida y bajada. Incluidos en los 2.830 tests de backend. |
-| **Tests unitarios frontend** | `Vitest` + Testing Library | 665 tests en 66 ficheros, entorno jsdom. Comportamiento de componentes, formato de cifras, pantallas de estado y margen (con objetivo, bruto, avisos y «Cambió tras el cierre»), formulario de alta, mapeo de Equativ, layout de autenticación. Aprobados dos veces consecutivas. |
+| **Tests de infraestructura y migraciones** | `pytest` contra PostgreSQL real | Modelos, repositorios y coherencia entre cada migración Alembic y los modelos, con prueba de subida y bajada. Incluidos en los 3.436 tests de backend. |
+| **Tests unitarios frontend** | `Vitest` + Testing Library | 746 tests en 71 ficheros, entorno jsdom. Comportamiento de componentes, formato de cifras, pantallas de estado (con arrastre y objetivo de entrega), margen (con objetivo, bruto, avisos, «Facturable» y «Cambió tras el cierre») y facturación (ajuste, revisión, marca del arrastre, CSV y autor), formulario de alta, mapeo de Equativ, layout de autenticación. Aprobados dos veces consecutivas. |
 | **Verificación de tipos** | TypeScript `tsc --noEmit` | ✓ Paso: sin errores de tipo en frontend. |
 | **Scripts** | `node --test` | 48 tests de `e2e/` (emisor de pruebas y sesiones, comprobación del proyecto Compose, `reset-data.sh`, elección de maestros y compromiso de volumen) y 15 de los scripts de la raíz (nombre del proyecto Compose, claves del emisor de pruebas). |
-| **End-to-end** | `Playwright` | 45 casos en 7 ficheros contra la aplicación desplegada en Docker, con el emisor de pruebas: registro de campañas (también una línea Deal con objetivo), estado, margen y cierre de mes, excepciones, navegación y matriz de roles, incluidas las campañas DOOH y Deal de demostración. Ninguno llama a Equativ. |
+| **End-to-end** | `Playwright` | 49 casos en 8 ficheros contra la aplicación desplegada en Docker, con el emisor de pruebas: registro de campañas (también una línea Deal con objetivo), estado (con un arrastre escrito por trading), margen y cierre de mes, facturación de punta a punta (ajuste, revisión, cierre y CSV), excepciones, navegación y matriz de roles, incluidas las campañas DOOH y Deal de demostración. Ninguno llama a Equativ. |
 | **Integración frontend-backend** | Tests E2E + backend real | Cubierta por los E2E anteriores: el frontend corre contra el backend real y la base real del compose. |
 
 Tres criterios concretos que la estrategia impone:
@@ -588,7 +628,7 @@ Tres criterios concretos que la estrategia impone:
 |---|---|---|
 | Operaciones | Registrar una campaña desde la orden de compra, mapearla al DSP y revisar una excepción de ingesta | **Cubierto en parte.** Registro de campañas y sus rechazos (`campaign.spec.ts`); lectura de la cola, filtros, resolución y vínculo de una fila sin casar a una línea, que crea el mapeo (`exceptions.spec.ts`). El mapeo desde el Catálogo Adform, y el de un paquete de Equativ, no tienen E2E propio (cubiertos por Vitest y por las comprobaciones con curl del paso 18) |
 | Negocio | Crear una oferta comercial y seguirla hasta convertirse en campaña | **No aplica en la fase 1**: la oferta comercial es de la fase 3. El perfil `business` se cubre en la matriz de roles (`roles-matrix.spec.ts`) y con la lectura del estado diario |
-| Financiero | Consultar el margen de campaña y los acumulados por periodo | **Cubierto.** Margen por campaña, línea y flight con sus estados, totales del periodo, avisos, unidad de entrega, el ejemplo resuelto de la demo de Deal («Venta objetivo» y «Bruto») y cierre de mes real e idempotente (`margin.spec.ts`). Sin E2E de la exportación a Excel o CSV |
+| Financiero | Consultar el margen de campaña y los acumulados por periodo | **Cubierto.** Margen por campaña, línea y flight con sus estados, totales del periodo, avisos, unidad de entrega, el ejemplo resuelto de la demo de Deal («Venta objetivo» y «Bruto») y cierre de mes real e idempotente (`margin.spec.ts`); en `billing.spec.ts`, finanzas revisa y ajusta un flight, operaciones cierra el mes y descarga el CSV, comprobado contra la API |
 | Varios roles | Un usuario que acumula roles | **Cubierto.** `finance` + `trading` y `business` + `trading` en `roles-matrix.spec.ts` |
 
 El detalle está en [Backend Standards § Testing Standards](./docs/backend-standards.md#testing-standards) y [Frontend Standards § Testing Standards](./docs/frontend-standards.md#testing-standards).
@@ -605,7 +645,7 @@ El detalle está en [Backend Standards § Testing Standards](./docs/backend-stan
 
 El esquema es **uno solo**. Se presenta en dos vistas porque más de treinta entidades en un único diagrama no se leen. Las entidades que aparecen en ambas —`agencies`, `advertisers`, `dsps`, `channels`, `campaign_types`, `campaign_lines`— son la costura entre las dos vistas, no copias de un modelo distinto.
 
-**Estado de implementación (entrega final).** La base de datos tiene **29 tablas** (migración `439b6b8481f8`) y el diagrama refleja el esquema real. Respecto al diseño de la entrega 1 y a la entrega 2:
+**Estado de implementación (entrega final).** La base de datos tiene **34 tablas** (migración `f1c6d2b84a57`) y el diagrama refleja el esquema real. Respecto al diseño de la entrega 1 y a la entrega 2:
 
 | Cambio | Detalle |
 |---|---|
@@ -615,6 +655,7 @@ El esquema es **uno solo**. Se presenta en dos vistas porque más de treinta ent
 | **Excepciones con entrega retenida** | `ingestion_exceptions` tiene dos tipos (`unmatched_delivery`, `missing_delivery`) y `ingestion_exception_deliveries` conserva la entrega mientras no hay línea |
 | **`applied_rates` por flight, con desglose** | Una fila por flight cerrado, con la posición del contador antes y después, y `applied_rate_brackets` con el desglose por tramo |
 | **Nuevo: foto del cierre** (`month_closings`, `month_closing_batches`, `closed_flight_snapshots`) | Una cabecera por cierre que congela algo, con el último lote correcto de cada DSP, y una foto por flight cerrado con todas sus cifras y la entrega con que se calcularon. Un flight cerrado se lee de su foto |
+| **Nuevo: facturación y revisión** (`flight_billing_adjustments`, `campaign_period_reviews`, y columnas en `campaign_line_periods` y `closed_flight_snapshots`) | Los ajustes de la facturación de un flight y los eventos de revisión de una campaña en un mes, los dos solo de inserción; el arrastre y su marca de facturable en el flight que lo recibe; y la facturación congelada en la foto del cierre |
 | **Sin tabla en esta entrega** | `commercial_offers` (ofertas comerciales, fase 3) y `rebate_accruals` (devengado frente a liquidado: el contador se recorre en orden cronológico y su posición queda congelada en `applied_rates`) |
 
 #### Vista 1 — Núcleo operativo: de la orden de compra a la entrega diaria
@@ -682,6 +723,29 @@ erDiagram
         date flight_start
         date flight_end "inicio no posterior al fin"
         bigint contracted_impressions "volumen del mes"
+        bigint carryover "arrastre recibido, 0 por defecto"
+        text carryover_reason "nullable: obligatorio con arrastre"
+        int carryover_set_by FK "nullable"
+        boolean carryover_billable "falso por defecto"
+        int carryover_billable_set_by FK "nullable"
+    }
+    flight_billing_adjustments {
+        bigint id PK
+        int campaign_line_period_id FK
+        string basis "minimum, delivered, contracted o custom"
+        numeric amount "nullable: solo y siempre con custom"
+        text reason "no vacio"
+        int created_by FK
+        timestamp created_at
+    }
+    campaign_period_reviews {
+        bigint id PK
+        int campaign_period_id FK
+        string kind "reviewed o reopened"
+        string cause "nullable: por que se reabrio"
+        int campaign_line_period_id FK "nullable: el flight editado"
+        int created_by FK
+        timestamp created_at
     }
     dsp_mappings {
         int id PK
@@ -751,6 +815,11 @@ erDiagram
         numeric delivered
         string delivery_metric
         string volume_commitment
+        string billing_basis "nullable: fotos de antes"
+        numeric billable "nullable"
+        bigint carryover "nullable"
+        boolean carryover_billable "nullable"
+        bigint billing_adjustment_id FK "nullable: el ajuste congelado"
     }
     applied_rate_brackets {
         bigint id PK
@@ -864,6 +933,13 @@ erDiagram
     month_closings    ||--o{ month_closing_batches : "nombra el ultimo lote de cada DSP"
     ingestion_batches ||--o{ month_closing_batches : "es el ultimo lote al cerrar"
     users             ||--o{ month_closings : "cierra"
+    campaign_line_periods ||--o{ flight_billing_adjustments : "se ajusta con"
+    users             ||--o{ flight_billing_adjustments : "ajusta"
+    flight_billing_adjustments |o--o{ closed_flight_snapshots : "queda congelado en"
+    campaign_periods  ||--o{ campaign_period_reviews : "se revisa en"
+    campaign_line_periods |o--o{ campaign_period_reviews : "reabre por una edicion de"
+    users             ||--o{ campaign_period_reviews : "revisa o reabre"
+    users             |o--o{ campaign_line_periods : "fija el arrastre y su marca"
     dsps              ||--o{ dsp_catalog_lines : "publica"
     ingestion_exceptions ||--o{ ingestion_exception_deliveries : "retiene la entrega de"
     campaign_periods  |o--o{ ingestion_exceptions : "ausencia en el mes de"
@@ -1037,18 +1113,20 @@ El desgaje es **por canal**, no global, porque la excepción se negocia por cana
 |---|---|---|---|
 | `commercial_offers` | Oferta del equipo de negocio, previa a la OC. **Fase 3, sin tabla en esta entrega.** | `id` PK · `offer_reference` UNIQUE · `agency_id` FK · `advertiser_id` FK · `status` · `presented_on` · `accepted_on` · `net_budget` · `currency` | Columna `OF` (47% de relleno) y el bloque `Estatus Agencias BEYUP` del Qlik, que ya define el embudo `OFERTA → GANADA` |
 | `purchase_orders` | Orden de compra que envía el cliente y que da de alta la campaña. | `id` PK · `order_reference` UNIQUE · `received_on` | Columna `OC` (38% de relleno, 47 OC distintas, 11 de ellas con más de una campaña) |
-| `purchase_order_versions` | **La OC se versiona, no se sobrescribe.** Una campaña que paró antes de tiempo se factura al menor entre contratado y servido, mediante abono u OC revisada, y el ingreso, la base de extraprima y la acumulación de tramos leen siempre la versión en vigor. | `id` PK · `purchase_order_id` FK · `version_number` · `issued_on` · `revision_reason` · `is_in_force` | Decisión del PO (2026-09-17). No existe en los ficheros |
+| `purchase_order_versions` | **La OC se versiona, no se sobrescribe.** Una campaña que paró antes de tiempo se factura al menor entre contratado y servido; desde `committed-billing-and-review` lo calcula el sistema por flight, sin abono ni OC revisada, y la facturación nunca reescribe la OC. Una revisión de la OC sigue siendo un hecho comercial. | `id` PK · `purchase_order_id` FK · `version_number` · `issued_on` · `revision_reason` · `is_in_force` | Decisión del PO (2026-09-17). No existe en los ficheros |
 | `campaigns` | Cabecera de campaña. | `id` PK · `name` · `display_name` · `agency_id` FK **NOT NULL** · `advertiser_id` FK · `purchase_order_id` FK ***nullable*** · `campaign_type_id`/`sector_id`/`sales_rep_id` FK · `status` · `start_date` · `end_date` | `campaign`, `CAMPAÑA`, `customer`, `brand`. La FK a la OC es **nullable a propósito**: solo el 38% de las filas actuales trae referencia de OC |
 | `campaign_periods` | **Mes natural como entidad de primer nivel.** Es como el negocio piensa (`period` = `agosto`), como se compromete el presupuesto y como consolida el equipo financiero. Aplanarlo a un rango de fechas perdería la forma de trabajar del equipo. **En la entrega final solo es calendario:** las líneas ya no cuelgan de él y el volumen por mes vive en `campaign_line_periods`. | `id` PK · `campaign_id` FK · `period_year` · `period_month` · `period_start` · `period_end` · `status` | El grano real de `Campaigns`: 259 filas para 113 campañas, una por mes |
 | `campaign_lines` | La línea es donde viven las tarifas y los volúmenes, porque `cpm_estandar` ya varía entre filas de una misma campaña (21 valores distintos, de 2 € a 31,25 €). **Cuelga de la campaña y tiene fechas propias**: puede empezar o acabar dentro del rango de la campaña. El CPM de venta puede ser 0 (excepción de precio, que el margen marca como «Sin venta»); el volumen contratado, nunca. | `id` PK · `campaign_id` FK · `line_number` · `start_date` · `end_date` · `purchase_order_version_id` FK *nullable* · `dsp_id`/`channel_id`/`format_id` FK · `scope` · `market_description` · `contracted_impressions` · `sale_cpm` · `currency` · `volume_commitment` (`committed`\|`target`, `NOT NULL`, por defecto `committed`; la línea lo declara y nunca se deduce del canal) | `target_impressions_estandar`, `cpm_estandar`, `trading`, `tipo_plataforma`, `tipo_formato`, `location`. `(campaign_id, line_number)` único |
-| `campaign_line_periods` | **El flight: la parte de una línea que cae en un mes natural.** Reparte el volumen contratado por mes, en proporción a los días o con los volúmenes que fija el usuario, y es la unidad sobre la que se calcula el margen, se cierra el mes y se congelan las tasas. | `id` PK · `campaign_line_id` FK · `campaign_period_id` FK · `flight_start` · `flight_end` · `contracted_impressions` | Corrección de modelo del propietario del producto: la línea no pertenece a un mes, el volumen sí. `(campaign_line_id, campaign_period_id)` único y `flight_start <= flight_end` |
+| `campaign_line_periods` | **El flight: la parte de una línea que cae en un mes natural.** Reparte el volumen contratado por mes, en proporción a los días o con los volúmenes que fija el usuario, y es la unidad sobre la que se calcula el margen, se cierra el mes y se congelan las tasas. | `id` PK · `campaign_line_id` FK · `campaign_period_id` FK · `flight_start` · `flight_end` · `contracted_impressions` · `carryover` (≥ 0, 0 por defecto) · `carryover_reason`/`carryover_set_by` FK/`carryover_set_at` (obligatorios con arrastre) · `carryover_billable` (falso por defecto) · `carryover_billable_set_by` FK/`carryover_billable_set_at` (obligatorios con la marca) | Corrección de modelo del propietario del producto: la línea no pertenece a un mes, el volumen sí. `(campaign_line_id, campaign_period_id)` único y `flight_start <= flight_end`. El arrastre (change `committed-billing-and-review`) vive en el flight que lo recibe: su objetivo de entrega es `contracted_impressions + carryover`, y el contratado no cambia |
 | `dsp_mappings` | **Clave foránea real contra el DSP**, en sustitución del nombre de campaña troceado por posición que hoy sostiene todo el modelo financiero. Es la mitigación del riesgo principal del proyecto. | `id` PK · `campaign_line_id` FK · `dsp_id` FK · `external_campaign_id` · `external_line_item_id` · `validated_at` | Requisito de [§7](./docs/product-description.md). Una línea activa sin mapeo es estado **bloqueante**, no aviso. `(dsp_id, external_campaign_id, external_line_item_id)` único: una pareja externa solo se enlaza a una línea. En Equativ la pareja es el `auctionPackageDealId` en los dos identificadores, que operaciones escribe y cuenta como validado por el usuario |
 | `dsp_catalog_lines` | **Catálogo de las líneas que Adform y Equativ han entregado** (en Equativ, un paquete por fila, sin fechas de línea), con sus nombres y fechas. Se actualiza con cada ingesta (primera y última fecha vista, y última con impresiones) y permite **vincular** una excepción a una línea de AdOps360 sin escribir identificadores a mano. | `id` PK · `dsp_id` FK · `external_campaign_id` · `external_line_item_id` · `campaign_name` · `line_item_name` · `line_start_date`/`line_end_date` *nullable* · `first_seen_date` · `last_seen_date` · `last_impressions_date` *nullable* | `(dsp_id, external_campaign_id, external_line_item_id)` único. Nace de las dimensiones de nombre y fechas que devuelve la API de reporting de Adform, y del nombre del paquete en el informe de Equativ |
 | `applied_rates` | Tasa de extraprima y tarifa de plataforma **congeladas al cerrar el mes**, **una fila por flight**, con su procedencia: qué escalón de la escalera de resolución las produjo (1 a 6, u 8 si no hay escala), de qué año venía la tabla y si salió de una excepción de agencia. Guarda la **posición del contador anual antes y después del flight** y el importe del rebate. Sin ese dato, un 25% negociado con una agencia concreta y el 25% heredado de su grupo son indistinguibles al revisar un margen. | `id` PK · `campaign_line_period_id` FK único · `rebate_schedule_id` FK *nullable* · `ladder_step` · `source_year` *nullable* · `agency_exception` · `zero_reason` *nullable* · `effective_rate` · `counter_group_id`/`counter_agency_id`/`counter_channel_id`/`counter_year` · `position_before` · `position_after` · `rebate_amount` · `platform_rate` · `revenue_amount`/`rebate_base_amount` (`Numeric(24,12)`, *nullable*, los dos o ninguno: el ingreso comunicado y el bruto de un flight `target` al cerrar, para que una reexpresión del DSP no los mueva) · `closed_at` · `closed_by` FK | Decisión de [§5.9](./docs/product-description.md). Se escribe una vez, al cerrar el mes: una cifra financiera que cambia sola cuando alguien edita un maestro no es auditable. El escalón 7 (arrastre de la tabla anterior) queda aplazado |
 | `applied_rate_brackets` | Desglose por tramo del rebate de un flight: **qué parte del importe cayó en cada tramo y cuánta extraprima generó**. Sin él, un importe no se podría reconstruir tras cambiar la escala. | `id` PK · `applied_rate_id` FK · `position` · `lower` · `upper` *nullable* · `rate` · `amount` · `rebate` | `(applied_rate_id, position)` único |
 | `month_closings` | **Cabecera de un cierre de mes**: una por cada cierre que congela algún flight. Un mes está cerrado cuando tiene al menos una; tiene más cuando un flight dado de alta después de cerrarlo se cierra en un cierre posterior. | `id` PK · `period_year` · `period_month` (1 a 12) · `closed_at` · `closed_by` FK · `as_of` (último día contado) | Change `closing-snapshot`. Solo inserción, con el mismo trigger que `applied_rates`; índice no único por (`period_year`, `period_month`) |
 | `month_closing_batches` | **Con qué entrega se cerró**: el último lote correcto de cada DSP de las líneas que el cierre congeló. | `month_closing_id` FK · `dsp_id` FK (los dos, PK) · `ingestion_batch_id` FK | Un DSP sin lote correcto no se nombra. Solo inserción |
-| `closed_flight_snapshots` | **La foto de un flight cerrado**: todas las cifras que muestra y la entrega con que se calcularon. Un flight cerrado se lee de aquí, sin volver a calcular nada; la entrega guardada después solo alimenta el aviso «Cambió tras el cierre». | `id` PK · `applied_rate_id` FK único · `month_closing_id` FK · `revenue`/`contracted_revenue`/`media_cost`/`rebate`/`platform_cost`/`margin` (`Numeric(18,2)`) · `gross_revenue` (`Numeric(18,2)`, *nullable*: solo y siempre en un flight `target`) · `delivered_impressions` · `delivered` (`Numeric(18,4)`) · `window_media_cost`/`window_reported_revenue`/`window_buyer_spend`/`window_data_cost` (`Numeric(18,6)`) · `gross_differs_from_buyer_spend` · `data_cost_reported` · `delivery_metric` · `sale_cpm` · `contracted_impressions` · `volume_commitment` | Change `closing-snapshot`. Solo inserción. Todas las columnas son `NOT NULL` salvo `gross_revenue`. La migración rechaza una base con flights cerrados de antes, porque no puede reconstruir su foto |
+| `closed_flight_snapshots` | **La foto de un flight cerrado**: todas las cifras que muestra y la entrega con que se calcularon. Un flight cerrado se lee de aquí, sin volver a calcular nada; la entrega guardada después solo alimenta el aviso «Cambió tras el cierre». | `id` PK · `applied_rate_id` FK único · `month_closing_id` FK · `revenue`/`contracted_revenue`/`media_cost`/`rebate`/`platform_cost`/`margin` (`Numeric(18,2)`) · `gross_revenue` (`Numeric(18,2)`, *nullable*: solo y siempre en un flight `target`) · `delivered_impressions` · `delivered` (`Numeric(18,4)`) · `window_media_cost`/`window_reported_revenue`/`window_buyer_spend`/`window_data_cost` (`Numeric(18,6)`) · `gross_differs_from_buyer_spend` · `data_cost_reported` · `delivery_metric` · `sale_cpm` · `contracted_impressions` · `volume_commitment` | Change `closing-snapshot`. Solo inserción. Todas las columnas son `NOT NULL` salvo `gross_revenue`. La migración rechaza una base con flights cerrados de antes, porque no puede reconstruir su foto. Desde `committed-billing-and-review` guarda también la facturación congelada: `billing_basis` (`minimum`, `delivered`, `contracted`, `custom` o `reported`), `billable` (`Numeric(18,4)`), `carryover`, `carryover_billable` y `billing_adjustment_id` FK, todas *nullable* para las fotos de antes, con comprobaciones que las exigen juntas |
+| `flight_billing_adjustments` | **Los ajustes de la facturación de un flight comprometido**, antes del cierre: la base, el importe si es fijo, el motivo, el autor y el momento. Manda el último; la foto del cierre congela el que estaba en vigor. | `id` PK · `campaign_line_period_id` FK · `basis` (`minimum`, `delivered`, `contracted` o `custom`) · `amount` (`Numeric(18,2)`, ≥ 0, solo y siempre con `custom`) · `reason` (no vacío) · `created_by` FK · `created_at` | Change `committed-billing-and-review`. Solo inserción: un trigger rechaza la actualización y el borrado |
+| `campaign_period_reviews` | **Los eventos de revisión de una campaña en un mes**: una revisión, o una reapertura con su causa (`withdrawn`, `adjustment`, `carryover` o `carryover_billable`) y el flight editado. El estado se lee del último evento; «En curso» y «Cerrada» salen de los flights. | `id` PK · `campaign_period_id` FK · `kind` (`reviewed` o `reopened`) · `cause` *nullable* · `campaign_line_period_id` FK *nullable* (solo con una edición) · `created_by` FK · `created_at` | Change `committed-billing-and-review`. Solo inserción, con el mismo trigger |
 
 #### Ingesta y entrega
 
@@ -1114,7 +1192,7 @@ Los escalones 1 a 3 son la novedad: **la extraprima se negocia normalmente con e
 
 ## 4. Especificación de la API
 
-AdOps360 expone **26 operaciones**. Todas, salvo `GET /api/health`, exigen un token válido y un rol (`operations`, `business`, `finance` o `trading`). Los importes viajan como **cadenas decimales**, nunca como números de coma flotante.
+AdOps360 expone **34 operaciones**. Todas, salvo `GET /api/health`, exigen un token válido y un rol (`operations`, `business`, `finance` o `trading`). Los importes viajan como **cadenas decimales**, nunca como números de coma flotante.
 
 | Método y ruta | Rol | Para qué | Respuestas |
 |---|---|---|---|
@@ -1134,10 +1212,18 @@ AdOps360 expone **26 operaciones**. Todas, salvo `GET /api/health`, exigen un to
 | `POST /api/margin/closings` · §4.8 | `operations`, `finance` | Cerrar un mes | 200, 409, 422 |
 | `POST /api/margin/rebate-schedules` · §4.9 | `operations` | Crear una escala de extraprima | 201, 409, 422 |
 | `POST /api/margin/platform-rates` · §4.9 | `operations` | Fijar una tarifa de plataforma | 201, 422 |
+| `GET /api/billing` · §4.11 | `operations`, `finance` | Facturación de un mes, con la revisión de cada campaña | 200, 404, 422 |
+| `POST /api/billing/flights/{id}/adjustments` · §4.11 | `operations`, `finance` | Ajustar la facturación de un flight | 201, 404, 409, 422 |
+| `GET /api/billing/flights/{id}/adjustments` · §4.11 | `operations`, `finance` | Historial de ajustes de un flight | 200, 404 |
+| `POST /api/billing/reviews` · §4.11 | `operations`, `finance` | Marcar revisada una campaña en un mes | 201, 200, 404, 409, 422 |
+| `POST /api/billing/reviews/withdrawals` · §4.11 | `operations`, `finance` | Retirar la revisión | 201, 404, 409, 422 |
+| `PUT /api/billing/flights/{id}/carryover/billable` · §4.11 | `operations`, `finance` | Marcar facturable el arrastre de un flight | 200, 404, 409, 422 |
+| `GET /api/billing/export` · §4.11 | `operations`, `finance` | CSV de la facturación de un mes cerrado | 200, 409, 422 |
+| `PUT /api/flights/{id}/carryover` · §4.11 | `operations`, `trading` | Arrastrar volumen no entregado al flight siguiente | 200, 404, 409, 422 |
 | `GET /api/users/me` · §4.10 | `operations`, `business`, `finance`, `trading` | Leer los roles propios | 200 |
 | `POST /api/users/activation` · §4.10 | `operations` | Activar o desactivar un usuario | 200, 404, 409, 422 |
 
-Los ejemplos de §4.4 a §4.8 salen de la **base de demostración** (`seed_margin_demo`, `seed_exceptions_demo`): son datos sintéticos, sin ninguna campaña ni importe real.
+Los ejemplos de §4.4 a §4.8 y de §4.11 salen de la **base de demostración** (`seed_margin_demo`, `seed_exceptions_demo`) o de las comprobaciones con curl del paso 15 (campañas `STEP15-…`): son datos sintéticos, sin ninguna campaña ni importe real.
 
 
 ### **4.1. POST /api/campaigns — Registrar campaña**
@@ -1371,6 +1457,8 @@ curl -X POST http://localhost/api/flights/preview \
     "line_number": 1,
     "flight": { "campaign_period_id": 9, "year": 2026, "month": 11, "start": "2026-11-01", "end": "2026-11-20" },
     "contracted_impressions": 487805,
+    "carryover": 0,
+    "delivery_target": 487805,
     "delivery_metric": "impressions",
     "delivered": "0.0000",
     "delivered_impressions": 0,
@@ -1386,6 +1474,8 @@ curl -X POST http://localhost/api/flights/preview \
     "line_number": 1,
     "flight": { "campaign_period_id": 8, "year": 2026, "month": 11, "start": "2026-11-10", "end": "2026-11-30" },
     "contracted_impressions": 484615,
+    "carryover": 0,
+    "delivery_target": 484615,
     "delivery_metric": "ots",
     "delivered": "250764.2500",
     "delivered_impressions": 12530,
@@ -1401,6 +1491,8 @@ curl -X POST http://localhost/api/flights/preview \
     "line_number": 1,
     "flight": { "campaign_period_id": 12, "year": 2026, "month": 11, "start": "2026-11-01", "end": "2026-11-30" },
     "contracted_impressions": 1500000,
+    "carryover": 0,
+    "delivery_target": 1500000,
     "delivery_metric": "impressions",
     "delivered": "1440000.0000",
     "delivered_impressions": 1440000,
@@ -1414,6 +1506,8 @@ curl -X POST http://localhost/api/flights/preview \
 ```
 
 **La unidad de cada fila.** `delivery_metric` es `impressions` u `ots` y dice en qué unidad van `contracted_impressions` (un entero), `delivered` (un texto decimal con cuatro decimales, tal como llega; el navegador lo muestra sin ceros de relleno), `delivery_ratio` (un número) y `pacing.expected_impressions` (un número), aunque sus nombres sigan diciendo «impresiones». `delivered_impressions` son siempre las impresiones reales, sea cual sea la métrica: en la fila DOOH hay 250.764,25 OTS sobre 12.530 impresiones. El ritmo se calcula sobre `delivered`. Un usuario con solo el rol `trading` recibe estos mismos campos, y ningún campo de dinero.
+
+**El arrastre y el objetivo de entrega** (change `committed-billing-and-review`). Cada fila lleva `carryover`, el volumen que el flight recibió del anterior de su línea (0 si no recibió nada), y `delivery_target`, su contratado más ese arrastre, en la misma unidad. `contracted_impressions` nunca incluye el arrastre. El ritmo, la desviación y `delivery_ratio` se miden contra `delivery_target`, sea o no facturable el arrastre. `flight.id` (que el ejemplo no repite) es el flight que recibe un arrastre en `PUT /api/flights/{flight_id}/carryover` (§4.11). `trading` recibe también estos volúmenes, y nunca la marca de facturable.
 
 **El aviso de ritmo según el compromiso.** `volume_commitment` es el de la línea. En una línea `committed`, `pacing_flag` se activa con cualquier desviación de más del 10 %, por debajo o por encima. En una línea `target` solo se activa por debajo: superar el objetivo no es un aviso, aunque `pacing.status` siga diciendo `over_delivering` y `deviation` la desviación (la fila de Deal del ejemplo va un 20 % por encima y no lleva aviso). La pantalla rotula «Objetivo» el volumen de esas filas. `volume_commitment` no es una cifra de dinero y lo recibe también `trading`.
 
@@ -1500,67 +1594,60 @@ curl -X POST http://localhost/api/flights/preview \
 
 **Rol requerido:** `operations` o `finance`
 
-**`GET /api/margin?year=2026&month=11&campaign_id=5`** (los tres parámetros son opcionales). Devuelve el margen por campaña, línea y flight, con totales en cada nivel que son la **suma exacta** del nivel inferior. Cada flight lleva su `state`: `running` (en curso: el ingreso y el rebate se devengan por los días transcurridos hasta `as_of`, que es el día anterior), `pending_close` (terminado y sin cerrar) o `closed` (leído de la **foto de su cierre**: ninguna cifra se vuelve a calcular). `provisional` es verdadero mientras el flight no está cerrado. `contracted_revenue` es la venta de la orden de compra completa; `revenue`, la devengada. `below_cost` marca un margen final negativo, `zero_sale` un CPM de venta 0, y `margin_pct` es `null` cuando no hay ingreso.
+**`GET /api/margin?year=2026&month=11&campaign_id=5`** (los tres parámetros son opcionales). Devuelve el margen por campaña, línea y flight, con totales en cada nivel que son la **suma exacta** del nivel inferior. Cada flight lleva su `state`: `running` (en curso hasta `as_of`, que es el día anterior), `pending_close` (terminado y sin cerrar) o `closed` (leído de la **foto de su cierre**: ninguna cifra se vuelve a calcular). `provisional` es verdadero mientras el flight no está cerrado. `contracted_revenue` es la venta de la orden de compra completa; `revenue`, la facturación. `below_cost` marca un margen final negativo, `zero_sale` un CPM de venta 0, y `margin_pct` es `null` cuando no hay ingreso.
+
+**Facturación de un flight comprometido** (change `committed-billing-and-review`). Su `revenue` es `billable` / 1000 × el CPM de venta, redondeado una vez, donde `billable` es el menor entre lo entregado (`delivered`, en la unidad del canal) y su tope: el volumen contratado, más el arrastre cuando es facturable. Un flight en curso factura lo entregado hasta `as_of`, **sin prorrateo** por días; `accrued_days` y `window_days` se siguen dando y no mueven ningún importe. El rebate se calcula sobre la facturación. Cada flight lleva `billable` (texto con cuatro decimales; `null` en un flight `target`, en un importe fijo y en un flight cerrado antes de este change) y `billing_basis`: `minimum` con la regla, `delivered`, `contracted` o `custom` con un ajuste en vigor (§4.11), `reported` en un flight `target`, y `null` en un flight cerrado antes. Las líneas, campañas y totales no suman `billable`.
 
 **Líneas con objetivo.** Cada flight lleva el `volume_commitment` de su línea. Un flight `committed` ingresa el volumen contratado por el CPM, como arriba. Un flight **`target`** (las líneas de `Deal`, que compran en Equativ) ingresa **lo que comunica su DSP** (`revenue`, el *curator margin* de Equativ), sin prorrateo en un mes en curso; `contracted_revenue` es la venta de su objetivo, y `gross_revenue`, las impresiones servidas por el CPM de venta, que es la base de su extraprima. `gross_revenue` es `null` en un flight `committed`. Dos avisos, que no cambian ningún importe: `gross_differs_from_buyer_spend` (el bruto se aleja más de un 1 % del gasto del comprador) y `data_cost_reported` (el DSP comunica costes de datos, que no se restan). Las líneas, campañas y totales llevan `gross_revenue` (la suma de los brutos de sus flights `target`, `null` si no hay), `gross_differs_count`, `data_cost_count` y el `volume_commitment` común, `null` si mezclan los dos. El ejemplo resuelto de un Deal cerrado (objetivo de 1.000.000 a 5,00 €, 1.100.000 servidas, 4.400,00 € comunicados y 5.500,00 € de gasto, extraprima plana del 10 % y plataforma de 1,00 €) da `revenue` `"4400.00"`, `contracted_revenue` `"5000.00"`, `gross_revenue` `"5500.00"`, `rebate` `"550.00"`, `platform_cost` `"1100.00"`, `margin` `"2750.00"` y `margin_pct` `"62.50"`.
 
+Ejemplo real de la demo sembrada, leído el 27 de noviembre de 2026: un flight en curso que contrató 746.667 impresiones a 6,00 € y entregó 553.330 hasta D-1 factura 553.330 / 1000 × 6,00 = 3.319,98 €, frente a una venta contratada de 4.480,00 €.
+
 ```json
 {
-  "as_of": "2026-11-02",
+  "as_of": "2026-11-26",
   "campaigns": [
     {
-      "campaign_id": 5,
-      "name": "DEMO-EXC-CAMPANA",
-      "status": "active",
-      "zero_sale": false,
+      "campaign_id": 2,
+      "name": "DEMO-MARGEN-CURSO",
       "lines": [
         {
-          "campaign_line_id": 5,
           "line_number": 1,
-          "channel": "DEMO Channel",
-          "scope": "national",
-          "zero_sale": false,
           "flights": [
             {
-              "flight_id": 9,
+              "flight_id": 2,
               "period_year": 2026,
               "period_month": 11,
-              "flight_start": "2026-11-01",
-              "flight_end": "2026-11-20",
+              "flight_start": "2026-11-17",
+              "flight_end": "2026-11-30",
               "state": "running",
               "provisional": true,
               "below_cost": false,
               "zero_sale": false,
-              "revenue": "243.90",
-              "contracted_revenue": "2439.03",
-              "accrued_days": 2,
-              "window_days": 20,
-              "delivered_impressions": 0,
-              "contracted_impressions": 487805,
+              "revenue": "3319.98",
+              "contracted_revenue": "4480.00",
+              "accrued_days": 10,
+              "window_days": 14,
+              "delivered_impressions": 553330,
+              "contracted_impressions": 746667,
               "delivery_metric": "impressions",
-              "delivered": "0.0000",
-              "media_cost": "0.00",
-              "rebate": "24.39",
-              "platform_cost": "0.00",
-              "margin": "219.51",
-              "margin_pct": "90.00",
+              "delivered": "553330.0000",
+              "media_cost": "885.33",
+              "rebate": "332.00",
+              "platform_cost": "553.33",
+              "margin": "1549.32",
+              "margin_pct": "46.67",
+              "rates": { "platform_rate": "1.000000", "effective_rebate_rate": "0.100000000000", "rebate_step": 6, "agency_exception": false, "zero_reason": null, "source_year": 2026 },
               "volume_commitment": "committed",
               "gross_revenue": null,
               "gross_differs_from_buyer_spend": false,
               "data_cost_reported": false,
               "delivery_changed": false,
               "delivery_change": null,
-              "rates": {
-                "platform_rate": "1.000000",
-                "effective_rebate_rate": "0.1000000000000000000000",
-                "rebate_step": 6,
-                "agency_exception": false,
-                "zero_reason": null,
-                "source_year": 2026
-              }
+              "billable": "553330.0000",
+              "billing_basis": "minimum"
             }
           ],
-          "totals": { "revenue": "243.90", "contracted_revenue": "2439.03", "delivered_impressions": 0, "contracted_impressions": 487805, "delivery_metric": "impressions", "delivered": "0.0000", "media_cost": "0.00", "rebate": "24.39", "platform_cost": "0.00", "margin": "219.51", "provisional": true, "flights_counted": 1, "below_cost_count": 0, "zero_sale_count": 0, "margin_pct": "90.00", "volume_commitment": "committed", "gross_revenue": null, "gross_differs_count": 0, "data_cost_count": 0, "delivery_changed_count": 0 }
+          "totals": { "revenue": "3319.98", "contracted_revenue": "4480.00", "delivered_impressions": 553330, "contracted_impressions": 746667, "delivery_metric": "impressions", "delivered": "553330.0000", "media_cost": "885.33", "rebate": "332.00", "platform_cost": "553.33", "margin": "1549.32", "provisional": true, "flights_counted": 1, "below_cost_count": 0, "zero_sale_count": 0, "margin_pct": "46.67", "volume_commitment": "committed", "gross_revenue": null, "gross_differs_count": 0, "data_cost_count": 0, "delivery_changed_count": 0 }
         }
       ],
       "totals": { … }
@@ -1570,7 +1657,9 @@ curl -X POST http://localhost/api/flights/preview \
 }
 ```
 
-**Volúmenes y unidad.** Cada flight, línea y campaña lleva `delivery_metric` (`impressions` u `ots`, la del canal de sus líneas), `contracted_impressions` (un entero en esa unidad), `delivered` (un texto decimal con cuatro decimales, en la misma unidad) y `delivered_impressions` (las impresiones reales, siempre). Un flight DOOH de 300.000 OTS que sirvió 280.000,50 OTS y 12.000 impresiones lleva `delivery_metric` `ots`, `contracted_impressions` 300000, `delivered` `"280000.5000"` y `delivered_impressions` 12000. El ingreso sigue saliendo del volumen contratado (1.500,00 € a 5,00 €) y el coste de plataforma de las impresiones reales (12,00 € a 1,00 € por mil). Los niveles superiores suman sus flights de forma exacta. Los **totales generales** mezclan campañas: si todas comparten métrica, la llevan y suman `contracted_impressions` y `delivered`; si hay más de una, **`delivery_metric`, `contracted_impressions` y `delivered` son `null`**, `delivered_impressions` se suma igualmente y los importes también.
+Se omiten algunos campos de la campaña y de la línea (`status`, `campaign_line_id`, `channel`, `scope`, `zero_sale`).
+
+**Volúmenes y unidad.** Cada flight, línea y campaña lleva `delivery_metric` (`impressions` u `ots`, la del canal de sus líneas), `contracted_impressions` (un entero en esa unidad), `delivered` (un texto decimal con cuatro decimales, en la misma unidad) y `delivered_impressions` (las impresiones reales, siempre). Un flight DOOH de 300.000 OTS que sirvió 280.000,50 OTS y 12.000 impresiones lleva `delivery_metric` `ots`, `contracted_impressions` 300000, `delivered` `"280000.5000"` y `delivered_impressions` 12000. El ingreso sale de los OTS facturables (280.000,50 × 5,00 / 1000 = 1.400,00 €) y el coste de plataforma de las impresiones reales (12,00 € a 1,00 € por mil). Los niveles superiores suman sus flights de forma exacta. Los **totales generales** mezclan campañas: si todas comparten métrica, la llevan y suman `contracted_impressions` y `delivered`; si hay más de una, **`delivery_metric`, `contracted_impressions` y `delivered` son `null`**, `delivered_impressions` se suma igualmente y los importes también.
 
 **Entrega cambiada tras el cierre.** Cada flight lleva `delivery_changed` y `delivery_change`. Un flight cerrado se compara con la entrega guardada ahora en su ventana: lleva `delivery_changed` verdadero cuando esa entrega movería su margen 1,00 € o más, o su volumen entregado un 1 % o más. `delivery_change` es `null` en un flight que no está cerrado. En uno cerrado es un objeto con las diferencias (lo actual menos lo congelado):
 
@@ -1582,12 +1671,14 @@ curl -X POST http://localhost/api/flights/preview \
 
 Es **informativo**: el margen actual usa la extraprima y las tarifas del cierre, solo cambia la entrega, y ningún importe ni total lo suma. Las líneas, campañas y totales llevan `delivery_changed_count`. Ejemplo: un flight comprometido de 1.000.000 a 5,00 €, con extraprima plana del 25 % y plataforma de 1,00 €, se cerró con 700.000 impresiones y 1.200,00 € de coste, con un margen de 1.850,00 €. Si después se reexpresa un día con 500.000 impresiones y 1.800,00 € más, sigue dando `margin` `"1850.00"` y lleva `delivery_changed` verdadero, `delivered_impressions_difference` 500000, `media_cost_difference` `"1800.00"`, `current_margin` `"-450.00"` y `margin_difference` `"-2300.00"`.
 
-**`POST /api/margin/closings`** con `{"year": 2026, "month": 10}` cierra un mes. Para cada flight terminado congela la tasa de extraprima y la de plataforma, con su procedencia (`applied_rates`), y una **foto de todas sus cifras** con la entrega con que se calcularon (`closed_flight_snapshots`). Todo queda bajo una cabecera de cierre (`month_closings`) con el último lote correcto de cada DSP. Es **idempotente**: repetirlo no cambia nada. Responde `{"year": 2026, "month": 10, "closed": 3, "already_closed": 0, "closings": 1}` (ejemplo). `closings` es el número de cabeceras que tiene el mes después de la petición: un flight dado de alta en un mes ya cerrado lo cierra un cierre posterior, con su propia cabecera, y entonces el mes tiene 2. Un cierre que no congela nada no escribe cabecera. Dos rechazos, los dos **409** y sin escribir nada:
+**`POST /api/margin/closings`** con `{"year": 2026, "month": 10}` cierra un mes. Para cada flight terminado congela la tasa de extraprima y la de plataforma, con su procedencia (`applied_rates`), y una **foto de todas sus cifras** con la entrega con que se calcularon (`closed_flight_snapshots`). Todo queda bajo una cabecera de cierre (`month_closings`) con el último lote correcto de cada DSP. Es **idempotente**: repetirlo no cambia nada. Responde `{"year": 2026, "month": 10, "closed": 3, "already_closed": 0, "closings": 1}` (ejemplo). `closings` es el número de cabeceras que tiene el mes después de la petición: un flight dado de alta en un mes ya cerrado lo cierra un cierre posterior, con su propia cabecera, y entonces el mes tiene 2. Un cierre que no congela nada no escribe cabecera. La foto guarda también la facturación del flight: su base, su volumen facturable, su arrastre y su marca, y el ajuste en vigor. Cuatro rechazos, todos **409** y sin escribir nada, comprobados en este orden:
 
-- `{"code": "previous_month_open", "message": "…"}`: un mes **anterior del mismo año** tiene flights terminados sin cerrar; el mensaje nombra el mes que bloquea. Se comprueba primero.
-- `{"code": "month_delivery_not_loaded", "message": "…"}`: el mes tiene un flight `target` cuyo DSP aún no tiene una ingesta correcta cuya ventana incluya el último día del mes; el mensaje nombra el mes y el DSP. Un mes solo de líneas `committed` no espera a ninguna ingesta.
+1. `{"code": "previous_month_open", "message": "…"}`: un mes **anterior del mismo año** tiene flights terminados sin cerrar; el mensaje nombra el mes que bloquea.
+2. `{"code": "month_not_reviewed", "message": "…"}`: una campaña del mes sigue **en curso** (un flight suyo no ha terminado). El mensaje nombra el mes y cada campaña que bloquea con su estado, por ejemplo `2026-11 has campaigns not reviewed: DEMO-MARGEN-CURSO (in progress); … Review them, then close the month.`
+3. `{"code": "month_delivery_not_loaded", "message": "…"}`: un DSP con flights terminados y sin cerrar en el mes no tiene una ingesta correcta cuya ventana incluya el último día del mes, sean líneas `committed` o `target`; el mensaje nombra el mes y el DSP.
+4. `{"code": "month_not_reviewed", "message": "…"}`: una campaña del mes está **pendiente de revisión** (§4.11).
 
-Un mes se puede cerrar en cuanto su último día está cargado. La ingesta y la desvinculación de una línea siguen reescribiendo la entrega de un mes cerrado, pero sus cifras no se mueven: solo se activa el aviso de entrega cambiada ([docs/deploy.md](./docs/deploy.md)).
+Un mes se puede cerrar en cuanto su último día está cargado y todas sus campañas están revisadas. La ingesta y la desvinculación de una línea siguen reescribiendo la entrega de un mes cerrado, pero sus cifras no se mueven: solo se activa el aviso de entrega cambiada ([docs/deploy.md](./docs/deploy.md)).
 
 ---
 
@@ -1642,11 +1733,45 @@ Respuesta 200, con el email y el estado resultante, sin roles ni otros datos:
 
 ---
 
+### **4.11. Facturación, revisión del mes y arrastre**
+
+**Roles:** las siete rutas de `/api/billing` son de `operations` y `finance`; `PUT /api/flights/{flight_id}/carryover`, de `operations` y `trading`. Cualquier otro rol recibe **403** `missing_role`. Una respuesta a `trading` nunca lleva un importe, un ajuste ni la marca de facturable. Los errores de estas rutas, también los de validación, son exactamente `{"code": …, "message": …}` y no llevan importes. Donde una respuesta nombra al autor de un evento, lleva su id y, al lado, su nombre (`*_name`), o su correo si no tiene nombre.
+
+| Ruta | Qué hace | Respuesta |
+|---|---|---|
+| `GET /api/billing?year=&month=[&campaign_id=]` | La facturación de un mes por campaña, línea y flight; no escribe nada | 200 |
+| `POST /api/billing/flights/{flight_id}/adjustments` | Ajusta la facturación de un flight | 201 |
+| `GET /api/billing/flights/{flight_id}/adjustments` | El historial de ajustes del flight, el último primero, con `in_force` | 200 |
+| `POST /api/billing/reviews` | Marca revisada una campaña en un mes | 201, o 200 si ya lo estaba |
+| `POST /api/billing/reviews/withdrawals` | Retira la revisión | 201 |
+| `PUT /api/billing/flights/{flight_id}/carryover/billable` | Fija la marca de facturable del arrastre | 200 |
+| `GET /api/billing/export?year=&month=` | El CSV del mes cerrado | 200, `text/csv` |
+| `PUT /api/flights/{flight_id}/carryover` | Escribe el arrastre que recibe el flight | 200 |
+
+**`GET /api/billing?year=2026&month=10`** devuelve cada campaña con flights en el mes con su `review_state` (`in_progress`, `pending_review`, `reviewed` o `closed`), el autor y el momento de su último evento (`review_set_by`, `review_set_by_name`, `review_set_at`), y por flight su `state` (`not_started`, `running`, `pending_close` o `closed`), `contracted_impressions`, `carryover`, `carryover_billable`, `delivery_target`, `delivered`, `billable`, `billing`, `billing_basis`, `sale_cpm` y el `adjustment` en vigor, con su base, importe, motivo y autor. `billing`, `billable` y `billing_basis` son los de `GET /api/margin`. Un flight cerrado se lee de su foto. Ejemplo real de la demo sembrada, el flight que sobreentregó: contrató 3.000.000 y entregó 3.060.994, y factura su contratado.
+
+```json
+{ "flight_id": 1, "flight_start": "2026-10-01", "flight_end": "2026-10-31", "state": "pending_close",
+  "delivery_metric": "impressions", "contracted_impressions": 3000000, "carryover": 0, "carryover_billable": false,
+  "delivery_target": 3000000, "delivered": "3060994.0000", "billable": "3000000.0000", "billing": "15000.00",
+  "billing_basis": "minimum", "sale_cpm": "5.00", "adjustment": null }
+```
+
+**Ajuste.** `POST /api/billing/flights/{flight_id}/adjustments` con `{"basis": "contracted", "reason": "Acuerdo con la agencia: se factura la OC completa"}`, o con `{"basis": "custom", "amount": "4200.00", "reason": "…"}`. Las bases son `minimum` (la regla), `delivered` (todo lo entregado, sin tope), `contracted` (el tope) y `custom` (el importe, fijo). Responde 201 con el ajuste, su autor y la `billing` del flight después. Rechazos, sin escribir nada: 404 `flight_not_found`; 409 `target_line_not_adjustable`, `flight_not_ended` (en curso) y `flight_closed` (ya congelado); 422 sin motivo (`validation_error`), con el motivo en blanco o un importe que no corresponde (`invalid_adjustment`). Un ajuste devuelve la campaña a pendiente de revisión.
+
+**Revisión.** `POST /api/billing/reviews` y `POST /api/billing/reviews/withdrawals` con `{"campaign_id": 7, "year": 2026, "month": 10}` responden `{"campaign_id", "year", "month", "state", "set_by", "set_by_name", "set_at"}`. Revisar exige que todos los flights del mes de la campaña hayan terminado y que **el DSP de cada uno tenga cargado el último día del mes**. Rechazos: 404 `campaign_not_found` y `campaign_month_not_found`; 409 `campaign_month_in_progress`, `campaign_month_closed`, `month_delivery_not_loaded` (nombra el mes y el DSP) y, en la retirada, `not_reviewed`. Revisar una campaña ya revisada responde 200 con la revisión que tenía, sin escribir nada.
+
+**Arrastre.** `PUT /api/flights/{flight_id}/carryover` con `{"volume": 100000, "reason": "Recuperar lo no entregado en octubre"}`, sobre el flight que lo recibe. Responde `{"flight_id", "delivery_metric", "contracted_impressions", "carryover", "delivery_target", "reason", "set_by", "set_by_name", "set_at"}`, sin importes ni marca. Un volumen de 0 lo quita. Rechazos: 404 `flight_not_found`; 409 `no_previous_flight`, `previous_flight_not_ended`, `carryover_exceeds_shortfall` (el mensaje nombra lo que faltó: el objetivo del flight anterior menos lo que entregó) y `month_closed`; 422 con un volumen negativo o no entero, o sin motivo. **Marca.** `PUT /api/billing/flights/{flight_id}/carryover/billable` con `{"billable": true}` responde `{"flight_id", "carryover", "billable", "set_by", "set_by_name", "set_at"}`; rechaza con 404 `flight_not_found` y 409 `target_line_not_adjustable`, `no_carryover` y `month_closed`. Las dos devuelven la campaña a pendiente de revisión.
+
+**CSV.** `GET /api/billing/export?year=2026&month=10` devuelve `facturacion-2026-10.csv`: una fila por flight congelado en el mes, por agencia, campaña, línea e inicio, con las columnas `cliente;agencia;campaña;línea;orden de compra;entregado;contratado;arrastre;facturable;CPM;importe;ajustado;motivo`. Las cifras salen de la foto del cierre. Va en UTF-8 con marca de orden de bytes, `;` como separador, coma decimal sin separador de miles y comillas RFC 4180 cuando un campo lleva `;`. Fila real de las comprobaciones del paso 15, con un ajuste fijo: `DEMO Advertiser;DEMO Agency;STEP15-AJUSTE-…;1;OC-STEP15-AJUSTE-…;800000,0000;1000000;0;;5,00;4200,00;sí;"Acuerdo; se factura la OC"`. Un mes sin cierre responde **409** `month_not_closed`.
+
+---
+
 ### **Nota: Formatos de error**
 
 El API utiliza tres formatos de error según el tipo:
 
-1. **Errores de negocio y de validación de las rutas del margen:** `{"code": "<error_code>", "message": "<mensaje>"}`. Códigos: `validation_error` (422, campos inválidos), `previous_month_open` (409), `month_delivery_not_loaded` (409, §4.8), los de las reglas de extraprima de §4.9 y `internal_error` (500, con un mensaje genérico: el detalle queda en el registro del servidor).
+1. **Errores de negocio y de validación de las rutas del margen, de la facturación y del arrastre:** `{"code": "<error_code>", "message": "<mensaje>"}`. Códigos: `validation_error` (422, campos inválidos), `previous_month_open`, `month_not_reviewed` y `month_delivery_not_loaded` (409, §4.8), los de las reglas de extraprima de §4.9, los de la facturación, la revisión y el arrastre de §4.11 y `internal_error` (500, con un mensaje genérico: el detalle queda en el registro del servidor).
 
 2. **Errores de negocio de las rutas anteriores al margen:** `{"code": "<error_code>", "message": "<mensaje>"}` en los 40x (`missing_role`, `duplicate_order_reference`, `duplicate_campaign_name`, `invalid_equativ_package`…), y **`{"detail": [...]}`** de FastAPI en los 422 de validación, con un elemento por campo: `{"detail": [{"loc": ["body", "field_name"], "msg": "error message", "type": "error_type"}]}`.
 
